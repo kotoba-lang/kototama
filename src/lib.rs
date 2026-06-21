@@ -20,6 +20,9 @@
 pub use kami_engine_clj;
 pub use kotoba_clj;
 
+/// The compiler error type, re-exported so hosts depend only on kototama.
+pub use kami_engine_clj::CljError;
+
 /// Compile a general Clojure/EDN-subset program to a wasm module (no game prelude).
 pub fn compile_clj(src: &str) -> Result<Vec<u8>, String> {
     kotoba_clj::compile_str(src).map_err(|e| e.to_string())
@@ -29,7 +32,13 @@ pub fn compile_clj(src: &str) -> Result<Vec<u8>, String> {
 /// `kami:engine` host ABI is targeted, so the module is drivable by a kami host
 /// (native `kami-script-runtime`, or a browser host over the same imports).
 pub fn compile_game(src: &str) -> Result<Vec<u8>, String> {
-    kami_engine_clj::compile_str_with_prelude(src).map_err(|e| e.to_string())
+    compile_game_typed(src).map_err(|e| e.to_string())
+}
+
+/// Native: compile a game keeping the typed [`CljError`], so hosts get `?`-friendly
+/// errors (kami-script-runtime). Same output as [`compile_game`].
+pub fn compile_game_typed(src: &str) -> Result<Vec<u8>, CljError> {
+    kami_engine_clj::compile_str_with_prelude(src)
 }
 
 /// The game prelude source (helpers written in the language itself).
