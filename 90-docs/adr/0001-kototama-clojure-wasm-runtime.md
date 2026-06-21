@@ -74,8 +74,9 @@ Determinism (all-i64 ABI) carries over: same module, same host → same run.
 
 1. ✅ kototama crate: facade over kotoba-clj + kami-engine-clj; native + wasm builds;
    `compile`/`compile_game` exported; round-trip tests (real wasm magic).
-2. ▶ network-isekai: load kototama wasm, compile `logic.clj` on edit, instantiate, and
-   drive it from the CLJS host (bind `kami:engine/*`) → live gameplay in the browser.
+2. ✅ network-isekai: loads the kototama wasm, compiles `logic.clj` on edit,
+   instantiates, and drives it from the CLJS host (`isekai.host` binds the full
+   `kami:engine/*` world) → live gameplay in the browser, deployed to isekai.network.
 3. ▶ Point `kami-script-runtime` (native) at kototama so native + web share one
    compiler; deprecate direct kami-engine-clj/kotoba-clj entry points.
 4. ▶ Fold the standalone kotoba-clj / kami-engine-clj crates behind kototama as their
