@@ -1,7 +1,9 @@
 # kototama — clojure-wasm-runtime
 
-One canonical **Clojure/EDN-subset → WebAssembly** runtime. Unifies the two compilers
-that grew up apart, and adds the browser path so Clojure compiles + runs **in the page**.
+One canonical **Clojure/EDN-subset → WebAssembly** runtime. Unifies the compilers that grew
+up apart, adds the browser path so Clojure compiles + runs **in the page**, and hosts the
+**artificial-organism / atproto-actor** runtime — actors authored in `kotoba-clj`, stored on
+the `kotoba` Datom log, run as organisms by `kototama`, publishing to atproto apps.
 
 ```
 kotoba-edn (reader)  →  kotoba-clj (core)  +  kami-engine-clj (game layer)   →  kototama
@@ -20,6 +22,47 @@ kotoba-edn (reader)  →  kotoba-clj (core)  +  kami-engine-clj (game layer)   �
   `WebAssembly.instantiate` → run. No server, no native runtime. This is what powers
   live CLJ-game editing on [network-isekai](https://github.com/gftdcojp/network-isekai)
   / isekai.network.
+
+## Stack — design → store → live → publish
+
+kototama is the **organism runtime** at the centre of a four-station loop. An actor is
+*designed* in Clojure, *stores* its state on a content-addressed DB, *lives* as a compiled
+organism, and *publishes* to the social web — each station a separate repo, composed:
+
+```
+  DESIGN                STORE                  LIVE                       PUBLISH
+  kotoba-clj      →     kotoba           →     kototama             →     app-aozora / com.etzhayyim
+  (CLJ/EDN subset)      (Datom log = DB)       (artificial organism)      (atproto destinations)
+
+  author the actor      append-only            compile_actor → wasm       outward membrane → dry-run
+  in lib/actor/*.cljc   commit-DAG (EAVT,      organism heartbeat:        posts; live broadcast (Council
+  (gates/membrane/      content-addressed,     sense → fold → decide      Lv6+ + self-signed) → atproto
+  heartbeat/didkey)     verify-chain)          → persist (idempotent)     records under app.aozora.* /
+                        ↑ actor:host           ↑ actor:host               com.etzhayyim.* lexicons
+                        log-read/append!       gen-keypair/sign           ↑ actor:host http-post
+```
+
+1. **DESIGN — `kotoba-clj`.** The actor is written in the Clojure/EDN subset (`lib/actor/*.cljc`):
+   its charter gates, outward membrane, heartbeat fold, did:key identity. The same source the
+   `ACTOR_PRELUDE` is distilled from — design and runtime are one language.
+2. **STORE — `kotoba` as the DB substrate.** State is **not** a database row; it is an
+   append-only, content-addressed **Datom log** (EAVT, Datomic-isomorphic, `verify-chain`
+   tamper-evident). kototama binds to it through `actor:host` `log-read` / `log-append!`. The
+   organism's whole life is a replayable commit-DAG.
+3. **LIVE — `kototama` as the artificial organism.** `compile_actor` turns the CLJ into a wasm
+   organism; `actor.heartbeat` runs the idempotent **sense → fold → decide → persist** beat
+   (crash/re-run safe — an unchanged beat is a structural no-op). The organism self-generates
+   and present-only-signs with its OWN did:key (`actor:host/gen-keypair`/`sign`); no server
+   holds a key.
+4. **PUBLISH — atproto apps (`app-aozora`, `com.etzhayyim.*`).** `actor.membrane` shapes a
+   **dry-run** post when every gate holds. A **live** broadcast is governance-gated (Council
+   Lv6+ + the actor's own signature, never a server key) and then `actor:host/http-post`s the
+   record to an atproto destination — **app-aozora** (the appview/PDS) and the
+   **com.etzhayyim.\*** lexicon namespace. The actor is the *bearer*; the apps are the *reach*.
+
+Every hop is content-addressed and keyless-by-default: design is source, store is a CID chain,
+live is a verifiable wasm CID, publish is a self-signed record. Same loop runs under bb/JVM
+today and (its scalar slice) in wasm now.
 
 ## API
 
@@ -68,9 +111,12 @@ wasm-pack build --target web            # → pkg/ : in-browser compiler
 
 ## Design
 
-See [ADR-0001](90-docs/adr/0001-kototama-clojure-wasm-runtime.md): layered (core +
-game), composition-first consolidation, the browser compile→instantiate loop, and the
-migration that points kami-script-runtime + network-isekai at this one toolchain.
+- [ADR-0001](90-docs/adr/0001-kototama-clojure-wasm-runtime.md) — layered (core + game),
+  composition-first consolidation, the browser compile→instantiate loop, and the migration
+  that points kami-script-runtime + network-isekai at this one toolchain.
+- [ADR-0002](90-docs/adr/0002-actor-organism-runtime-lib.md) — the **actor / artificial-organism**
+  third layer: the design→store→live→publish loop above, the `actor:host` capability boundary,
+  and the no-server-key / outward-broadcast governance boundaries.
 
 ## License
 
