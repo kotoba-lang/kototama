@@ -57,14 +57,16 @@
                 :max-http-posts :non-negative-int
                 :max-log-read-bytes :non-negative-int
                 :max-log-append-bytes :non-negative-int
-                :allow-secret-imports? :boolean}})
+                :allow-secret-imports? :boolean
+                :allow-write-imports? :boolean}})
 
 (def default-runtime-limits
   {:max-imports (count (:abi/imports import-surface))
    :max-http-posts 0
    :max-log-read-bytes 1048576
    :max-log-append-bytes 65536
-   :allow-secret-imports? false})
+   :allow-secret-imports? false
+   :allow-write-imports? false})
 
 (def HostCaps
   {:model/name :kototama.contract/HostCaps
@@ -121,7 +123,8 @@
 (defn- limit-errors [limits requested ids]
   (let [requested-count (count requested)
         http-posts (count (filter #{:http-post} ids))
-        secret-imports (filterv #(some (:import/effects (import-by-id %)) [:secret]) ids)]
+        secret-imports (filterv #(some (:import/effects (import-by-id %)) [:secret]) ids)
+        write-imports (filterv #(some (:import/effects (import-by-id %)) [:write]) ids)]
     (cond-> []
       (> requested-count (:max-imports limits))
       (conj {:error :limit/max-imports
@@ -136,7 +139,12 @@
       (and (false? (:allow-secret-imports? limits))
            (seq secret-imports))
       (conj {:error :limit/secret-imports
-             :imports secret-imports}))))
+             :imports secret-imports})
+
+      (and (false? (:allow-write-imports? limits))
+           (seq write-imports))
+      (conj {:error :limit/write-imports
+             :imports write-imports}))))
 
 (defn- abi-errors [surface]
   (if (map? surface)

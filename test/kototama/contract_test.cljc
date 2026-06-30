@@ -16,7 +16,8 @@
                                   :limits {:max-imports 3}})]
     (is (= #{:verify :now :log-read} (:grants caps)))
     (is (= 3 (get-in caps [:limits :max-imports])))
-    (is (= 0 (get-in caps [:limits :max-http-posts])))))
+    (is (= 0 (get-in caps [:limits :max-http-posts])))
+    (is (false? (get-in caps [:limits :allow-write-imports?])))))
 
 (deftest granted-imports-pass
   (let [result (contract/validate-import-surface
@@ -34,7 +35,8 @@
                  ["verify" "http-delete" "log-append!"]
                  {:grants [:verify]
                   :limits {:max-imports 8
-                           :allow-secret-imports? true}})]
+                           :allow-secret-imports? true
+                           :allow-write-imports? true}})]
     (is (false? (:ok? result)))
     (is (= [{:error :imports/unknown
              :imports ["http-delete"]}
@@ -68,6 +70,22 @@
     (is (false? (:ok? result)))
     (is (= #{:limit/max-imports :limit/max-http-posts :limit/secret-imports}
            (set (map :error (:errors result)))))))
+
+(deftest write-imports-require-explicit-host-opt-in
+  (let [closed (contract/validate-import-surface
+                 ["log-append!"]
+                 {:grants [:log-append!]
+                  :limits {:max-imports 1}})
+        open (contract/validate-import-surface
+               ["log-append!"]
+               {:grants [:log-append!]
+                :limits {:max-imports 1
+                         :allow-write-imports? true}})]
+    (is (false? (:ok? closed)))
+    (is (= [{:error :limit/write-imports
+             :imports [:log-append!]}]
+           (:errors closed)))
+    (is (:ok? open))))
 
 (defn -main [& _]
   (let [{:keys [fail error]} (run-tests 'kototama.contract-test)]
