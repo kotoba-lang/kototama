@@ -1,5 +1,22 @@
 # kototama
 
+## Role
+
+In the `kotoba-lang → kototama → aiueos` stack
+([ADR-2607022400](https://github.com/com-junkawasaki/root/blob/main/90-docs/adr/2607022400-kototama-unikernel-tender-runtime-vocabulary.md)),
+kototama is the **Wasm execution runtime**: it hosts the Wasm components that
+`kotoba-lang` compiles, under capability grants that `aiueos` (the OS/broker
+layer) decides. That ADR also adopts Solo5's *tender* pattern as the target
+native-runtime shape — kototama as tender, the Wasm components aiueos
+launches as guest — but the tender/wasmtime-hosting implementation itself is
+still follow-up work, not yet built here.
+
+What this repository implements *today* is the CLJC contract surface that
+runtime is built on: the actor/organism host-capability contracts described
+below. Read the description immediately following as "the contract kototama's
+runtime will execute against," not as a claim that Wasm hosting is already
+wired up in this repo.
+
 Kototama is the CLJC authority layer for actor/organism host capability
 contracts.
 
