@@ -6,29 +6,38 @@ In the `kotoba-lang → kototama → aiueos` stack
 ([ADR-2607022400](https://github.com/com-junkawasaki/root/blob/main/90-docs/adr/2607022400-kototama-unikernel-tender-runtime-vocabulary.md)),
 kototama is the **Wasm execution runtime**: it hosts the Wasm components that
 `kotoba-lang` compiles, under capability grants that `aiueos` (the OS/broker
-layer) decides. That ADR also adopts Solo5's *tender* pattern as the target
-native-runtime shape — kototama as tender, the Wasm components aiueos
-launches as guest — but the tender/wasmtime-hosting implementation itself is
-still follow-up work, not yet built here.
+layer) decides. That ADR adopts Solo5's *tender* pattern — kototama as
+tender, the Wasm component it runs as guest — and
+[ADR-2607022900](https://github.com/com-junkawasaki/root/blob/main/90-docs/adr/2607022900-aiueos-chicory-jvm-native-adapter.md)
+decided the tender's execution layer is **JVM/Clojure via
+`com.dylibso.chicory`**, not Rust/wasmtime.
 
-What this repository implements *today* is the CLJC contract surface that
-runtime is built on: the actor/organism host-capability contracts described
-below. Read the description immediately following as "the contract kototama's
-runtime will execute against," not as a claim that Wasm hosting is already
-wired up in this repo.
-
-Kototama is the CLJC authority layer for actor/organism host capability
-contracts.
-
-The repository keeps the portable `.cljc` organism runtime and the pure
-`kototama.contract` import-surface validator. Native compiler/runtime wrappers
-are no longer defined here; host adapters should consume the CLJC data contract
-instead of becoming the semantic authority.
+**`kototama.tender` (`src/kototama/tender.clj`) is that execution layer,
+landed** ([ADR-2607062330](https://github.com/com-junkawasaki/root/blob/main/90-docs/adr/2607062330-kototama-tender-chicory-execution-runtime.md)):
+every one of `kototama.contract`'s 8 `actor:host` imports (`gen-keypair`/
+`sign`/`verify`/`sha256-hex`/`http-post`/`log-read`/`log-append!`/`now`) is
+wired to a real Chicory `HostFunction` that only performs its effect when
+`contract/validate-import-surface` says the caller's `HostCaps` grant it —
+checked pre-flight (before any `Instance` is built) and again per call
+(defense in depth). `RuntimeLimits` (`:max-http-posts`/`:max-log-*-bytes`)
+are enforced by kototama itself (Chicory has no native per-category call
+counter) as an in-band `-1` a well-behaved guest can see and back off
+from — distinct from a `:grants` violation, which is a structural
+authority breach and hard-aborts the call instead. A per-instruction fuel
+listener traps a runaway/looping guest. Verified against real Wasm
+binaries (`wasm-tools`-assembled WAT fixtures through the actual Chicory
+`Parser`/`Instance` pipeline, not mocked), including cross-checking a
+real `sign`→`verify` round trip and `sha256-hex` against a known digest.
 
 ## Contract Surface
 
 - `src/kototama/contract.cljc` defines the `actor:host` import surface,
-  `HostCaps`, `RuntimeLimits`, grant normalization, and import validation.
+  `HostCaps`, `RuntimeLimits`, grant normalization, and import validation
+  (pure data, zero-dep, no execution — see `kototama.tender` for that).
+- `src/kototama/tender.clj` is the Chicory-based execution runtime (see
+  above). `:clj`-only, matching `com.dylibso.chicory`'s own JVM-only
+  nature; pulls in `com.dylibso.chicory/{wasm,runtime}` and
+  `kotoba-lang/ed25519` (`kototama.contract` itself stays free of them).
 - `lib/kototama/*.cljc` contains the portable organism/cell runtime:
   gates, membrane, heartbeat, did:key, atproto shaping, and identity helpers.
 - `lib/actor/publish.bb` is the shared actor publish runner.
@@ -57,8 +66,12 @@ bb --classpath lib lib/kototama/test_actor.clj
 bb --classpath lib lib/kototama/test_atproto.cljc
 ```
 
-`clojure -M:test` is the default repository gate. The babashka commands cover
-the current organism runtime helpers when `bb` is available.
+`clojure -M:test` is the default repository gate. `kototama.tender-test`
+shells out to the `wasm-tools` CLI (Bytecode Alliance) to assemble its WAT
+fixtures into real Wasm bytes at test time — install it (`cargo install
+wasm-tools` or your package manager) if it isn't already on `PATH`. The
+babashka commands cover the current organism runtime helpers when `bb` is
+available.
 
 ## Migration
 
