@@ -38,12 +38,12 @@
      (func (export \"main\") (result i64)
        (i64.extend_i32_s (call $sha256_hex (i32.const 0) (i32.const 5) (i32.const 100) (i32.const 64)))))")
 
-(def now-wat
-  "Imports now, calls it once, returns whatever it got (proves linkage --
-  a specific value isn't asserted, just that it doesn't trap)."
+(def clock-monotonic-wat
+  "Imports clock_monotonic, calls it once, returns whatever it got (proves
+  linkage -- a specific value isn't asserted, just that it doesn't trap)."
   "(module
-     (import \"kotoba\" \"now\" (func $now (result i64)))
-     (func (export \"main\") (result i64) (call $now)))")
+     (import \"kotoba\" \"clock_monotonic\" (func $clock_monotonic (result i64)))
+     (func (export \"main\") (result i64) (call $clock_monotonic)))")
 
 (def memory-grow-wat
   "No imports -- declares 1 initial page, main tries to grow BY the
@@ -63,19 +63,19 @@
        (loop $l (br $l))
        (i64.const 0)))")
 
-(def log-append-thrice-wat
-  "Imports log_append, calls it 3 times with the same 4-byte payload,
+(def log-write-thrice-wat
+  "Imports log_write, calls it 3 times with the same 4-byte payload,
   returns the THIRD call's result (i32 sign-extended to i64) -- so a
   RuntimeLimits cap of e.g. 8 bytes (2 calls' worth) shows up as -1 on
   the third call."
   "(module
-     (import \"kotoba\" \"log_append\" (func $log_append (param i32 i32) (result i32)))
+     (import \"kotoba\" \"log_write\" (func $log_write (param i32 i32) (result i32)))
      (memory (export \"memory\") 1)
      (data (i32.const 0) \"data\")
      (func (export \"main\") (result i64)
-       (drop (call $log_append (i32.const 0) (i32.const 4)))
-       (drop (call $log_append (i32.const 0) (i32.const 4)))
-       (i64.extend_i32_s (call $log_append (i32.const 0) (i32.const 4)))))")
+       (drop (call $log_write (i32.const 0) (i32.const 4)))
+       (drop (call $log_write (i32.const 0) (i32.const 4)))
+       (i64.extend_i32_s (call $log_write (i32.const 0) (i32.const 4)))))")
 
 (def everything (constantly true))
 
@@ -88,10 +88,10 @@
     (is (= "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
            (tender/read-memory-string instance 100 64)))))
 
-(deftest now-links-and-returns-without-trapping
-  (let [wasm (wat->wasm now-wat)
-        caps (contract/host-caps {:grants [:now]})
-        n (tender/run-main wasm [:now] caps)]
+(deftest clock-monotonic-links-and-returns-without-trapping
+  (let [wasm (wat->wasm clock-monotonic-wat)
+        caps (contract/host-caps {:grants [:clock-monotonic]})
+        n (tender/run-main wasm [:clock-monotonic] caps)]
     (is (pos? n))))
 
 (deftest ungranted-import-is-rejected-pre-flight-before-any-wasm-runs
@@ -107,7 +107,7 @@
     ;; validate-import-surface itself would already refuse this combo, so
     ;; this just re-confirms the pre-flight path is what actually fires.
     (let [wasm (wat->wasm sha256-hex-wat)
-          caps (contract/host-caps {:grants [:now]})]
+          caps (contract/host-caps {:grants [:clock-monotonic]})]
       (is (thrown-with-msg? clojure.lang.ExceptionInfo #"rejected by contract"
                             (tender/instantiate wasm [:sha256-hex] caps))))))
 
@@ -130,26 +130,26 @@
     (is (= -1 result) "memory.grow returns -1 when it would exceed max-memory-pages")))
 
 (deftest memory-less-guest-is-unaffected-by-the-memory-cap
-  (let [wasm (wat->wasm now-wat)
-        caps (contract/host-caps {:grants [:now] :limits {:max-memory-pages 0}})]
-    (is (pos? (tender/run-main wasm [:now] caps))
+  (let [wasm (wat->wasm clock-monotonic-wat)
+        caps (contract/host-caps {:grants [:clock-monotonic] :limits {:max-memory-pages 0}})]
+    (is (pos? (tender/run-main wasm [:clock-monotonic] caps))
         "a guest declaring no memory section links and runs fine even with max-memory-pages 0")))
 
-(deftest log-append-byte-limit-denies-once-exceeded
-  (let [wasm (wat->wasm log-append-thrice-wat)
-        caps (contract/host-caps {:grants [:log-append!]
+(deftest log-write-byte-limit-denies-once-exceeded
+  (let [wasm (wat->wasm log-write-thrice-wat)
+        caps (contract/host-caps {:grants [:log-write]
                                   :limits {:allow-write-imports? true
-                                           :max-log-append-bytes 8}})
-        n (tender/run-main wasm [:log-append!] caps)]
+                                           :max-log-write-bytes 8}})
+        n (tender/run-main wasm [:log-write] caps)]
     (testing "2 calls x 4 bytes = 8 bytes fits the cap; the 3rd call (12 total) is denied"
       (is (= -1 n)))))
 
-(deftest log-append-under-the-limit-all-succeed
-  (let [wasm (wat->wasm log-append-thrice-wat)
-        caps (contract/host-caps {:grants [:log-append!]
+(deftest log-write-under-the-limit-all-succeed
+  (let [wasm (wat->wasm log-write-thrice-wat)
+        caps (contract/host-caps {:grants [:log-write]
                                   :limits {:allow-write-imports? true
-                                           :max-log-append-bytes 1000}})
-        n (tender/run-main wasm [:log-append!] caps)]
+                                           :max-log-write-bytes 1000}})
+        n (tender/run-main wasm [:log-write] caps)]
     (is (= 0 n))))
 
 (deftest sign-and-verify-round-trip-through-real-chicory

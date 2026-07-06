@@ -35,10 +35,18 @@
   `\"kototama\"` here and only ever linked against this namespace's own
   hand-written WAT test fixtures, which happened to agree with it --
   never against a real compiled guest). Field names (gen_keypair, sign,
-  verify, sha256_hex, http_post, log_read, log_append, now) don't
-  collide with `kotoba.wasm-exec`'s own fields (kgraph_assert,
+  verify, sha256_hex, http_post, log_read, log_write, clock_monotonic)
+  don't collide with `kotoba.wasm-exec`'s own fields (kgraph_assert,
   has_capability, ...) under the same module, so both host surfaces can
-  coexist for a guest that needs imports from each."
+  coexist for a guest that needs imports from each.
+
+  `:log-write`/`:clock-monotonic` (not `:log-append!`/`:now`, an earlier
+  draft's names) match field-for-field the `log-write`/`clock-monotonic`
+  entries `kotoba-core-contracts`' `capability_contract.edn` registers
+  for `kotoba wasm emit` (landed independently, for aiueos's own kernel-
+  capability vocabulary) -- same operation, so this ABI reuses that name
+  instead of registering a second one a `.kotoba` author would have to
+  pick between for no real difference."
   (:require [kototama.contract :as contract]
             [ed25519.core :as ed])
   (:import (com.dylibso.chicory.runtime ExecutionListener HostFunction ImportFunction
@@ -98,7 +106,7 @@
 ;; well-behaved guest can see it and back off instead of the whole `main`
 ;; call crashing on a Java exception it never gets a chance to handle. ──
 
-(defn- new-limits-state [] (atom {:http-posts 0 :log-read-bytes 0 :log-append-bytes 0}))
+(defn- new-limits-state [] (atom {:http-posts 0 :log-read-bytes 0 :log-write-bytes 0}))
 
 (defn- within-count-limit? [state-key limit-key caps limits-state]
   (< (get @limits-state state-key) (get (:limits caps) limit-key)))
@@ -207,30 +215,31 @@
                  (write-bytes! instance (aget args 0) (aget args 1) bs)
                  -1)))))
 
-(defn- log-append-host-fn
+(defn- log-write-host-fn
   "`(ptr len) -> 0|-1`. Appends the input bytes via the injected store's
   `:append-fn`. `#{:storage :write}` -- gated by `:allow-write-imports?`
-  AND metered against `:max-log-append-bytes` (cumulative across this
+  AND metered against `:max-log-write-bytes` (cumulative across this
   Instance's lifetime)."
   [caps limits-state store]
-  (host-fn "log_append" [ValType/I32 ValType/I32] ValType/I32
+  (host-fn "log_write" [ValType/I32 ValType/I32] ValType/I32
            (fn [instance args]
-             (ensure-granted! caps :log-append!)
+             (ensure-granted! caps :log-write)
              (let [bs (read-bytes! instance (aget args 0) (aget args 1))]
-               (if (try-add-bytes! :log-append-bytes :max-log-append-bytes caps limits-state (count bs))
+               (if (try-add-bytes! :log-write-bytes :max-log-write-bytes caps limits-state (count bs))
                  (do ((:append-fn store) bs) 0)
                  -1)))))
 
-(defn- now-host-fn [caps _limits-state]
-  (host-fn "now" [] ValType/I64
+(defn- clock-monotonic-host-fn [caps _limits-state]
+  (host-fn "clock_monotonic" [] ValType/I64
            (fn [_instance _args]
-             (ensure-granted! caps :now)
+             (ensure-granted! caps :clock-monotonic)
              (System/currentTimeMillis))))
 
 (defn in-memory-store
-  "A trivial `{:read-fn :append-fn}` log store backed by an atom of
-  concatenated bytes -- the default for tests/standalone use. A production
-  tender injects its own (file, R2, whatever backs its actual log)."
+  "A trivial `{:read-fn :append-fn}` log store backing `log-read`/
+  `log-write`, an atom of concatenated bytes -- the default for tests/
+  standalone use. A production tender injects its own (file, R2,
+  whatever backs its actual log)."
   []
   (let [state (atom (byte-array 0))]
     {:read-fn (fn [] @state)
@@ -263,8 +272,9 @@
   OWN declared INITIAL page count is read and never overridden (a guest
   that needs N pages to even start must still get them; only the ceiling
   on growth is capped). `nil` when MODULE declares no memory section at
-  all (a memory-less guest, e.g. one only calling `now`, has nothing to
-  limit). Same approach `aiueos.execute/memory-limits-for` establishes,
+  all (a memory-less guest, e.g. one only calling `clock-monotonic`, has
+  nothing to limit). Same approach `aiueos.execute/memory-limits-for`
+  establishes,
   via Chicory's STABLE (not :unsafe/:experimental, unlike the fuel
   listener above) `Instance.Builder/withMemoryLimits` API."
   [module caps-limit]
@@ -291,7 +301,7 @@
   granted (a memory-less guest has nothing to cap).
 
   opts:
-    :store  {:read-fn :append-fn} for log-read/log-append! (default:
+    :store  {:read-fn :append-fn} for log-read/log-write (default:
              `in-memory-store`).
     :fuel   instruction budget override (default `default-fuel-limit`)."
   ([wasm-bytes requested-imports host-caps] (instantiate wasm-bytes requested-imports host-caps {}))
@@ -310,8 +320,8 @@
                      :sha256-hex #(sha256-hex-host-fn caps limits-state)
                      :http-post #(http-post-host-fn caps limits-state)
                      :log-read #(log-read-host-fn caps limits-state store)
-                     :log-append! #(log-append-host-fn caps limits-state store)
-                     :now #(now-host-fn caps limits-state)}
+                     :log-write #(log-write-host-fn caps limits-state store)
+                     :clock-monotonic #(clock-monotonic-host-fn caps limits-state)}
            host-fns (mapv (fn [id] ((get fn-by-id id))) (:requested validation))
            imports (-> (ImportValues/builder)
                       (.addFunction (into-array ImportFunction host-fns))
