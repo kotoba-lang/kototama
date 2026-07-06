@@ -32,7 +32,7 @@
   "Imports sha256_hex, hashes the 5-byte literal \"hello\" at offset 0,
   writes the 64-char hex digest at offset 100 (exact capacity)."
   "(module
-     (import \"kototama\" \"sha256_hex\" (func $sha256_hex (param i32 i32 i32 i32) (result i32)))
+     (import \"kotoba\" \"sha256_hex\" (func $sha256_hex (param i32 i32 i32 i32) (result i32)))
      (memory (export \"memory\") 1)
      (data (i32.const 0) \"hello\")
      (func (export \"main\") (result i64)
@@ -42,7 +42,7 @@
   "Imports now, calls it once, returns whatever it got (proves linkage --
   a specific value isn't asserted, just that it doesn't trap)."
   "(module
-     (import \"kototama\" \"now\" (func $now (result i64)))
+     (import \"kotoba\" \"now\" (func $now (result i64)))
      (func (export \"main\") (result i64) (call $now)))")
 
 (def infinite-loop-wat
@@ -59,7 +59,7 @@
   RuntimeLimits cap of e.g. 8 bytes (2 calls' worth) shows up as -1 on
   the third call."
   "(module
-     (import \"kototama\" \"log_append\" (func $log_append (param i32 i32) (result i32)))
+     (import \"kotoba\" \"log_append\" (func $log_append (param i32 i32) (result i32)))
      (memory (export \"memory\") 1)
      (data (i32.const 0) \"data\")
      (func (export \"main\") (result i64)
@@ -126,9 +126,9 @@
 
 (deftest sign-and-verify-round-trip-through-real-chicory
   (let [wat "(module
-               (import \"kototama\" \"gen_keypair\" (func $gk (param i32 i32) (result i32)))
-               (import \"kototama\" \"sign\" (func $sign (param i32 i32 i32 i32 i32) (result i32)))
-               (import \"kototama\" \"verify\" (func $verify (param i32 i32 i32 i32 i32 i32) (result i32)))
+               (import \"kotoba\" \"gen_keypair\" (func $gk (param i32 i32) (result i32)))
+               (import \"kotoba\" \"sign\" (func $sign (param i32 i32 i32 i32 i32) (result i32)))
+               (import \"kotoba\" \"verify\" (func $verify (param i32 i32 i32 i32 i32 i32) (result i32)))
                (memory (export \"memory\") 1)
                (data (i32.const 200) \"msg!\")
                (func (export \"main\") (result i64)
