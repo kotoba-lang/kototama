@@ -21,7 +21,7 @@
 
 ;; Pinned to the wasm-webcomponent commit this page was last verified
 ;; against -- bump deliberately, don't float on @main.
-(def wasm-webcomponent-pin "042d3b46a2eacf802a00efc64ad8c8ac54ca5eb3")
+(def wasm-webcomponent-pin "154b09102d55b06ef10d0885504d02d91d347da9")
 (def lib (str "https://cdn.jsdelivr.net/gh/kotoba-lang/wasm-webcomponent@" wasm-webcomponent-pin "/src"))
 
 (def stylesheet
@@ -68,10 +68,10 @@
    "      const store = inMemoryStore();\n"
    "      memoryBox.store = store;\n"
    "      const caps = hostCaps({\n"
-   "        grants: ['now', 'sha256-hex', 'log-append!'],\n"
+   "        grants: ['clock-monotonic', 'sha256-hex', 'log-write'],\n"
    "        limits: { allowWriteImports: true },\n"
    "      });\n"
-   "      return { kotoba: actorHostImports(['now', 'sha256-hex', 'log-append!'], caps, memoryBox, { store }) };\n"
+   "      return { kotoba: actorHostImports(['clock-monotonic', 'sha256-hex', 'log-write'], caps, memoryBox, { store }) };\n"
    "    },\n"
    "    render(pre, { src, result, memoryBox }) {\n"
    "      const resultBytes = new Uint8Array(memoryBox.memory.buffer, 100, Number(result));\n"
@@ -79,7 +79,7 @@
    "      const logged = new TextDecoder('utf-8').decode(memoryBox.store.read());\n"
    "      pre.textContent =\n"
    "        `${src}\\n` +\n"
-   "        `  log_append! recorded: ${JSON.stringify(logged)}\\n` +\n"
+   "        `  log_write recorded: ${JSON.stringify(logged)}\\n` +\n"
    "        `  sha256_hex(\"hello\"):  ${resultText}`;\n"
    "    },\n"
    "  });\n"
@@ -123,17 +123,19 @@
     [:kototama-wasm-kgraph-demo {:id "out-kgraph" :src "./demo-kgraph.wasm"}]
 
     [:h2 "actor-host-demo.wasm (kototama.contract's actor:host ABI, partial)"]
-    [:p "Hand-assembled module importing " [:code "now"] "/" [:code "log_append"] "/"
+    [:p "Hand-assembled module importing " [:code "clock_monotonic"] "/" [:code "log_write"] "/"
      [:code "sha256_hex"] " (module " [:code "\"kotoba\""] "), backed by "
      [:code "actor-host.js"] " — a browser-side port of "
      [:a {:href "../src/kototama/contract.cljc"} [:code "kototama.contract"]]
      "'s " [:code "HostCaps"] "/" [:code "RuntimeLimits"] "/"
      [:code "validate-import-surface"] ", the same fail-closed pre-flight + per-call "
      "grant checks " [:code "kototama.tender"] " (the JVM/Chicory counterpart) enforces. "
-     "Only 4 of the 8 " [:code "actor:host"] " imports are implementable as SYNCHRONOUS "
+     "7 of the 8 " [:code "actor:host"] " imports are implementable as SYNCHRONOUS "
      "Wasm host imports in a standard browser (" [:code "gen-keypair"] "/" [:code "sign"] "/"
-     [:code "verify"] "/" [:code "http-post"] " would need an async Web Crypto/"
-     [:code "fetch"] " call, which a synchronous host import can't " [:code "await"] ") — "
+     [:code "verify"] " are real too, via a vendored " [:code "@noble/curves"] " ed25519 — "
+     "elliptic-curve signing is pure arithmetic, not I/O). Only " [:code "http-post"]
+     " is missing: " [:code "fetch"] " is real network I/O, which a synchronous host "
+     "import can't " [:code "await"] " — "
      "see " [:code "actor-host.js"] "'s header comment for the honest scope note."]
     [:kototama-wasm-actor-host-demo {:id "out-actor-host" :src "./actor-host-demo.wasm"}]
 

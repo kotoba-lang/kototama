@@ -2,21 +2,49 @@
 // kotoba-lang/wasm-webcomponent's actor-host.js host-import port (this repo
 // carries the compiled `.wasm` only -- see index.html and README.md).
 // Mirrors verify-kgraph.mjs's structure. Run: `node web/verify-actor-host.mjs`
-import { readFile } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
+import { readFile, mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-// Node has no flag-free `import()` of an https: URL; fetch the source and
-// hand it to a `data:` URL instead. Pinned to the same commit index.html
-// loads from jsdelivr -- bump both together, don't float on @main.
-const WASM_WEBCOMPONENT_COMMIT = '042d3b46a2eacf802a00efc64ad8c8ac54ca5eb3';
-async function importFromJsdelivr(filePath) {
+// Node has no flag-free `import()` of an https: URL, and a plain `data:` URL
+// import (this script's original approach) can't resolve actor-host.js's own
+// relative `./vendor/curves/ed25519.js` import (added when wasm-webcomponent
+// landed real gen-keypair/sign/verify -- a data: URL has no base path for a
+// relative specifier to resolve against). So: download actor-host.js AND its
+// vendor/ tree to a real temp directory, preserving relative structure, and
+// import from a file:// URL instead -- Node's normal ESM resolution then
+// handles the relative imports exactly like a real checkout would. Pinned to
+// the same commit index.html loads from jsdelivr -- bump both together,
+// don't float on @main.
+const WASM_WEBCOMPONENT_COMMIT = '154b09102d55b06ef10d0885504d02d91d347da9';
+const SRC_FILES = [
+  'src/actor-host.js',
+  'src/vendor/curves/ed25519.js',
+  'src/vendor/curves/utils.js',
+  'src/vendor/curves/abstract/curve.js',
+  'src/vendor/curves/abstract/edwards.js',
+  'src/vendor/curves/abstract/hash-to-curve.js',
+  'src/vendor/curves/abstract/modular.js',
+  'src/vendor/curves/abstract/montgomery.js',
+  'src/vendor/hashes/_md.js',
+  'src/vendor/hashes/_u64.js',
+  'src/vendor/hashes/crypto.js',
+  'src/vendor/hashes/sha2.js',
+  'src/vendor/hashes/utils.js',
+];
+
+const tmpRoot = await mkdtemp(path.join(tmpdir(), 'kototama-actor-host-'));
+for (const filePath of SRC_FILES) {
   const url = `https://cdn.jsdelivr.net/gh/kotoba-lang/wasm-webcomponent@${WASM_WEBCOMPONENT_COMMIT}/${filePath}`;
   const src = await (await fetch(url)).text();
-  return import(`data:text/javascript;base64,${Buffer.from(src).toString('base64')}`);
+  const dest = path.join(tmpRoot, filePath);
+  await mkdir(path.dirname(dest), { recursive: true });
+  await writeFile(dest, src);
 }
-
-const { actorHostImports, hostCaps, inMemoryStore } = await importFromJsdelivr('src/actor-host.js');
+const { actorHostImports, hostCaps, inMemoryStore } = await import(
+  pathToFileURL(path.join(tmpRoot, 'src', 'actor-host.js'))
+);
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const bytes = await readFile(path.join(here, 'actor-host-demo.wasm'));
@@ -24,10 +52,10 @@ const bytes = await readFile(path.join(here, 'actor-host-demo.wasm'));
 const store = inMemoryStore();
 const memoryBox = {};
 const caps = hostCaps({
-  grants: ['now', 'sha256-hex', 'log-append!'],
+  grants: ['clock-monotonic', 'sha256-hex', 'log-write'],
   limits: { allowWriteImports: true },
 });
-const importObject = { kotoba: actorHostImports(['now', 'sha256-hex', 'log-append!'], caps, memoryBox, { store }) };
+const importObject = { kotoba: actorHostImports(['clock-monotonic', 'sha256-hex', 'log-write'], caps, memoryBox, { store }) };
 
 const { instance } = await WebAssembly.instantiate(bytes, importObject);
 memoryBox.memory = instance.exports.memory;
@@ -51,10 +79,12 @@ check(
   resultText === '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824',
   `guest-computed sha256("hello") matches the known digest (got ${resultText})`
 );
-check(logged === 'hello', `log_append! recorded the guest's 5-byte payload (got ${JSON.stringify(logged)})`);
+check(logged === 'hello', `log_write recorded the guest's 5-byte payload (got ${JSON.stringify(logged)})`);
+
+await rm(tmpRoot, { recursive: true, force: true });
 
 if (failed) {
   console.error('actor-host browser host-import verification FAILED');
   process.exit(1);
 }
-console.log('OK: browser-native WebAssembly engine ran now/log_append/sha256_hex through kotoba-lang/wasm-webcomponent\'s actor-host.js (no JVM/Chicory/wasmtime)');
+console.log('OK: browser-native WebAssembly engine ran clock_monotonic/log_write/sha256_hex through kotoba-lang/wasm-webcomponent\'s actor-host.js (no JVM/Chicory/wasmtime)');

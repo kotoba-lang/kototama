@@ -16,7 +16,7 @@ anymore (see "History" below).
   `kotoba wasm emit src/demo_kgraph.kotoba --policy src/demo_kgraph_policy.edn`
   (219 bytes; declares the `kgraph_assert`/`kgraph_query` imports).
 - `actor-host-demo.wasm` — hand-assembled (`wasm-tools`) module importing
-  `now`/`log_append`/`sha256_hex` (module `"kotoba"`) -- exercises
+  `clock_monotonic`/`log_write`/`sha256_hex` (module `"kotoba"`) -- exercises
   `kototama.contract`'s `actor:host` ABI (partial), same fixture as
   `kotoba-lang/wasm-webcomponent`'s `examples/actor-host/`.
 - `index.html` — **generated**, not hand-written (see `generate.cljs`
