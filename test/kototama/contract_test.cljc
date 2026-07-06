@@ -1,5 +1,5 @@
 (ns kototama.contract-test
-  (:require [clojure.test :refer [deftest is run-tests]]
+  (:require [clojure.test :refer [deftest is]]
             [kototama.contract :as contract]))
 
 (deftest import-surface-data-is-canonical
@@ -86,9 +86,3 @@
              :imports [:log-append!]}]
            (:errors closed)))
     (is (:ok? open))))
-
-(defn -main [& _]
-  (let [{:keys [fail error]} (run-tests 'kototama.contract-test)]
-    (when (pos? (+ (or fail 0) (or error 0)))
-      #?(:clj (System/exit 1)
-         :cljs (throw (ex-info "contract tests failed" {:fail fail :error error}))))))
