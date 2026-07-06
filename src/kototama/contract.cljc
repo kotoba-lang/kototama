@@ -36,12 +36,12 @@
      :import/name "log-read"
      :import/category :storage
      :import/effects #{:storage}}
-    {:import/id :log-append!
-     :import/name "log-append!"
+    {:import/id :log-write
+     :import/name "log-write"
      :import/category :storage
      :import/effects #{:storage :write}}
-    {:import/id :now
-     :import/name "now"
+    {:import/id :clock-monotonic
+     :import/name "clock-monotonic"
      :import/category :clock
      :import/effects #{:clock}}]})
 
@@ -56,7 +56,7 @@
    :model/keys {:max-imports :non-negative-int
                 :max-http-posts :non-negative-int
                 :max-log-read-bytes :non-negative-int
-                :max-log-append-bytes :non-negative-int
+                :max-log-write-bytes :non-negative-int
                 :max-memory-pages :non-negative-int
                 :allow-secret-imports? :boolean
                 :allow-write-imports? :boolean}})
@@ -65,7 +65,7 @@
   {:max-imports (count (:abi/imports import-surface))
    :max-http-posts 0
    :max-log-read-bytes 1048576
-   :max-log-append-bytes 65536
+   :max-log-write-bytes 65536
    ;; 16 Wasm pages (64 KiB/page) = 1 MiB -- a guest that legitimately
    ;; needs more grows this explicitly via HostCaps, same as every other
    ;; limit here; this is NOT an :abi/imports-gated effect (a guest's

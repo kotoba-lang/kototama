@@ -7,14 +7,14 @@
   (is (= 0 (:abi/version contract/import-surface)))
   (is (= :kototama.contract/HostCaps (:model/name contract/HostCaps)))
   (is (= :kototama.contract/RuntimeLimits (:model/name contract/RuntimeLimits)))
-  (is (= #{:gen-keypair :sign :verify :sha256-hex :http-post :log-read :log-append! :now}
+  (is (= #{:gen-keypair :sign :verify :sha256-hex :http-post :log-read :log-write :clock-monotonic}
          (set (keys contract/import-by-id))))
-  (is (= :log-append! (contract/import-id "log-append!"))))
+  (is (= :log-write (contract/import-id "log-write"))))
 
 (deftest host-caps-normalize-grants-and-limits
-  (let [caps (contract/host-caps {:grants ["verify" :now {:fn "log-read"}]
+  (let [caps (contract/host-caps {:grants ["verify" :clock-monotonic {:fn "log-read"}]
                                   :limits {:max-imports 3}})]
-    (is (= #{:verify :now :log-read} (:grants caps)))
+    (is (= #{:verify :clock-monotonic :log-read} (:grants caps)))
     (is (= 3 (get-in caps [:limits :max-imports])))
     (is (= 0 (get-in caps [:limits :max-http-posts])))
     (is (= 16 (get-in caps [:limits :max-memory-pages])))
@@ -24,16 +24,16 @@
   (let [result (contract/validate-import-surface
                  {:abi/namespace "actor:host"
                   :abi/version 0
-                  :abi/imports [{:fn "verify"} {:import/name "now"}]}
-                 {:grants [:verify :now]
+                  :abi/imports [{:fn "verify"} {:import/name "clock-monotonic"}]}
+                 {:grants [:verify :clock-monotonic]
                   :limits {:max-imports 2}})]
     (is (:ok? result))
-    (is (= [:verify :now] (:requested result)))
+    (is (= [:verify :clock-monotonic] (:requested result)))
     (is (empty? (:errors result)))))
 
 (deftest missing-and-unknown-imports-fail-with-data
   (let [result (contract/validate-import-surface
-                 ["verify" "http-delete" "log-append!"]
+                 ["verify" "http-delete" "log-write"]
                  {:grants [:verify]
                   :limits {:max-imports 8
                            :allow-secret-imports? true
@@ -42,7 +42,7 @@
     (is (= [{:error :imports/unknown
              :imports ["http-delete"]}
             {:error :grants/missing
-             :imports [:log-append!]}]
+             :imports [:log-write]}]
            (:errors result)))))
 
 (deftest wrong-abi-surface-fails-with-data
@@ -74,16 +74,16 @@
 
 (deftest write-imports-require-explicit-host-opt-in
   (let [closed (contract/validate-import-surface
-                 ["log-append!"]
-                 {:grants [:log-append!]
+                 ["log-write"]
+                 {:grants [:log-write]
                   :limits {:max-imports 1}})
         open (contract/validate-import-surface
-               ["log-append!"]
-               {:grants [:log-append!]
+               ["log-write"]
+               {:grants [:log-write]
                 :limits {:max-imports 1
                          :allow-write-imports? true}})]
     (is (false? (:ok? closed)))
     (is (= [{:error :limit/write-imports
-             :imports [:log-append!]}]
+             :imports [:log-write]}]
            (:errors closed)))
     (is (:ok? open))))
