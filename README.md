@@ -33,23 +33,23 @@ instead of becoming the semantic authority.
   gates, membrane, heartbeat, did:key, atproto shaping, and identity helpers.
 - `lib/actor/publish.bb` is the shared actor publish runner.
 
-## Browser WASM AOT PoC (`web/`)
+## Browser WASM AOT demo (`web/`)
 
 [ADR-2607061630](https://github.com/com-junkawasaki/root/blob/main/90-docs/adr/2607061630-kototama-browser-wasm-aot-webcomponent.md)
 starts shifting kototama's execution premise from "JVM hosts a Wasm
 interpreter" (`kotoba wasm run` + `com.dylibso.chicory` in
 `kotoba-lang/kotoba`) toward "the browser's own engine runs the
 already-AOT-compiled binary directly", with kototama supplying the hosting
-shell as a WebComponent instead of a JVM process. `web/` is the first slice:
-a `<kototama-wasm-run>` custom element that loads a zero-import
-`.kotoba`-emitted `.wasm` module and runs it via native `WebAssembly.instantiate`
-— no JVM, no Chicory, no wasmtime. A second element,
-`<kototama-wasm-kgraph-demo>`, closes the biggest R0 gap from that first
-slice: `kgraph.js` ports `kotoba-lang/kotoba`'s in-memory EAVT datom store
-and the `kgraph-*` host-import ABI to the browser, so a module that calls
-`kgraph-assert!`/`kgraph-query` (not just zero-import modules) now runs here
-too — verified against the exact same demo and expected values as
-kotoba-lang/kotoba's own JVM/Chicory test. See `web/README.md` for the
+shell as a WebComponent instead of a JVM process. The hosting code itself
+(`KotobaWasmElement`, `kgraph.js`) has since been extracted into
+[`kotoba-lang/wasm-webcomponent`](https://github.com/kotoba-lang/wasm-webcomponent)
+so other repos can reuse it — `web/` is now a **consumer** of that library,
+not its canonical source. It defines `<kototama-wasm-run>` (a zero-import
+`.kotoba`-emitted `.wasm` module) and `<kototama-wasm-kgraph-demo>` (a
+module that calls `kgraph-assert!`/`kgraph-query`, backed by the library's
+browser-side port of kotoba's in-memory EAVT datom store) — verified
+against the exact same demo and expected values as kotoba-lang/kotoba's
+own JVM/Chicory test. See `web/README.md` for the
 remaining honest R0 scope (only `kgraph-*` is ported, not `kse`/`auth`/`llm`/
 etc.; no capability/policy re-enforcement at load time). The JVM+Chicory
 path in kotoba-lang/kotoba is unaffected and remains the compile-time/

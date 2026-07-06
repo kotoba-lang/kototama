@@ -2,32 +2,62 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>kototama-wasm-run demo</title>
+<title>kototama browser WASM AOT demo</title>
 </head>
 <body>
-<h1>kototama browser WASM AOT PoC</h1>
+<h1>kototama browser WASM AOT demo</h1>
 <p>
-  <code>demo.wasm</code> is the unmodified byte-for-byte output of
-  <code>kotoba wasm emit src/demo.kotoba</code> in kotoba-lang/kotoba
-  (73 bytes, zero imports, exports <code>main() : i32</code> which returns 42).
-  This page instantiates it with the browser's native <code>WebAssembly</code>
-  API — no JVM, no Chicory, no wasmtime.
+  Both elements below are defined by
+  <a href="https://github.com/kotoba-lang/wasm-webcomponent"><code>kotoba-lang/wasm-webcomponent</code></a>
+  (<code>KotobaWasmElement</code> + <code>kgraph.js</code>) — this page no
+  longer carries its own copy of that hosting code, it only supplies the
+  `.wasm` payloads and a couple of `define()` calls. See
+  <a href="https://github.com/com-junkawasaki/root/blob/main/90-docs/adr/2607061630-kototama-browser-wasm-aot-webcomponent.md">ADR-2607061630</a>.
+</p>
+
+<h2>demo.wasm (zero imports)</h2>
+<p>
+  Byte-for-byte output of <code>kotoba wasm emit src/demo.kotoba</code> in
+  kotoba-lang/kotoba (73 bytes, exports <code>main() : i32</code> which
+  returns 42) — instantiated with the browser's native
+  <code>WebAssembly</code> API, no JVM, no Chicory, no wasmtime.
 </p>
 <kototama-wasm-run id="out" src="./demo.wasm"></kototama-wasm-run>
-<script type="module" src="./kototama-wasm-run.js"></script>
 
-<h1>kgraph host-import PoC</h1>
+<h2>demo-kgraph.wasm (kgraph-* host imports)</h2>
 <p>
-  <code>demo-kgraph.wasm</code> is the byte-for-byte output of
+  Byte-for-byte output of
   <code>kotoba wasm emit src/demo_kgraph.kotoba --policy src/demo_kgraph_policy.edn</code>
-  in kotoba-lang/kotoba (219 bytes; declares the <code>kgraph_assert</code>/
-  <code>kgraph_query</code> host imports). This element wires those imports to
-  a browser-side port of kotoba's in-memory EAVT datom store
-  (<code>kgraph.js</code>) instead of the JVM's <code>kotoba.wasm-exec</code> —
-  the module asserts <code>[1 :name "Aoi"]</code> then queries
-  <code>{:find [?v] :where [[1 :name ?v]]}</code>, all inside this page.
+  in kotoba-lang/kotoba (219 bytes; declares the
+  <code>kgraph_assert</code>/<code>kgraph_query</code> host imports),
+  backed by <code>kgraph.js</code>'s browser-side port of kotoba's
+  in-memory EAVT datom store.
 </p>
 <kototama-wasm-kgraph-demo id="out-kgraph" src="./demo-kgraph.wasm"></kototama-wasm-kgraph-demo>
-<script type="module" src="./kototama-wasm-kgraph-demo.js"></script>
+
+<script type="module">
+  // Pinned to the wasm-webcomponent commit this page was last verified
+  // against -- bump deliberately, don't float on @main.
+  const LIB = 'https://cdn.jsdelivr.net/gh/kotoba-lang/wasm-webcomponent@feef2632b15cdd3f71b48ecee6dc443db184b92a/src';
+  const { KotobaWasmElement } = await import(`${LIB}/kotoba-wasm-element.js`);
+  const { kgraphHostImports, writeEdn } = await import(`${LIB}/kgraph.js`);
+
+  KotobaWasmElement.define('kototama-wasm-run');
+
+  KotobaWasmElement.define('kototama-wasm-kgraph-demo', {
+    createImports(memoryBox) {
+      memoryBox.store = [];
+      return { kotoba: kgraphHostImports(memoryBox.store, memoryBox) };
+    },
+    render(pre, { src, result, memoryBox }) {
+      const resultBytes = new Uint8Array(memoryBox.memory.buffer, 2048, result);
+      const resultText = new TextDecoder('utf-8').decode(resultBytes);
+      pre.textContent =
+        `${src}\n` +
+        `  store (after kgraph_assert!): ${writeEdn(memoryBox.store)}\n` +
+        `  kgraph_query result:          ${resultText}`;
+    },
+  });
+</script>
 </body>
 </html>

@@ -1,14 +1,25 @@
-// Dependency-free smoke test for the browser-side kgraph host-import ABI
-// (web/kgraph.js): instantiates demo-kgraph.wasm with the JS engine's own
-// WebAssembly implementation, backed by kgraphHostImports instead of the
-// zero-import path verify.mjs covers. Mirrors
+// Dependency-free smoke test for demo-kgraph.wasm against
+// kotoba-lang/wasm-webcomponent's kgraph.js host-import port (this repo no
+// longer carries its own copy -- see index.html and README.md). Mirrors
 // kotoba-lang/kotoba's wasm-binary-runs-kgraph-round-trip-through-real-host-functions
 // test (test/kotoba/wasm_exec_test.clj) byte-for-byte: same demo, same
 // asserted datom, same expected query result. Run: `node web/verify-kgraph.mjs`
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import { kgraphHostImports, writeEdn } from './kgraph.js';
+
+// Node has no flag-free `import()` of an https: URL; fetch the source and
+// hand it to a `data:` URL instead (standard ESM, no --experimental-* flags,
+// works the same on any Node >= 18). Pinned to the same commit index.html
+// loads from jsdelivr -- bump both together, don't float on @main.
+const WASM_WEBCOMPONENT_COMMIT = 'feef2632b15cdd3f71b48ecee6dc443db184b92a';
+async function importFromJsdelivr(filePath) {
+  const url = `https://cdn.jsdelivr.net/gh/kotoba-lang/wasm-webcomponent@${WASM_WEBCOMPONENT_COMMIT}/${filePath}`;
+  const src = await (await fetch(url)).text();
+  return import(`data:text/javascript;base64,${Buffer.from(src).toString('base64')}`);
+}
+
+const { kgraphHostImports, writeEdn } = await importFromJsdelivr('src/kgraph.js');
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const bytes = await readFile(path.join(here, 'demo-kgraph.wasm'));
@@ -51,4 +62,4 @@ if (failed) {
   console.error('kgraph browser host-import verification FAILED');
   process.exit(1);
 }
-console.log('OK: browser-native WebAssembly engine ran kgraph_assert!/kgraph_query through a real JS host-import store (no JVM/Chicory/wasmtime)');
+console.log('OK: browser-native WebAssembly engine ran kgraph_assert!/kgraph_query through kotoba-lang/wasm-webcomponent\'s host-import store (no JVM/Chicory/wasmtime)');
