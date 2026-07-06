@@ -43,11 +43,17 @@ already-AOT-compiled binary directly", with kototama supplying the hosting
 shell as a WebComponent instead of a JVM process. `web/` is the first slice:
 a `<kototama-wasm-run>` custom element that loads a zero-import
 `.kotoba`-emitted `.wasm` module and runs it via native `WebAssembly.instantiate`
-— no JVM, no Chicory, no wasmtime. See `web/README.md` for scope and honest
-R0 limitations (no host-import ABI in the browser yet, no capability/policy
-re-enforcement at load time). The JVM+Chicory path in kotoba-lang/kotoba is
-unaffected and remains the compile-time/test-time proof; this is additive,
-not a replacement.
+— no JVM, no Chicory, no wasmtime. A second element,
+`<kototama-wasm-kgraph-demo>`, closes the biggest R0 gap from that first
+slice: `kgraph.js` ports `kotoba-lang/kotoba`'s in-memory EAVT datom store
+and the `kgraph-*` host-import ABI to the browser, so a module that calls
+`kgraph-assert!`/`kgraph-query` (not just zero-import modules) now runs here
+too — verified against the exact same demo and expected values as
+kotoba-lang/kotoba's own JVM/Chicory test. See `web/README.md` for the
+remaining honest R0 scope (only `kgraph-*` is ported, not `kse`/`auth`/`llm`/
+etc.; no capability/policy re-enforcement at load time). The JVM+Chicory
+path in kotoba-lang/kotoba is unaffected and remains the compile-time/
+test-time proof; this is additive, not a replacement.
 
 ## Test
 

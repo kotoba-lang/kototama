@@ -20,6 +20,26 @@ of hosted on the JVM.
   (same engine — V8 — a Chromium browser uses) and asserts `main() === 42`.
   This checks the AOT-execution claim only; it does not exercise the DOM/
   customElements wrapper (no DOM in plain Node).
+- `kgraph.js` — a browser-side port of `kotoba-lang/kotoba`'s
+  `src/kotoba/kgraph.clj` (the pure in-memory EAVT datom store) plus a
+  minimal EDN reader/writer for the two shapes the `kgraph-*` host-import
+  wire ABI carries (`[e a v]` datoms, `{:find [...] :where [...]}` queries).
+  `kgraphHostImports(store, memoryBox)` implements the exact
+  `(module "kotoba")` import surface `kotoba.wasm-exec/kgraph-host-functions`
+  implements on the JVM side — same field names, same `(ptr, len[, out-ptr,
+  out-cap])` convention.
+- `demo-kgraph.wasm` — byte-for-byte output of
+  `kotoba wasm emit src/demo_kgraph.kotoba --policy src/demo_kgraph_policy.edn`
+  (219 bytes; declares the `kgraph_assert`/`kgraph_query` imports).
+- `kototama-wasm-kgraph-demo.js` — a second custom element wiring
+  `demo-kgraph.wasm` to `kgraphHostImports`, rendering the resulting store
+  and query result into its shadow DOM.
+- `verify-kgraph.mjs` — dependency-free smoke test (`node web/verify-kgraph.mjs`)
+  mirroring kotoba-lang/kotoba's own
+  `wasm-binary-runs-kgraph-round-trip-through-real-host-functions` JVM test
+  byte-for-byte: asserts `[1 :name "Aoi"]`, queries
+  `{:find [?v] :where [[1 :name ?v]]}`, and checks both the store and the
+  query result (`[["Aoi"]]`) match what the JVM/Chicory path produces.
 
 ## Run it
 
@@ -30,11 +50,17 @@ cd web && python3 -m http.server 8123
 
 ## Scope (honest R0)
 
-- **Zero-import modules only.** The host-import ABI (`kgraph-assert!` etc.
-  — the same wire contract `kotoba.wasm-exec` implements on the JVM side in
-  `kotoba-lang/kotoba`) has **no browser implementation here**. A component
-  that calls any `(module "kotoba")` import will fail to instantiate in this
-  page today.
+- **Only the `kgraph-*` host-import surface is ported.** `kgraph_assert`/
+  `kgraph_retract`/`kgraph_get_objects`/`kgraph_query` are implemented in
+  `kgraph.js`; `kse`/`auth`/`llm`/`evm`/`btc`/`egress`/`chain` and friends
+  (referenced in the wider kotoba/kototama design docs) have no browser
+  implementation. A component that calls any other `(module "kotoba")`
+  import will still fail to instantiate in this page.
+- **`kgraph.js`'s EDN reader/writer is intentionally not general-purpose.**
+  It handles exactly the shapes the `kgraph-*` ABI carries (vectors, maps
+  with keyword keys, keywords, strings, integers, `?var` symbols) — no
+  sets, no reader macros, no arbitrary nesting. Extend it if a demo needs
+  more; don't assume it parses arbitrary EDN.
 - **No capability/policy enforcement at this layer.** The `--policy`
   gate kotoba-lang/kotoba applies at `wasm emit` time is a build-time
   check; nothing here re-verifies it at load time. Don't treat this page as

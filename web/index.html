@@ -15,5 +15,19 @@
 </p>
 <kototama-wasm-run id="out" src="./demo.wasm"></kototama-wasm-run>
 <script type="module" src="./kototama-wasm-run.js"></script>
+
+<h1>kgraph host-import PoC</h1>
+<p>
+  <code>demo-kgraph.wasm</code> is the byte-for-byte output of
+  <code>kotoba wasm emit src/demo_kgraph.kotoba --policy src/demo_kgraph_policy.edn</code>
+  in kotoba-lang/kotoba (219 bytes; declares the <code>kgraph_assert</code>/
+  <code>kgraph_query</code> host imports). This element wires those imports to
+  a browser-side port of kotoba's in-memory EAVT datom store
+  (<code>kgraph.js</code>) instead of the JVM's <code>kotoba.wasm-exec</code> —
+  the module asserts <code>[1 :name "Aoi"]</code> then queries
+  <code>{:find [?v] :where [[1 :name ?v]]}</code>, all inside this page.
+</p>
+<kototama-wasm-kgraph-demo id="out-kgraph" src="./demo-kgraph.wasm"></kototama-wasm-kgraph-demo>
+<script type="module" src="./kototama-wasm-kgraph-demo.js"></script>
 </body>
 </html>
