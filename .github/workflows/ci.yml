@@ -21,3 +21,14 @@ jobs:
           cli: latest
       - name: Test CLJC contract
         run: clojure -M:test
+
+  web:
+    name: browser WASM AOT demo gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: node web/verify.mjs
+      - run: node web/verify-kgraph.mjs
