@@ -44,7 +44,7 @@
   (:import (com.dylibso.chicory.runtime ExecutionListener HostFunction ImportFunction
                                         ImportValues Instance WasmFunctionHandle)
            (com.dylibso.chicory.wasm Parser)
-           (com.dylibso.chicory.wasm.types FunctionType ValType)
+           (com.dylibso.chicory.wasm.types FunctionType MemoryLimits ValType)
            (java.security MessageDigest SecureRandom)
            (java.net URI)
            (java.net.http HttpClient HttpRequest HttpRequest$BodyPublishers HttpResponse$BodyHandlers)))
@@ -257,6 +257,22 @@
   guests, still trips a genuinely unbounded loop in a fraction of a second."
   5000000)
 
+(defn- memory-limits-for
+  "Chicory `MemoryLimits` capping how far the guest's `memory.grow` can
+  reach, to `min(caps-limit, module's-own-declared-max)` -- the module's
+  OWN declared INITIAL page count is read and never overridden (a guest
+  that needs N pages to even start must still get them; only the ceiling
+  on growth is capped). `nil` when MODULE declares no memory section at
+  all (a memory-less guest, e.g. one only calling `now`, has nothing to
+  limit). Same approach `aiueos.execute/memory-limits-for` establishes,
+  via Chicory's STABLE (not :unsafe/:experimental, unlike the fuel
+  listener above) `Instance.Builder/withMemoryLimits` API."
+  [module caps-limit]
+  (let [section (.memorySection module)]
+    (when (.isPresent section)
+      (let [own-limits (.limits (.getMemory (.get section) 0))]
+        (MemoryLimits. (.initialPages own-limits) (min caps-limit (.maximumPages own-limits)))))))
+
 (defn instantiate
   "Parse WASM-BYTES and build a Chicory Instance whose host imports are
   exactly REQUESTED-IMPORTS (a seq of `kototama.contract` import ids the
@@ -268,6 +284,11 @@
   wired HostFunction ALSO re-checks its own grant at call time (defense
   in depth) and enforces its RuntimeLimits counter, so a caller building
   the import list a different way still can't bypass either check.
+
+  Also caps the guest's linear memory growth to HOST-CAPS'
+  `:limits :max-memory-pages` (via `memory-limits-for`) whenever the
+  module declares a memory section -- independent of which imports are
+  granted (a memory-less guest has nothing to cap).
 
   opts:
     :store  {:read-fn :append-fn} for log-read/log-append! (default:
@@ -295,11 +316,12 @@
            imports (-> (ImportValues/builder)
                       (.addFunction (into-array ImportFunction host-fns))
                       .build)
-           module (Parser/parse ^bytes wasm-bytes)]
-       (-> (Instance/builder module)
-           (.withImportValues imports)
-           (.withUnsafeExecutionListener (fuel-listener fuel))
-           .build)))))
+           module (Parser/parse ^bytes wasm-bytes)
+           mem-limits (memory-limits-for module (:max-memory-pages (:limits caps)))
+           builder (-> (Instance/builder module)
+                      (.withImportValues imports)
+                      (.withUnsafeExecutionListener (fuel-listener fuel)))]
+       (.build (if mem-limits (.withMemoryLimits builder mem-limits) builder))))))
 
 (defn call-main
   "Invoke an already-built Instance's 0-arity exported `main` and return

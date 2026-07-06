@@ -17,6 +17,7 @@
     (is (= #{:verify :now :log-read} (:grants caps)))
     (is (= 3 (get-in caps [:limits :max-imports])))
     (is (= 0 (get-in caps [:limits :max-http-posts])))
+    (is (= 16 (get-in caps [:limits :max-memory-pages])))
     (is (false? (get-in caps [:limits :allow-write-imports?])))))
 
 (deftest granted-imports-pass
