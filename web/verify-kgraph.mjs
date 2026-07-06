@@ -12,7 +12,7 @@ import path from 'node:path';
 // hand it to a `data:` URL instead (standard ESM, no --experimental-* flags,
 // works the same on any Node >= 18). Pinned to the same commit index.html
 // loads from jsdelivr -- bump both together, don't float on @main.
-const WASM_WEBCOMPONENT_COMMIT = 'feef2632b15cdd3f71b48ecee6dc443db184b92a';
+const WASM_WEBCOMPONENT_COMMIT = '042d3b46a2eacf802a00efc64ad8c8ac54ca5eb3';
 async function importFromJsdelivr(filePath) {
   const url = `https://cdn.jsdelivr.net/gh/kotoba-lang/wasm-webcomponent@${WASM_WEBCOMPONENT_COMMIT}/${filePath}`;
   const src = await (await fetch(url)).text();
