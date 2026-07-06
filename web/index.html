@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>kototama-wasm-run demo</title>
+</head>
+<body>
+<h1>kototama browser WASM AOT PoC</h1>
+<p>
+  <code>demo.wasm</code> is the unmodified byte-for-byte output of
+  <code>kotoba wasm emit src/demo.kotoba</code> in kotoba-lang/kotoba
+  (73 bytes, zero imports, exports <code>main() : i32</code> which returns 42).
+  This page instantiates it with the browser's native <code>WebAssembly</code>
+  API — no JVM, no Chicory, no wasmtime.
+</p>
+<kototama-wasm-run id="out" src="./demo.wasm"></kototama-wasm-run>
+<script type="module" src="./kototama-wasm-run.js"></script>
+</body>
+</html>

@@ -33,6 +33,22 @@ instead of becoming the semantic authority.
   gates, membrane, heartbeat, did:key, atproto shaping, and identity helpers.
 - `lib/actor/publish.bb` is the shared actor publish runner.
 
+## Browser WASM AOT PoC (`web/`)
+
+[ADR-2607061630](https://github.com/com-junkawasaki/root/blob/main/90-docs/adr/2607061630-kototama-browser-wasm-aot-webcomponent.md)
+starts shifting kototama's execution premise from "JVM hosts a Wasm
+interpreter" (`kotoba wasm run` + `com.dylibso.chicory` in
+`kotoba-lang/kotoba`) toward "the browser's own engine runs the
+already-AOT-compiled binary directly", with kototama supplying the hosting
+shell as a WebComponent instead of a JVM process. `web/` is the first slice:
+a `<kototama-wasm-run>` custom element that loads a zero-import
+`.kotoba`-emitted `.wasm` module and runs it via native `WebAssembly.instantiate`
+— no JVM, no Chicory, no wasmtime. See `web/README.md` for scope and honest
+R0 limitations (no host-import ABI in the browser yet, no capability/policy
+re-enforcement at load time). The JVM+Chicory path in kotoba-lang/kotoba is
+unaffected and remains the compile-time/test-time proof; this is additive,
+not a replacement.
+
 ## Test
 
 ```bash
