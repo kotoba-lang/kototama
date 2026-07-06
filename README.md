@@ -15,7 +15,7 @@ decided the tender's execution layer is **JVM/Clojure via
 **`kototama.tender` (`src/kototama/tender.clj`) is that execution layer,
 landed** ([ADR-2607062330](https://github.com/com-junkawasaki/root/blob/main/90-docs/adr/2607062330-kototama-tender-chicory-execution-runtime.md)):
 every one of `kototama.contract`'s 8 `actor:host` imports (`gen-keypair`/
-`sign`/`verify`/`sha256-hex`/`http-post`/`log-read`/`log-append!`/`now`) is
+`sign`/`verify`/`sha256-hex`/`http-post`/`log-read`/`log-write`/`clock-monotonic`) is
 wired to a real Chicory `HostFunction` that only performs its effect when
 `contract/validate-import-surface` says the caller's `HostCaps` grant it —
 checked pre-flight (before any `Instance` is built) and again per call
