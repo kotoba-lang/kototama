@@ -23,8 +23,11 @@ checked pre-flight (before any `Instance` is built) and again per call
 are enforced by kototama itself (Chicory has no native per-category call
 counter) as an in-band `-1` a well-behaved guest can see and back off
 from — distinct from a `:grants` violation, which is a structural
-authority breach and hard-aborts the call instead. A per-instruction fuel
-listener traps a runaway/looping guest. Verified against real Wasm
+authority breach and hard-aborts the call instead. `:max-memory-pages` is
+enforced too, via Chicory's STABLE `withMemoryLimits` API (not the
+:unsafe fuel-listener hook) — independent of which imports are granted,
+applied to any guest that declares a memory section. A per-instruction
+fuel listener traps a runaway/looping guest. Verified against real Wasm
 binaries (`wasm-tools`-assembled WAT fixtures through the actual Chicory
 `Parser`/`Instance` pipeline, not mocked), including cross-checking a
 real `sign`→`verify` round trip and `sha256-hex` against a known digest.

@@ -57,6 +57,7 @@
                 :max-http-posts :non-negative-int
                 :max-log-read-bytes :non-negative-int
                 :max-log-append-bytes :non-negative-int
+                :max-memory-pages :non-negative-int
                 :allow-secret-imports? :boolean
                 :allow-write-imports? :boolean}})
 
@@ -65,6 +66,15 @@
    :max-http-posts 0
    :max-log-read-bytes 1048576
    :max-log-append-bytes 65536
+   ;; 16 Wasm pages (64 KiB/page) = 1 MiB -- a guest that legitimately
+   ;; needs more grows this explicitly via HostCaps, same as every other
+   ;; limit here; this is NOT an :abi/imports-gated effect (a guest's
+   ;; linear memory ceiling applies regardless of which host imports it's
+   ;; granted), so it is deliberately NOT checked by
+   ;; validate-import-surface below -- a host adapter (kototama.tender,
+   ;; the browser actor-host.js) reads it directly off HostCaps' :limits
+   ;; when it instantiates.
+   :max-memory-pages 16
    :allow-secret-imports? false
    :allow-write-imports? false})
 

@@ -45,6 +45,16 @@
      (import \"kotoba\" \"now\" (func $now (result i64)))
      (func (export \"main\") (result i64) (call $now)))")
 
+(def memory-grow-wat
+  "No imports -- declares 1 initial page, main tries to grow BY the
+  amount passed as a global-like constant baked per test (see below);
+  returns memory.grow's result (previous page count, or -1 on failure)."
+  (fn [grow-by]
+    (str "(module
+            (memory (export \"memory\") 1)
+            (func (export \"main\") (result i64)
+              (i64.extend_i32_s (memory.grow (i32.const " grow-by ")))))")))
+
 (def infinite-loop-wat
   "No imports -- just an unconditional back-edge loop, to trip the fuel
   listener."
@@ -106,6 +116,24 @@
         caps (contract/host-caps {})]
     (is (thrown-with-msg? clojure.lang.ExceptionInfo #"fuel limit"
                           (tender/run-main wasm [] caps {:fuel 10000})))))
+
+(deftest memory-grow-within-cap-succeeds
+  (let [wasm (wat->wasm (memory-grow-wat 1)) ; 1 initial + 1 = 2, exactly the cap
+        caps (contract/host-caps {:limits {:max-memory-pages 2}})
+        prev-size (tender/run-main wasm [] caps)]
+    (is (= 1 prev-size) "memory.grow returns the PREVIOUS page count on success")))
+
+(deftest memory-grow-past-cap-fails
+  (let [wasm (wat->wasm (memory-grow-wat 5)) ; 1 initial + 5 = 6, past a 2-page cap
+        caps (contract/host-caps {:limits {:max-memory-pages 2}})
+        result (tender/run-main wasm [] caps)]
+    (is (= -1 result) "memory.grow returns -1 when it would exceed max-memory-pages")))
+
+(deftest memory-less-guest-is-unaffected-by-the-memory-cap
+  (let [wasm (wat->wasm now-wat)
+        caps (contract/host-caps {:grants [:now] :limits {:max-memory-pages 0}})]
+    (is (pos? (tender/run-main wasm [:now] caps))
+        "a guest declaring no memory section links and runs fine even with max-memory-pages 0")))
 
 (deftest log-append-byte-limit-denies-once-exceeded
   (let [wasm (wat->wasm log-append-thrice-wat)
