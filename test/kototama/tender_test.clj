@@ -79,6 +79,10 @@
 
 (def everything (constantly true))
 
+(defn- read-fixture [name]
+  (with-open [is (io/input-stream (io/resource (str "kototama/fixtures/" name)))]
+    (.readAllBytes is)))
+
 (deftest sha256-hex-round-trips-through-real-chicory
   (let [wasm (wat->wasm sha256-hex-wat)
         caps (contract/host-caps {:grants [:sha256-hex]})
@@ -170,3 +174,32 @@
                                   :limits {:allow-secret-imports? true}})
         ok? (tender/run-main wasm [:gen-keypair :sign :verify] caps)]
     (is (= 1 ok?))))
+
+;; ---------------------------------------------------------------------------
+;; Real .kotoba-compiler-emitted fixtures (kotoba-lang/kotoba's `kotoba wasm
+;; emit`, checked in as bytes -- NOT a hand-written WAT string self-consistent
+;; only with this repo's own field-name choices). ADR-2607062330's addendum 3
+;; found `kotoba wasm emit` could not call these imports at all until
+;; kotoba-core-contracts registered them (kotoba-core-contracts#3); this is
+;; the actual end-to-end proof that closed loop: a real compiled guest
+;; produced by the independent `kotoba` compiler links against
+;; `kototama.tender`'s HostFunctions without any shape mismatch. Source
+;; alongside each fixture for provenance (`fixtures/*.kotoba`).
+
+(deftest kotoba-compiled-sha256-hex-guest-round-trips-through-real-chicory
+  (testing "(sha256-hex 0 0 2048 64), compiled by `kotoba wasm emit`, not WAT"
+    (let [wasm (read-fixture "kotoba-compiled-sha256-hex.wasm")
+          caps (contract/host-caps {:grants [:sha256-hex]})
+          instance (tender/instantiate wasm [:sha256-hex] caps)
+          written (tender/call-main instance)]
+      (is (= 64 written))
+      (is (= "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+             (tender/read-memory-string instance 2048 written))
+          "sha256(\"\") computed by the real host function, written into the guest's own memory"))))
+
+(deftest kotoba-compiled-gen-keypair-guest-round-trips-through-real-chicory
+  (testing "(gen-keypair 2048 64), compiled by `kotoba wasm emit`, not WAT"
+    (let [wasm (read-fixture "kotoba-compiled-gen-keypair.wasm")
+          caps (contract/host-caps {:grants [:gen-keypair] :limits {:allow-secret-imports? true}})
+          written (tender/run-main wasm [:gen-keypair] caps)]
+      (is (= 64 written) "32-byte seed + 32-byte derived pubkey"))))
