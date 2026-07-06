@@ -27,10 +27,18 @@
   one sane way to wire a HostFunction — proof-of-pattern, not shared
   code.
 
-  Host module name is `\"kototama\"` (Chicory links a HostFunction by
-  `(module, field)` name — distinct from kotoba's own `\"kotoba\"`
-  module, so a guest can in principle import from both without
-  collision)."
+  Host module name is `\"kotoba\"`, matching `kotoba wasm emit`'s own
+  hardcoded import-module convention (`kotoba.runtime`'s WASM encoder) --
+  a real compiled `.kotoba` guest can only ever import from that exact
+  module name, so this MUST match it or Chicory's `.build` fails to link
+  any guest actually emitted by the compiler (an earlier draft used
+  `\"kototama\"` here and only ever linked against this namespace's own
+  hand-written WAT test fixtures, which happened to agree with it --
+  never against a real compiled guest). Field names (gen_keypair, sign,
+  verify, sha256_hex, http_post, log_read, log_append, now) don't
+  collide with `kotoba.wasm-exec`'s own fields (kgraph_assert,
+  has_capability, ...) under the same module, so both host surfaces can
+  coexist for a guest that needs imports from each."
   (:require [kototama.contract :as contract]
             [ed25519.core :as ed])
   (:import (com.dylibso.chicory.runtime ExecutionListener HostFunction ImportFunction
@@ -55,10 +63,10 @@
           n))))
 
 (defn host-fn
-  "One (module \"kototama\") host import: FIELD, param/result ValTypes, and
+  "One (module \"kotoba\") host import: FIELD, param/result ValTypes, and
   a Clojure fn [instance long-args] -> long (the single i32/i64 result)."
   [field params result f]
-  (HostFunction. "kototama" field
+  (HostFunction. "kotoba" field
                  (FunctionType/of params [result])
                  (reify WasmFunctionHandle
                    (apply [_ instance args]
