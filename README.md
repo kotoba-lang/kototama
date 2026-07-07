@@ -41,6 +41,19 @@ real `sign`→`verify` round trip and `sha256-hex` against a known digest.
   above). `:clj`-only, matching `com.dylibso.chicory`'s own JVM-only
   nature; pulls in `com.dylibso.chicory/{wasm,runtime}` and
   `kotoba-lang/ed25519` (`kototama.contract` itself stays free of them).
+- `src/kototama/aiueos_adapter.clj` closes the "aiueos decides, kototama
+  enforces" loop for real: calls `aiueos.cli/command-result` (a real
+  `io.github.kotoba-lang/aiueos` dependency, in-process — not the
+  `bb decide` subprocess `aiueos.decide` also exposes for hosts that
+  aren't already JVM/Clojure) and translates the actual grant/deny
+  decision into a `kototama.contract/host-caps` value. `kototama.tender`
+  never computes a grant itself either way (ADR-2607022700's rule); this
+  only removes the need for every caller to hand-build `HostCaps` from a
+  decision aiueos already made. Covers the subset of `actor:host` imports
+  aiueos's own default kernel capabilities recognize (`log-write`/
+  `clock-monotonic`/`random-bytes`) — `gen-keypair`/`sign`/`verify`/
+  `sha256-hex`/`http-post`/`log-read` have no aiueos-kernel-capability
+  counterpart and still take caller-supplied `HostCaps`, same as before.
 - `lib/kototama/*.cljc` contains the portable organism/cell runtime:
   gates, membrane, heartbeat, did:key, atproto shaping, and identity helpers.
 - `lib/actor/publish.bb` is the shared actor publish runner.
