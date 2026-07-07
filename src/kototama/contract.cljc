@@ -43,7 +43,11 @@
     {:import/id :clock-monotonic
      :import/name "clock-monotonic"
      :import/category :clock
-     :import/effects #{:clock}}]})
+     :import/effects #{:clock}}
+    {:import/id :llm-infer
+     :import/name "llm-infer"
+     :import/category :llm
+     :import/effects #{:network}}]})
 
 (def import-by-id
   (into {} (map (juxt :import/id identity) (:abi/imports import-surface))))
@@ -55,6 +59,7 @@
   {:model/name :kototama.contract/RuntimeLimits
    :model/keys {:max-imports :non-negative-int
                 :max-http-posts :non-negative-int
+                :max-llm-infers :non-negative-int
                 :max-log-read-bytes :non-negative-int
                 :max-log-write-bytes :non-negative-int
                 :max-memory-pages :non-negative-int
@@ -64,6 +69,10 @@
 (def default-runtime-limits
   {:max-imports (count (:abi/imports import-surface))
    :max-http-posts 0
+   ;; Same "fully denied unless a caller's HostCaps explicitly raises the
+   ;; limit AND grants the import" default as :max-http-posts -- an LLM
+   ;; call is metered network egress + real API spend, not a free action.
+   :max-llm-infers 0
    :max-log-read-bytes 1048576
    :max-log-write-bytes 65536
    ;; 16 Wasm pages (64 KiB/page) = 1 MiB -- a guest that legitimately
@@ -133,6 +142,7 @@
 (defn- limit-errors [limits requested ids]
   (let [requested-count (count requested)
         http-posts (count (filter #{:http-post} ids))
+        llm-infers (count (filter #{:llm-infer} ids))
         secret-imports (filterv #(some (:import/effects (import-by-id %)) [:secret]) ids)
         write-imports (filterv #(some (:import/effects (import-by-id %)) [:write]) ids)]
     (cond-> []
@@ -145,6 +155,11 @@
       (conj {:error :limit/max-http-posts
              :limit (:max-http-posts limits)
              :actual http-posts})
+
+      (> llm-infers (:max-llm-infers limits))
+      (conj {:error :limit/max-llm-infers
+             :limit (:max-llm-infers limits)
+             :actual llm-infers})
 
       (and (false? (:allow-secret-imports? limits))
            (seq secret-imports))

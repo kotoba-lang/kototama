@@ -7,7 +7,8 @@
   (is (= 0 (:abi/version contract/import-surface)))
   (is (= :kototama.contract/HostCaps (:model/name contract/HostCaps)))
   (is (= :kototama.contract/RuntimeLimits (:model/name contract/RuntimeLimits)))
-  (is (= #{:gen-keypair :sign :verify :sha256-hex :http-post :log-read :log-write :clock-monotonic}
+  (is (= #{:gen-keypair :sign :verify :sha256-hex :http-post :llm-infer
+           :log-read :log-write :clock-monotonic}
          (set (keys contract/import-by-id))))
   (is (= :log-write (contract/import-id "log-write"))))
 
@@ -17,6 +18,7 @@
     (is (= #{:verify :clock-monotonic :log-read} (:grants caps)))
     (is (= 3 (get-in caps [:limits :max-imports])))
     (is (= 0 (get-in caps [:limits :max-http-posts])))
+    (is (= 0 (get-in caps [:limits :max-llm-infers])))
     (is (= 16 (get-in caps [:limits :max-memory-pages])))
     (is (false? (get-in caps [:limits :allow-write-imports?])))))
 
@@ -71,6 +73,16 @@
     (is (false? (:ok? result)))
     (is (= #{:limit/max-imports :limit/max-http-posts :limit/secret-imports}
            (set (map :error (:errors result)))))))
+
+(deftest limits-reject-excess-llm-infers
+  (let [result (contract/validate-import-surface
+                 ["llm-infer"]
+                 {:grants [:llm-infer]
+                  :limits {:max-imports 1
+                           :max-llm-infers 0}})]
+    (is (false? (:ok? result)))
+    (is (= [{:error :limit/max-llm-infers :limit 0 :actual 1}]
+           (:errors result)))))
 
 (deftest write-imports-require-explicit-host-opt-in
   (let [closed (contract/validate-import-surface
