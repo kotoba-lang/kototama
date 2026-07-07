@@ -35,10 +35,10 @@
   `\"kototama\"` here and only ever linked against this namespace's own
   hand-written WAT test fixtures, which happened to agree with it --
   never against a real compiled guest). Field names (gen_keypair, sign,
-  verify, sha256_hex, http_post, log_read, log_write, clock_monotonic)
-  don't collide with `kotoba.wasm-exec`'s own fields (kgraph_assert,
-  has_capability, ...) under the same module, so both host surfaces can
-  coexist for a guest that needs imports from each.
+  verify, sha256_hex, http_post, log_read, log_write, clock_monotonic,
+  llm_infer) don't collide with `kotoba.wasm-exec`'s own fields
+  (kgraph_assert, has_capability, ...) under the same module, so both
+  host surfaces can coexist for a guest that needs imports from each.
 
   `:log-write`/`:clock-monotonic` (not `:log-append!`/`:now`, an earlier
   draft's names) match field-for-field the `log-write`/`clock-monotonic`
@@ -46,8 +46,20 @@
   for `kotoba wasm emit` (landed independently, for aiueos's own kernel-
   capability vocabulary) -- same operation, so this ABI reuses that name
   instead of registering a second one a `.kotoba` author would have to
-  pick between for no real difference."
-  (:require [kototama.contract :as contract]
+  pick between for no real difference.
+
+  `:llm-infer` (`llm_infer`, capability id 225 in `kotoba-core-contracts`'
+  `capability_contract.edn`) is the one host function here that talks to
+  a THIRD party (the Anthropic Messages API), not just this JVM process
+  or its injected store -- so, unlike every other host-fn above, it is
+  built with an injectable `llm-client` (`{:infer-fn (fn [prompt] text-
+  or-nil)}`, same DI shape `log-read-host-fn`/`log-write-host-fn` already
+  use for `store`) instead of calling `HttpClient` inline. `default-llm-
+  client` is the production implementation; tests inject a fake
+  `:infer-fn` instead of hitting the real network."
+  (:require [clojure.data.json :as json]
+            [clojure.string :as str]
+            [kototama.contract :as contract]
             [ed25519.core :as ed])
   (:import (com.dylibso.chicory.runtime ExecutionListener HostFunction ImportFunction
                                         ImportValues Instance WasmFunctionHandle)
@@ -106,7 +118,7 @@
 ;; well-behaved guest can see it and back off instead of the whole `main`
 ;; call crashing on a Java exception it never gets a chance to handle. ──
 
-(defn- new-limits-state [] (atom {:http-posts 0 :log-read-bytes 0 :log-write-bytes 0}))
+(defn- new-limits-state [] (atom {:http-posts 0 :llm-infers 0 :log-read-bytes 0 :log-write-bytes 0}))
 
 (defn- within-count-limit? [state-key limit-key caps limits-state]
   (< (get @limits-state state-key) (get (:limits caps) limit-key)))
@@ -128,7 +140,7 @@
   (when-not (contains? (:grants caps) id)
     (denied! id :grant/missing {:granted (:grants caps)})))
 
-;; ── the 8 kototama.contract/import-surface host functions ──────────────────
+;; ── the 9 kototama.contract/import-surface host functions ──────────────────
 
 (defn- gen-keypair-host-fn
   "`(out-ptr out-cap) -> bytes-written|-1`. Writes a fresh random 32-byte
@@ -201,6 +213,92 @@
                      resp (.send (HttpClient/newHttpClient) req (HttpResponse$BodyHandlers/ofByteArray))]
                  (swap! limits-state update :http-posts inc)
                  (write-bytes! instance (aget args 4) (aget args 5) (.body resp)))))))
+
+;; ── llm-infer's injected client: real Anthropic call in production,
+;; fake `:infer-fn` in tests (same DI shape as `store` below) ──────────────
+
+(def ^:private anthropic-messages-url "https://api.anthropic.com/v1/messages")
+(def ^:private default-llm-model "claude-opus-4-8")
+(def ^:private default-llm-max-tokens 1024)
+
+(def ^:private llm-api-key-env-vars
+  "Same resolution order `cloud_itonami.runtime/model-config` uses --
+  ITO_MODEL_API_KEY takes precedence over the more generic provider-
+  specific vars, ANTHROPIC_API_KEY is the last resort."
+  ["ITO_MODEL_API_KEY" "OPENAI_API_KEY" "OPENCLAW_API_KEY" "HERMES_API_KEY" "ANTHROPIC_API_KEY"])
+
+(defn resolve-llm-api-key
+  "First non-blank value among `llm-api-key-env-vars`, or nil if every one
+  of them is unset/blank -- callers treat nil as \"no key configured\",
+  never throw."
+  []
+  (some (fn [env-var]
+          (let [v (System/getenv env-var)]
+            (when-not (str/blank? v) v)))
+        llm-api-key-env-vars))
+
+(defn- anthropic-infer
+  "Calls the real Anthropic Messages API with PROMPT as a single user
+  message, authenticated with API-KEY; returns the assistant's text
+  reply, or nil on ANY failure (non-2xx status, network error, malformed
+  JSON) -- never throws, so a caller can treat nil uniformly with \"no
+  key configured\" and fail closed."
+  [api-key prompt]
+  (try
+    (let [body (json/write-str {:model default-llm-model
+                                :max_tokens default-llm-max-tokens
+                                :messages [{:role "user" :content prompt}]})
+          req (-> (HttpRequest/newBuilder (URI/create anthropic-messages-url))
+                 (.header "content-type" "application/json")
+                 (.header "x-api-key" api-key)
+                 (.header "anthropic-version" "2023-06-01")
+                 (.POST (HttpRequest$BodyPublishers/ofString body))
+                 .build)
+          resp (.send (HttpClient/newHttpClient) req (HttpResponse$BodyHandlers/ofString))]
+      (when (<= 200 (.statusCode resp) 299)
+        (let [resp-body (json/read-str (.body resp) :key-fn keyword)
+              text (apply str (keep #(when (= "text" (:type %)) (:text %))
+                                    (:content resp-body)))]
+          (when-not (str/blank? text) text))))
+    (catch Exception _ nil)))
+
+(defn default-llm-client
+  "Production `{:infer-fn}` backing `llm-infer-host-fn`: resolves the API
+  key fresh on every call (env can change between calls in a long-lived
+  tender process) and calls the real Anthropic Messages API, or returns
+  nil (fail-closed) with no network call at all when no key is
+  configured."
+  []
+  {:infer-fn (fn [prompt]
+              (when-let [api-key (resolve-llm-api-key)]
+                (anthropic-infer api-key prompt)))})
+
+(defn- llm-infer-host-fn
+  "`(prompt-ptr prompt-len out-ptr out-cap) -> bytes-written|-1`. Reads
+  PROMPT out of guest memory, sends it to the injected LLM-CLIENT's
+  `:infer-fn` as a single user message, and writes the text reply.
+  `#{:network}`, metered against `:max-llm-infers` (default 0 -- fully
+  denied unless a caller's HostCaps explicitly raises the limit AND
+  grants the import, same convention `http-post-host-fn` uses).
+
+  Fail-closed like every quota/overflow case here (-1, never an
+  exception): `:infer-fn` returning nil (no API key configured, or the
+  underlying call failed) is indistinguishable in-band from a metering
+  denial or an oversized reply -- a well-behaved guest sees -1 either
+  way and can't tell which, which is the point (it never gets to probe
+  the host's credential state)."
+  [caps limits-state llm-client]
+  (host-fn "llm_infer" (mapv valtype [:i32 :i32 :i32 :i32]) ValType/I32
+           (fn [instance args]
+             (ensure-granted! caps :llm-infer)
+             (if-not (within-count-limit? :llm-infers :max-llm-infers caps limits-state)
+               -1
+               (let [prompt (String. ^bytes (read-bytes! instance (aget args 0) (aget args 1)) "UTF-8")
+                     text ((:infer-fn llm-client) prompt)]
+                 (if (nil? text)
+                   -1
+                   (do (swap! limits-state update :llm-infers inc)
+                       (write-bytes! instance (aget args 2) (aget args 3) (.getBytes ^String text "UTF-8")))))))))
 
 (defn- log-read-host-fn
   "`(out-ptr out-cap) -> bytes-written|-1`. Reads the injected store's
@@ -301,12 +399,15 @@
   granted (a memory-less guest has nothing to cap).
 
   opts:
-    :store  {:read-fn :append-fn} for log-read/log-write (default:
-             `in-memory-store`).
-    :fuel   instruction budget override (default `default-fuel-limit`)."
+    :store      {:read-fn :append-fn} for log-read/log-write (default:
+                `in-memory-store`).
+    :llm-client {:infer-fn} for llm-infer (default: `default-llm-client`,
+                the real Anthropic call; tests inject a fake `:infer-fn`).
+    :fuel       instruction budget override (default `default-fuel-limit`)."
   ([wasm-bytes requested-imports host-caps] (instantiate wasm-bytes requested-imports host-caps {}))
   ([wasm-bytes requested-imports host-caps
-    {:keys [store fuel] :or {store (in-memory-store) fuel default-fuel-limit}}]
+    {:keys [store llm-client fuel]
+     :or {store (in-memory-store) llm-client (default-llm-client) fuel default-fuel-limit}}]
    (let [caps (contract/host-caps host-caps)
          validation (contract/validate-import-surface requested-imports caps)]
      (when-not (:ok? validation)
@@ -319,6 +420,7 @@
                      :verify #(verify-host-fn caps limits-state)
                      :sha256-hex #(sha256-hex-host-fn caps limits-state)
                      :http-post #(http-post-host-fn caps limits-state)
+                     :llm-infer #(llm-infer-host-fn caps limits-state llm-client)
                      :log-read #(log-read-host-fn caps limits-state store)
                      :log-write #(log-write-host-fn caps limits-state store)
                      :clock-monotonic #(clock-monotonic-host-fn caps limits-state)}

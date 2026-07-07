@@ -77,6 +77,28 @@
        (drop (call $log_write (i32.const 0) (i32.const 4)))
        (i64.extend_i32_s (call $log_write (i32.const 0) (i32.const 4)))))")
 
+(def llm-infer-wat
+  "Imports llm_infer, sends the 5-byte literal \"hello\" as the prompt,
+  writes the reply at offset 100 (64-byte capacity)."
+  "(module
+     (import \"kotoba\" \"llm_infer\" (func $llm_infer (param i32 i32 i32 i32) (result i32)))
+     (memory (export \"memory\") 1)
+     (data (i32.const 0) \"hello\")
+     (func (export \"main\") (result i64)
+       (i64.extend_i32_s (call $llm_infer (i32.const 0) (i32.const 5) (i32.const 100) (i32.const 64)))))")
+
+(def llm-infer-twice-wat
+  "Imports llm_infer, calls it twice with the same 5-byte prompt, returns
+  the SECOND call's result (i32 sign-extended to i64) -- so a
+  RuntimeLimits cap of 1 call shows up as -1 on the second call."
+  "(module
+     (import \"kotoba\" \"llm_infer\" (func $llm_infer (param i32 i32 i32 i32) (result i32)))
+     (memory (export \"memory\") 1)
+     (data (i32.const 0) \"hello\")
+     (func (export \"main\") (result i64)
+       (drop (call $llm_infer (i32.const 0) (i32.const 5) (i32.const 100) (i32.const 64)))
+       (i64.extend_i32_s (call $llm_infer (i32.const 0) (i32.const 5) (i32.const 100) (i32.const 64)))))")
+
 (def everything (constantly true))
 
 (defn- read-fixture [name]
@@ -114,6 +136,51 @@
           caps (contract/host-caps {:grants [:clock-monotonic]})]
       (is (thrown-with-msg? clojure.lang.ExceptionInfo #"rejected by contract"
                             (tender/instantiate wasm [:sha256-hex] caps))))))
+
+;; ── llm-infer: DI'd via :llm-client (`{:infer-fn}`), same shape :store
+;; already uses for log-read/log-write -- these tests inject a fake
+;; :infer-fn instead of ever reaching the real Anthropic API. ───────────────
+
+(deftest llm-infer-denied-without-explicit-grant-and-limit
+  (testing "default caps: no :llm-infer grant AND max-llm-infers 0 -- pre-flight rejects before any Instance is built"
+    (let [caps (contract/host-caps {})]
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"rejected by contract"
+                            (tender/instantiate (byte-array 0) [:llm-infer] caps))))))
+
+(deftest llm-infer-round-trips-through-an-injected-mock-client
+  (let [wasm (wat->wasm llm-infer-wat)
+        caps (contract/host-caps {:grants [:llm-infer] :limits {:max-llm-infers 1}})
+        seen-prompt (atom nil)
+        instance (tender/instantiate wasm [:llm-infer] caps
+                                     {:llm-client {:infer-fn (fn [prompt]
+                                                               (reset! seen-prompt prompt)
+                                                               "mocked reply")}})
+        n (tender/call-main instance)]
+    (is (= "hello" @seen-prompt) "the guest's prompt bytes were read out of its own memory correctly")
+    (is (= (count "mocked reply") n))
+    (is (= "mocked reply" (tender/read-memory-string instance 100 n)))))
+
+(deftest llm-infer-count-limit-denies-once-exceeded
+  (let [wasm (wat->wasm llm-infer-twice-wat)
+        caps (contract/host-caps {:grants [:llm-infer] :limits {:max-llm-infers 1}})
+        n (tender/run-main wasm [:llm-infer] caps {:llm-client {:infer-fn (fn [_] "ok")}})]
+    (testing "1st call fits the max-llm-infers 1 cap; the 2nd call is denied"
+      (is (= -1 n)))))
+
+(deftest llm-infer-fails-closed-when-the-client-yields-nil
+  (testing "no API key configured / underlying call failed -- :infer-fn returns nil, the host-fn is fail-closed (-1), not an exception"
+    (let [wasm (wat->wasm llm-infer-wat)
+          caps (contract/host-caps {:grants [:llm-infer] :limits {:max-llm-infers 5}})
+          n (tender/run-main wasm [:llm-infer] caps {:llm-client {:infer-fn (fn [_] nil)}})]
+      (is (= -1 n)))))
+
+(deftest llm-infer-fails-closed-through-the-real-default-client-when-no-api-key-is-set
+  (testing "no :llm-client opt passed at all -- wired to the real default-llm-client; asserts the fail-closed path only when this env truly has no key configured, so this never makes a live network call in an environment that happens to have one set for something else"
+    (when (nil? (tender/resolve-llm-api-key))
+      (let [wasm (wat->wasm llm-infer-wat)
+            caps (contract/host-caps {:grants [:llm-infer] :limits {:max-llm-infers 1}})
+            n (tender/run-main wasm [:llm-infer] caps)]
+        (is (= -1 n))))))
 
 (deftest fuel-limit-traps-an-infinite-loop
   (let [wasm (wat->wasm infinite-loop-wat)
