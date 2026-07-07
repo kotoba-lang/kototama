@@ -10,7 +10,14 @@
         ;; llm-infer-host-fn's Anthropic Messages API request/response
         ;; bodies -- same lib+version kototama-clj's :build-taxonomy/
         ;; :enrich aliases already pin elsewhere in this org.
-        org.clojure/data.json {:mvn/version "2.5.0"}}
+        org.clojure/data.json {:mvn/version "2.5.0"}
+        ;; kototama.aiueos-adapter calls aiueos.cli/command-result directly
+        ;; (in-process, not the bb-decide subprocess -- see the adapter's
+        ;; namespace docstring for why) to translate a REAL aiueos policy
+        ;; decision into a kototama.contract/host-caps value.
+        io.github.kotoba-lang/aiueos
+        {:git/url "https://github.com/kotoba-lang/aiueos.git"
+         :git/sha "6403a66203140864f2e859d5d3c9b64471c14351"}}
  :aliases
  {:test {:extra-paths ["test"]
          :extra-deps {io.github.cognitect-labs/test-runner
