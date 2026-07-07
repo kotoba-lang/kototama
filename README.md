@@ -1,5 +1,15 @@
 # kototama
 
+**Not to be confused with [`kotoba-lang/kotodama`](https://github.com/kotoba-lang/kotodama)**
+— both names romanize the same word (言霊/言魂, "word-spirit"; "kototama" and
+"kotodama" are two real, independently-attested readings of the same kanji,
+not a typo), but the repos are unrelated in scope: `kotodama` is the generic
+functional-organism runtime (organism/ReAct machinery injected into any
+actor, extracted from `etzhayyim/kototama`'s UNSPSC-specific predecessor);
+this repo is the Wasm execution/tender runtime described below.
+ADR-2607050900 audited the naming overlap and found no functional
+duplication — just an undocumented spelling split, which this note closes.
+
 ## Role
 
 In the `kotoba-lang → kototama → aiueos` stack
