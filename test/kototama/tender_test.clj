@@ -45,6 +45,17 @@
      (import \"kotoba\" \"clock_monotonic\" (func $clock_monotonic (result i64)))
      (func (export \"main\") (result i64) (call $clock_monotonic)))")
 
+(def multi-export-wat
+  "No imports -- a guest with `main` AND `on-http` (ADR-2607082400's
+  `dispatch-trigger`), each a distinct 0-arity export returning its own
+  constant so a test can tell which one actually ran. No `on-tick`/
+  `on-kse` export, so `has-export?`/`dispatch-trigger` on those two must
+  report :dispatched? false, same as kotoba-server's own route table
+  not sending a trigger to a component that isn't bound to it."
+  "(module
+     (func (export \"main\") (result i64) (i64.const 111))
+     (func (export \"on-http\") (result i64) (i64.const 222)))")
+
 (def memory-grow-wat
   "No imports -- declares 1 initial page, main tries to grow BY the
   amount passed as a global-like constant baked per test (see below);
@@ -119,6 +130,39 @@
         caps (contract/host-caps {:grants [:clock-monotonic]})
         n (tender/run-main wasm [:clock-monotonic] caps)]
     (is (pos? n))))
+
+(deftest call-export-invokes-any-named-export-not-just-main
+  (let [wasm (wat->wasm multi-export-wat)
+        caps (contract/host-caps {:grants []})
+        instance (tender/instantiate wasm [] caps)]
+    (is (= 111 (tender/call-export instance "main")))
+    (is (= 111 (tender/call-main instance)) "call-main stays the historical main-only shim")
+    (is (= 222 (tender/call-export instance "on-http")))))
+
+(deftest has-export?-distinguishes-present-from-absent-exports
+  (let [wasm (wat->wasm multi-export-wat)
+        caps (contract/host-caps {:grants []})
+        instance (tender/instantiate wasm [] caps)]
+    (is (true? (tender/has-export? instance "main")))
+    (is (true? (tender/has-export? instance "on-http")))
+    (is (false? (tender/has-export? instance "on-tick")))
+    (is (false? (tender/has-export? instance "on-kse")))))
+
+(deftest dispatch-trigger-maps-kotoba-server-trigger-kinds-to-export-names
+  (is (= {:run "run" :http "on-http" :tick "on-tick" :kse "on-kse"}
+         tender/trigger->export))
+  (let [wasm (wat->wasm multi-export-wat)
+        caps (contract/host-caps {:grants []})
+        instance (tender/instantiate wasm [] caps)]
+    (testing "bound trigger dispatches and returns the export's result"
+      (is (= {:dispatched? true :result 222}
+             (tender/dispatch-trigger instance :http))))
+    (testing "unbound trigger is a non-event, not an error (component isn't bound to it)"
+      (is (= {:dispatched? false} (tender/dispatch-trigger instance :tick)))
+      (is (= {:dispatched? false} (tender/dispatch-trigger instance :kse))))
+    (testing "unknown trigger kind is a caller bug -- throws"
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"unknown trigger kind"
+                            (tender/dispatch-trigger instance :bogus))))))
 
 (deftest ungranted-import-is-rejected-pre-flight-before-any-wasm-runs
   (testing "validate-import-surface's own :grants/missing error, no Instance ever built"
