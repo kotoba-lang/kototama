@@ -33,6 +33,8 @@ jobs:
           wasm-tools --version
       - name: Test CLJC contract
         run: clojure -M:test
+      - name: Lint CLJC contract
+        run: clojure -M:lint
 
   web:
     name: browser WASM AOT demo gate
