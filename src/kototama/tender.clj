@@ -435,11 +435,62 @@
                       (.withUnsafeExecutionListener (fuel-listener fuel)))]
        (.build (if mem-limits (.withMemoryLimits builder mem-limits) builder))))))
 
+(defn call-export
+  "Invoke an already-built Instance's 0-arity EXPORT-NAME and return its
+  single i32/i64 result as a long. Throws (Chicory's own exception) if
+  INSTANCE has no such export -- see `has-export?` to check first."
+  [instance export-name]
+  (aget ^longs (.apply (.export instance export-name) (long-array 0)) 0))
+
 (defn call-main
-  "Invoke an already-built Instance's 0-arity exported `main` and return
-  its single i32/i64 result as a long."
+  "`(call-export instance \"main\")` -- kept as the historical name every
+  existing caller/test uses; `main` is still the one export every guest
+  is required to have."
   [instance]
-  (aget ^longs (.apply (.export instance "main") (long-array 0)) 0))
+  (call-export instance "main"))
+
+(defn has-export?
+  "True when INSTANCE exports a function named EXPORT-NAME. For a caller
+  that wants to dispatch an OPTIONAL export (not every guest implements
+  every trigger -- see `dispatch-trigger`) without relying on Chicory's
+  exception type as control flow."
+  [instance export-name]
+  (try (some? (.export instance export-name))
+       (catch Exception _ false)))
+
+(def trigger->export
+  "ADR-2607082400: the export-name mapping kotoba-server's own
+  `net_actor.rs::trigger_name` uses for its four `ComponentTrigger`
+  kinds (Run/Http/Tick/Kse) -- kept as data here so a caller dispatching
+  by trigger keyword doesn't hand-roll the string shape. NOTE this is
+  the kotoba-server WIRE VOCABULARY, not a claim that kototama can host
+  kotoba-server's own guests: those are WASM Components (`kotoba-clj`
+  compiler, WIT canonical ABI) and Chicory -- kototama's only engine --
+  rejects that binary format outright (verified: `Parser/parse` throws
+  `MalformedException` on a real compiled mesh-guest .wasm, version
+  header `[13,0,1,0]` vs the core-module `[1,0,0,0]` it expects). This
+  map exists so a FUTURE `.kotoba`-language guest with more than one
+  export can be dispatched by the same trigger vocabulary, not to
+  imply today's mesh guests are already hostable here."
+  {:run "run" :http "on-http" :tick "on-tick" :kse "on-kse"})
+
+(defn dispatch-trigger
+  "Invoke the export for TRIGGER-KIND (one of `(keys trigger->export)`)
+  if INSTANCE has it. Returns `{:dispatched? true :result <long>}`, or
+  `{:dispatched? false}` when the guest doesn't implement that trigger
+  -- not an error, the same non-event kotoba-server's own route table
+  represents when a component isn't bound to a given trigger kind.
+  Throws for an unrecognised TRIGGER-KIND (a caller bug, not a guest
+  shape question)."
+  [instance trigger-kind]
+  (let [export-name (get trigger->export trigger-kind)]
+    (when-not export-name
+      (throw (ex-info "kototama.tender: unknown trigger kind"
+                      {:kototama.tender/trigger-kind trigger-kind
+                       :kototama.tender/known-kinds (set (keys trigger->export))})))
+    (if (has-export? instance export-name)
+      {:dispatched? true :result (call-export instance export-name)}
+      {:dispatched? false})))
 
 (defn run-main
   "`instantiate` + `call-main` in one call. See `instantiate` for the
