@@ -14,10 +14,12 @@
         ;; kototama.aiueos-adapter calls aiueos.cli/command-result directly
         ;; (in-process, not the bb-decide subprocess -- see the adapter's
         ;; namespace docstring for why) to translate a REAL aiueos policy
-        ;; decision into a kototama.contract/host-caps value.
-        io.github.kotoba-lang/aiueos
-        {:git/url "https://github.com/kotoba-lang/aiueos.git"
-         :git/sha "6403a66203140864f2e859d5d3c9b64471c14351"}}
+        ;; decision into a kototama.contract/host-caps value. aiueos.cli
+        ;; lives in aiueos-cljc-contract (the CLJC/EDN authority repo), not
+        ;; in aiueos itself (examples/docs only, no src/aiueos/*.cljc).
+        io.github.kotoba-lang/aiueos-cljc-contract
+        {:git/url "https://github.com/kotoba-lang/aiueos-cljc-contract.git"
+         :git/sha "bac0e59872eef6e1fcbefa7cd76f5af065e019f9"}}
  :aliases
  {:test {:extra-paths ["test"]
          :extra-deps {io.github.cognitect-labs/test-runner

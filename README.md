@@ -53,7 +53,7 @@ real `sign`→`verify` round trip and `sha256-hex` against a known digest.
   `kotoba-lang/ed25519` (`kototama.contract` itself stays free of them).
 - `src/kototama/aiueos_adapter.clj` closes the "aiueos decides, kototama
   enforces" loop for real: calls `aiueos.cli/command-result` (a real
-  `io.github.kotoba-lang/aiueos` dependency, in-process — not the
+  `io.github.kotoba-lang/aiueos-cljc-contract` dependency, in-process — not the
   `bb decide` subprocess `aiueos.decide` also exposes for hosts that
   aren't already JVM/Clojure) and translates the actual grant/deny
   decision into a `kototama.contract/host-caps` value. `kototama.tender`
