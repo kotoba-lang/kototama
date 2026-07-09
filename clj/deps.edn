@@ -2,15 +2,14 @@
  ;; runtime's portable lib); this clj subtree adds the UNSPSC fleet on top.
  :paths ["src" "resources" "../lib"]
  ;; UNSPSC organism actors on the Clojure substrate:
- ;;   langgraph-clj  — StateGraph orchestration (the agent graph)
- ;;   langchain-clj  — model adapter (Murakumo), Datomic-shaped EAV + kotoba_db backend
- ;; Workspace-local roots. This clj subtree lives at
- ;; orgs/com-junkawasaki/kototama/clj; the clj libs are siblings of kototama
- ;; under orgs/com-junkawasaki/ (../../<lib>). The langchain-clj :local/root
- ;; overrides langgraph-clj's transitive git dep so the whole stack resolves
- ;; offline against the local checkouts.
- :deps {io.github.com-junkawasaki/langgraph-clj {:local/root "../../langgraph-clj"}
-        io.github.com-junkawasaki/langchain-clj {:local/root "../../langchain-clj"}}
+ ;;   langgraph  — StateGraph orchestration (the agent graph)
+ ;;   langchain  — model adapter (Murakumo), Datomic-shaped EAV + kotoba_db backend
+ ;; Workspace-local roots. This clj subtree lives at orgs/kotoba-lang/kototama/clj;
+ ;; the clj libs are siblings of kototama under orgs/kotoba-lang/ (../../<lib>).
+ ;; The langchain :local/root overrides langgraph's transitive git dep so the
+ ;; whole stack resolves offline against the local checkouts.
+ :deps {io.github.kotoba-lang/langgraph {:local/root "../../langgraph"}
+        io.github.kotoba-lang/langchain {:local/root "../../langchain"}}
  :aliases
  {:test {:extra-paths ["test"]
          :extra-deps {io.github.cognitect-labs/test-runner
