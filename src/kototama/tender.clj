@@ -343,19 +343,31 @@
     {:read-fn (fn [] @state)
      :append-fn (fn [bs] (swap! state #(byte-array (concat % bs))))}))
 
+(defn fuel-listener*
+  "Returns `[listener counter-atom]` so a session can report how many
+   Wasm instructions were executed (maturity R1 observability)."
+  [limit]
+  (let [n (atom 0)
+        listener (reify ExecutionListener
+                   (onExecution [_ _instruction _stack]
+                     (when (> (swap! n inc) limit)
+                       (throw (ex-info "kototama.tender: wasm execution exceeded fuel limit"
+                                       {:kototama.tender/problem :fuel-exhausted
+                                        :kototama.tender/fuel-limit limit
+                                        :kototama.tender/fuel-used @n})))))]
+    [listener n]))
+
 (defn fuel-listener
   "Same `ExecutionListener` per-instruction counting hook
   `kotoba.wasm-exec/fuel-listener` uses (verified against Chicory
   1.4.0's own dispatch loop there) -- traps a runaway/looping guest
-  instead of hanging the tender process."
+  instead of hanging the tender process.
+
+   Returns only the listener (backward compatible). Prefer
+   `fuel-listener*` when the caller needs the counter atom for a
+   post-run report (`open-session` / `run-report`)."
   [limit]
-  (let [n (atom 0)]
-    (reify ExecutionListener
-      (onExecution [_ _instruction _stack]
-        (when (> (swap! n inc) limit)
-          (throw (ex-info "kototama.tender: wasm execution exceeded fuel limit"
-                          {:kototama.tender/problem :fuel-exhausted
-                           :kototama.tender/fuel-limit limit})))))))
+  (first (fuel-listener* limit)))
 
 (def default-fuel-limit
   "Default max Wasm-instruction budget per `instantiate`d guest, absent an
@@ -381,30 +393,25 @@
       (let [own-limits (.limits (.getMemory (.get section) 0))]
         (MemoryLimits. (.initialPages own-limits) (min caps-limit (.maximumPages own-limits)))))))
 
-(defn instantiate
-  "Parse WASM-BYTES and build a Chicory Instance whose host imports are
-  exactly REQUESTED-IMPORTS (a seq of `kototama.contract` import ids the
-  specific guest module declares it needs) -- gated by HOST-CAPS.
+(defn open-session
+  "Parse WASM-BYTES and build a Chicory session (Instance + observability).
 
-  Fail-closed, pre-flight: `contract/validate-import-surface` runs BEFORE
-  any Instance is built; if it says not `:ok?`, this throws with the
-  contract's own error data attached (no guest code ever runs). Each
-  wired HostFunction ALSO re-checks its own grant at call time (defense
-  in depth) and enforces its RuntimeLimits counter, so a caller building
-  the import list a different way still can't bypass either check.
+   Returns:
+     {:instance      Chicory Instance
+      :limits-state  atom of RuntimeLimits counters (http-posts, llm-infers, …)
+      :fuel-used     atom of instruction count so far
+      :fuel-limit    long
+      :caps          normalized HostCaps
+      :requested     vector of granted import ids wired into the Instance
+      :validation    contract/validate-import-surface result}
 
-  Also caps the guest's linear memory growth to HOST-CAPS'
-  `:limits :max-memory-pages` (via `memory-limits-for`) whenever the
-  module declares a memory section -- independent of which imports are
-  granted (a memory-less guest has nothing to cap).
+   Fail-closed pre-flight via `contract/validate-import-surface`. Each
+   HostFunction re-checks grants at call time. Memory growth capped to
+   HostCaps `:max-memory-pages`. Maturity R1 (ADR-2607101200).
 
-  opts:
-    :store      {:read-fn :append-fn} for log-read/log-write (default:
-                `in-memory-store`).
-    :llm-client {:infer-fn} for llm-infer (default: `default-llm-client`,
-                the real Anthropic call; tests inject a fake `:infer-fn`).
-    :fuel       instruction budget override (default `default-fuel-limit`)."
-  ([wasm-bytes requested-imports host-caps] (instantiate wasm-bytes requested-imports host-caps {}))
+   opts: :store, :llm-client, :fuel (see previous instantiate docstring)."
+  ([wasm-bytes requested-imports host-caps]
+   (open-session wasm-bytes requested-imports host-caps {}))
   ([wasm-bytes requested-imports host-caps
     {:keys [store llm-client fuel]
      :or {store (in-memory-store) llm-client (default-llm-client) fuel default-fuel-limit}}]
@@ -430,16 +437,37 @@
                       .build)
            module (Parser/parse ^bytes wasm-bytes)
            mem-limits (memory-limits-for module (:max-memory-pages (:limits caps)))
+           [listener fuel-used] (fuel-listener* fuel)
            builder (-> (Instance/builder module)
                       (.withImportValues imports)
-                      (.withUnsafeExecutionListener (fuel-listener fuel)))]
-       (.build (if mem-limits (.withMemoryLimits builder mem-limits) builder))))))
+                      (.withUnsafeExecutionListener listener))
+           instance (.build (if mem-limits (.withMemoryLimits builder mem-limits) builder))]
+       {:instance instance
+        :limits-state limits-state
+        :fuel-used fuel-used
+        :fuel-limit fuel
+        :caps caps
+        :requested (:requested validation)
+        :validation validation}))))
+
+(defn instantiate
+  "Backward-compatible Instance-only entry. Prefer `open-session` /
+   `run-report` for maturity R1 observability."
+  ([wasm-bytes requested-imports host-caps]
+   (instantiate wasm-bytes requested-imports host-caps {}))
+  ([wasm-bytes requested-imports host-caps opts]
+   (:instance (open-session wasm-bytes requested-imports host-caps opts))))
 
 (defn call-main
   "Invoke an already-built Instance's 0-arity exported `main` and return
   its single i32/i64 result as a long."
   [instance]
   (aget ^longs (.apply (.export instance "main") (long-array 0)) 0))
+
+(defn session-call-main
+  "Invoke `main` on an `open-session` map; returns the i32/i64 result."
+  [session]
+  (call-main (:instance session)))
 
 (defn run-main
   "`instantiate` + `call-main` in one call. See `instantiate` for the
@@ -448,6 +476,80 @@
    (call-main (instantiate wasm-bytes requested-imports host-caps)))
   ([wasm-bytes requested-imports host-caps opts]
    (call-main (instantiate wasm-bytes requested-imports host-caps opts))))
+
+(defn run-report
+  "`open-session` + `call-main` with a structured post-run report.
+
+   Returns {:ok? true :result long :fuel-used n :fuel-limit n
+            :limits {...} :requested [...] :caps HostCaps}
+   or {:ok? false :error ex-data-or-message ...} on denial/fuel/trap."
+  ([wasm-bytes requested-imports host-caps]
+   (run-report wasm-bytes requested-imports host-caps {}))
+  ([wasm-bytes requested-imports host-caps opts]
+   (try
+     (let [session (open-session wasm-bytes requested-imports host-caps opts)
+           result (session-call-main session)]
+       {:ok? true
+        :result result
+        :fuel-used @(:fuel-used session)
+        :fuel-limit (:fuel-limit session)
+        :limits @(:limits-state session)
+        :requested (:requested session)
+        :caps (:caps session)})
+     (catch Exception e
+       {:ok? false
+        :error (or (ex-data e) {:message (.getMessage e)})
+        :message (.getMessage e)}))))
+
+(defn inspect-module
+  "Parse WASM-BYTES (no Instantiation) and report structural surface:
+
+     {:magic-ok? bool
+      :byte-count n
+      :export-names [\"main\" …]
+      :import-names [\"gen_keypair\" …]   ; field names under module \"kotoba\"
+      :import-modules [\"kotoba\" …]
+      :has-memory? bool
+      :has-main? bool}
+
+   Pure observation — does not run guest code or check HostCaps. Used by
+   CLI doctor / maturity gates before a run."
+  [^bytes wasm-bytes]
+  (let [module (Parser/parse wasm-bytes)
+        ;; Chicory 1.4: exportSection/importSection are concrete sections
+        ;; (not Optional); memorySection is Optional.
+        export-names (try
+                       (let [es (.exportSection module)
+                             n (.exportCount es)]
+                         (mapv #(.name (.getExport es %)) (range n)))
+                       (catch Exception _ []))
+        imports (try
+                  (let [isec (.importSection module)
+                        n (.importCount isec)]
+                    (mapv (fn [i]
+                            (let [imp (.getImport isec i)]
+                              {:module (.module imp)
+                               :name (.name imp)}))
+                          (range n)))
+                  (catch Exception _ []))
+        has-memory? (try
+                      (let [ms (.memorySection module)]
+                        (if (instance? java.util.Optional ms)
+                          (.isPresent ^java.util.Optional ms)
+                          (some? ms)))
+                      (catch Exception _ false))]
+    {:magic-ok? (and (>= (alength wasm-bytes) 4)
+                     (= (bit-and (aget wasm-bytes 0) 0xff) 0x00)
+                     (= (bit-and (aget wasm-bytes 1) 0xff) 0x61)
+                     (= (bit-and (aget wasm-bytes 2) 0xff) 0x73)
+                     (= (bit-and (aget wasm-bytes 3) 0xff) 0x6d))
+     :byte-count (alength wasm-bytes)
+     :export-names export-names
+     :import-names (mapv :name imports)
+     :import-modules (vec (distinct (map :module imports)))
+     :imports imports
+     :has-memory? has-memory?
+     :has-main? (boolean (some #{"main"} export-names))}))
 
 (defn read-memory-string
   "Read a UTF-8 string of LEN bytes at PTR out of INSTANCE's memory -- for

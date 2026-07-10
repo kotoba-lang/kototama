@@ -19,7 +19,9 @@
         {:git/url "https://github.com/kotoba-lang/aiueos.git"
          :git/sha "6403a66203140864f2e859d5d3c9b64471c14351"}}
  :aliases
- {:test {:extra-paths ["test"]
+ {:cli  {:main-opts ["-m" "kototama.cli"]}
+  :doctor {:main-opts ["-m" "kototama.cli" "doctor"]}
+  :test {:extra-paths ["test"]
          :extra-deps {io.github.cognitect-labs/test-runner
                       {:git/tag "v0.5.1" :git/sha "dfb30dd"}}
          :main-opts ["-m" "cognitect.test-runner"]
