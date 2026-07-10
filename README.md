@@ -92,20 +92,21 @@ test-time proof; this is additive, not a replacement.
 
 ## Maturity
 
-**Current level: R2 advanced-partial** (R1 stable underneath; R3 skeleton landed).
+**Current level: R2 advanced-partial** (R1 stable underneath; R3 skeleton+persist).
 Ladder and gates: [`docs/maturity.md`](docs/maturity.md).
 
 | Level | Status |
 |---|---|
 | R0 contract / dry-run | stable |
 | R1 tender (JVM/Chicory) | stable — session report, host-free guests, emit lint, CLI |
-| **R2 browser host parity** | **advanced-partial** — 7/9 sync imports; host-free web fixtures |
-| R3 fleet multi-tenant | skeleton — lease/budget/tick/governor/checkpoint (pure cljc) |
+| **R2 browser host parity** | **advanced-partial** — 8/9 linkable; http-post inject\|SAB-COOP; host-free web fixtures |
+| R3 fleet multi-tenant | skeleton+persist — disk/B2 checkpoint + fleet-exec tender run-report |
 
 ```bash
 clojure -M:doctor                                    # R0–R3 snapshot
 clojure -M:cli parity                                # R2 import matrix
 clojure -M:cli fleet-demo                            # R3 pure loop demo
+clojure -M:cli fleet-run path/to/guest.wasm          # tender execute + disk checkpoint
 clojure -M:cli lint  path/to/guest.kotoba
 clojure -M:cli run     path/to/guest.wasm
 node web/verify-host-free.mjs                        # R2 host-free under browser Wasm

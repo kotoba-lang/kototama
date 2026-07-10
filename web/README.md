@@ -69,10 +69,11 @@ Parity matrix: `kototama.browser` / `clojure -M:cli parity`.
 | sha256-hex / clock-monotonic | **yes** | |
 | log-read / log-write | **yes** | injectable store |
 | llm-infer | **no** in tab | Node can inject `opts.llmInfer` |
-| http-post | **no** | needs JSPI or COOP/COEP SAB; absent on purpose |
+| http-post | inject / SAB+COOP | `opts.httpPost` or `createSabHttpPostBridge` (COOP/COEP); JSPI experimental |
 
-**7/9** imports are browser-linkable. A guest that imports `http_post` fails
-to link with a clear unknown-import error (not a silent skip).
+**8/9** imports are browser-linkable (`llm-infer` remains Node-inject only). Without
+an inject/bridge backend, `http_post` is **absent** from the import object (clear
+link error — not a silent fake success).
 
 ### Host-free guests (R2)
 
@@ -91,8 +92,8 @@ node web/verify-host-free.mjs
 - **`kgraph.js`**: kgraph assert/query only; **no** HostCaps re-enforcement at
   load (emit-time policy only). `actor-host.js` **does** re-verify grants.
 - Wider kotoba imports (`kse`/`auth`/`evm`/…) — not ported here.
-- This is not a multi-tenant sandboxed fleet host (that's R3 skeleton on JVM
-  pure data: `kototama.fleet`).
+- This is not a multi-tenant sandboxed fleet host (that's R3 skeleton+persist on
+  JVM: `kototama.fleet` + disk/B2 store + `fleet-exec` tender bridge).
 
 ## History
 
