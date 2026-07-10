@@ -325,12 +325,14 @@
             "multi-tenant isolation on shared store (gate)"
             "optional aiueos grant path in bootstrap (--use-aiueos)"
             "aiueos GRANT/DENY E2E through fleet-exec + tender"
-            "fleet-status / fleet-audit observability CLI"]
+            "fleet-status / fleet-audit observability CLI"
+            "CI: fleet-gate + daemon dry-run + packaging validate"
+            "deploy/validate-packaging.sh (oneshot+timer static gate)"]
    :not-yet ["Raft/Paxos multi-node consensus"
              "full aiueos fleet broker (all actor:host kinds as first-class policy)"]
    :stable-when ["fleet-gate green in CI on every merge"
                  "aiueos grant+deny E2E green without flakiness"
-                 "documented ops runbook for systemd daemon"
+                 "documented ops runbook for systemd daemon (+ packaging validate CI)"
                  "still NOT claiming Raft — stable means local/shared-store fleet ops"]
    :api ['kototama.fleet 'kototama.fleet-store 'kototama.fleet-exec
          'kototama.fleet-fence]

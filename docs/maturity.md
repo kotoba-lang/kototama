@@ -74,7 +74,8 @@ Host library: `actor-host.js`, `http-post-bridge.js`, `kgraph.js`.
 # One-shot acceptance (preferred CI / doctor path)
 clojure -M:cli fleet-gate
 # → pure loop + fence bootstrap + audit + resume + second-node skip
-#   + recovery-pass + daemon + systemd packaging check
+#   + recovery-pass + daemon + multi-tenant + aiueos path + packaging
+bash deploy/validate-packaging.sh
 
 # Manual drill
 clojure -M:cli fleet-demo
@@ -104,6 +105,7 @@ clojure -M:cli fleet-daemon test/kototama/fixtures/kotoba-compiled-fact.wasm \
 | **optional aiueos grants** (`--use-aiueos` on fleet-run) | |
 | **aiueos GRANT/DENY E2E** (fleet-exec + tender) | |
 | **fleet-status / fleet-audit** CLI | |
+| **CI fleet-gate + daemon dry-run + packaging validate** | |
 
 Fencing is **not** distributed consensus — higher epoch wins on a shared store.
 `bootstrap` / `resume` / `recovery-pass` call `claim-before-run` so only the
@@ -114,10 +116,14 @@ under automated gate; multi-datacenter consensus is explicitly out of scope.
 
 ### Path to R3 `stable` (honest, no Raft)
 
-1. `fleet-gate` green on every CI merge  
-2. aiueos grant + deny E2E green (no flake)  
-3. systemd daemon runbook exercised in staging  
-4. Still **do not** claim Raft/Paxos — “stable” here means **ops-ready local/shared-store fleet**, not global consensus  
+1. ✅ `fleet-gate` in CI (`.github/workflows/ci.yml`)  
+2. ✅ aiueos grant + deny E2E in test suite  
+3. ✅ packaging static check (`deploy/validate-packaging.sh`) + daemon wrapper dry-run in CI  
+4. Staging: enable systemd timer against real shared store (ops, not code)  
+5. Still **do not** claim Raft/Paxos — “stable” = **ops-ready local/shared-store fleet**
+
+When (1–3) stay green on main and (4) has been done once in staging, R3 may be
+promoted to **stable** without inventing consensus.
 
 ## Guest source rules (emit subset)
 

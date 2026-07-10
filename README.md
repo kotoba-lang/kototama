@@ -122,6 +122,7 @@ Ladder and gates: [`docs/maturity.md`](docs/maturity.md).
 clojure -M:doctor                                    # R0–R3 snapshot
 clojure -M:cli parity                                # R2 import matrix
 clojure -M:cli fleet-gate                            # R3 acceptance harness (CI)
+bash deploy/validate-packaging.sh                    # systemd oneshot+timer static gate
 clojure -M:cli fleet-demo                            # R3 pure loop demo
 clojure -M:cli fleet-run path/to/guest.wasm          # tender execute + disk checkpoint
 clojure -M:cli lint  path/to/guest.kotoba            # lint only — compile with kotoba
