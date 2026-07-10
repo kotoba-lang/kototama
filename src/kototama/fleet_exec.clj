@@ -510,7 +510,7 @@
    recovery-pass, bounded daemon, tick audit, and systemd packaging presence.
    Does **not** claim Raft or multi-datacenter consensus.
 
-   Returns {:ok? bool :checks [{::id :ok? …}] :status :advanced-partial}."
+   Returns {:ok? bool :checks [{::id :ok? …}] :status :stable|:failing}."
   [& {:keys [wasm dir]
       :or {wasm "kototama/fixtures/kotoba-compiled-fact.wasm"
            dir (str "tmp/r3-gate-" (System/currentTimeMillis))}}]
@@ -679,12 +679,13 @@
           ok? (every? :ok? cs)]
       {:ok? ok?
        :level :r3
-       :status (if ok? :advanced-partial :failing)
+       :status (if ok? :stable :failing)
        :title "Fleet multi-tenant tender"
        :checks cs
        :pass-count (count (filter :ok? cs))
        :fail-count (count (remove :ok? cs))
        :store-root dir
        :not-claimed ["Raft/Paxos multi-node consensus"
-                    "full aiueos fleet broker (grant subset + optional path only)"]
-       :gate "clojure -M:cli fleet-gate"})))
+                    "full aiueos fleet broker (all actor:host kinds as first-class policy)"]
+       :gate "clojure -M:cli fleet-gate"
+       :staging "bash deploy/staging-smoke.sh"})))

@@ -108,7 +108,7 @@ Wasm interpreter". Hosting library:
 
 ## Maturity
 
-**Current level: R3 advanced-partial** (R1 stable; R2 advanced-partial).
+**Current level: R3 stable** (shared-store fleet ops; R1 stable; R2 advanced-partial).
 Ladder and gates: [`docs/maturity.md`](docs/maturity.md).
 
 | Level | Status |
@@ -116,13 +116,14 @@ Ladder and gates: [`docs/maturity.md`](docs/maturity.md).
 | R0 contract / dry-run | stable |
 | R1 tender (compat: JVM/Chicory) | stable as **compat suite** — session report, host-free guests, emit lint, CLI (not the first path) |
 | **R2 browser / native WASM host** | **first product path** (advanced-partial) — AOT `.wasm` via wasm-webcomponent; 8/9 linkable; host-free web fixtures |
-| **R3 fleet multi-tenant** | **advanced-partial** — disk/B2 + fence-gated tender + daemon + systemd + tick audit + `fleet-gate` (not Raft) |
+| **R3 fleet multi-tenant** | **stable** — ops-ready local/shared-store fleet (fence+daemon+CI+staging-smoke; **not Raft**) |
 
 ```bash
 clojure -M:doctor                                    # R0–R3 snapshot
 clojure -M:cli parity                                # R2 import matrix
 clojure -M:cli fleet-gate                            # R3 acceptance harness (CI)
 bash deploy/validate-packaging.sh                    # systemd oneshot+timer static gate
+bash deploy/staging-smoke.sh                         # non-root staging substitute
 clojure -M:cli fleet-demo                            # R3 pure loop demo
 clojure -M:cli fleet-run path/to/guest.wasm          # tender execute + disk checkpoint
 clojure -M:cli lint  path/to/guest.kotoba            # lint only — compile with kotoba

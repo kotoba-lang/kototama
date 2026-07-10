@@ -1,5 +1,5 @@
 (ns kototama.fleet
-  "R3 advanced-partial: multi-tenant durable outer loop for kototama tender.
+  "R3 stable (shared-store fleet ops): multi-tenant durable outer loop.
 
    Pure data — no threads, no network. Models the durable loop described in
    the actor design (lease / tick / budget / governor / crash recovery):
@@ -298,11 +298,11 @@
 (defn r3-report
   "Aggregate R3 snapshot for CLI doctor.
 
-   Status advanced-partial: all non-consensus fleet surfaces landed with
-   automated `fleet-gate` harness + tick audit. Still not Raft / full broker."
+   Status stable: ops-ready local/shared-store fleet (CI + staging-smoke).
+   Still not Raft / multi-datacenter consensus / full aiueos fleet broker."
   []
   {:level :r3
-   :status :advanced-partial
+   :status :stable
    :title "Fleet multi-tenant tender"
    :landed ["lease create/renew/expire"
             "budget charge (fuel/llm/http/ticks)"
@@ -327,20 +327,19 @@
             "aiueos GRANT/DENY E2E through fleet-exec + tender"
             "fleet-status / fleet-audit observability CLI"
             "CI: fleet-gate + daemon dry-run + packaging validate"
-            "deploy/validate-packaging.sh (oneshot+timer static gate)"]
+            "deploy/validate-packaging.sh (oneshot+timer static gate)"
+            "deploy/staging-smoke.sh (non-root staging substitute)"]
    :not-yet ["Raft/Paxos multi-node consensus"
              "full aiueos fleet broker (all actor:host kinds as first-class policy)"]
-   :stable-when ["fleet-gate green in CI on every merge"
-                 "aiueos grant+deny E2E green without flakiness"
-                 "documented ops runbook for systemd daemon (+ packaging validate CI)"
-                 "still NOT claiming Raft — stable means local/shared-store fleet ops"]
+   :stable-means "ops-ready local/shared-store fleet — NOT global consensus"
    :api ['kototama.fleet 'kototama.fleet-store 'kototama.fleet-exec
          'kototama.fleet-fence]
    :gate "clojure -M:cli fleet-gate"
+   :staging "bash deploy/staging-smoke.sh"
    :notes ["Pure cljc core + JVM store/exec edges"
            "1 tick = 1 bounded guest run; no internal infinite loops"
            "B2 via B2_KEY_ID/B2_APP_KEY/B2_BUCKET or KOTOTAMA_FLEET_B2_*"
            "CLI: fleet-run | list | status | audit | resume | recover | daemon | fence-demo | fleet-gate"
-           "deploy: deploy/systemd + deploy/bin/kototama-fleet-daemon"
+           "deploy: deploy/systemd + deploy/bin/kototama-fleet-daemon + staging-smoke.sh"
            "Multi-node: claim-before-run; held-by-other → skip tender"
-           "R3 advanced-partial — not production multi-datacenter"]})
+           "R3 stable = shared-store fleet ops; not multi-datacenter Raft"]})

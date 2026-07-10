@@ -340,7 +340,7 @@
             (println "kototama — .kotoba WASM runtime (tender)")
             (println "  Role: run guests emitted by kotoba (language). Compile elsewhere:")
             (println "        kotoba wasm emit cell.kotoba -o cell.wasm")
-            (println "  Maturity: R3 advanced-partial (R1 stable; R2 advanced-partial)")
+            (println "  Maturity: R3 stable (shared-store fleet; not Raft)")
             (println)
             (println "  doctor              maturity snapshot R0–R3")
             (println "  parity              R2 browser/JVM import matrix")

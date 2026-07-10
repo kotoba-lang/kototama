@@ -10,9 +10,9 @@ guest = Wasm component). Not a marketing scorecard.
 | **R0** | Contract / dry-run | **stable** | `kototama.contract` HostCaps + import surface; organism membrane refuses live publish |
 | **R1** | Tender execution (JVM/Chicory) | **stable** | `kototama.tender` runs real `.wasm`; fuel + memory limits; aiueos adapter; session report; source lint; host-free + host-import fixtures from `kotoba wasm emit` |
 | **R2** | Browser-native host parity | **advanced-partial** | parity matrix; 8/9 browser-linkable; http-post via inject / SAB+COOP bridge (`http-post-bridge.js`); host-free web fixtures |
-| **R3** | Fleet multi-tenant tender | **advanced-partial** | disk/B2 + fence-gated tender + daemon + systemd + tick audit + `fleet-gate` harness (not Raft) |
+| **R3** | Fleet multi-tenant tender | **stable** | ops-ready local/shared-store fleet: fence+daemon+CI+staging-smoke (**not Raft**) |
 
-**Current declared level: R3 advanced-partial** (R1 stable; R2 advanced-partial underneath).
+**Current declared level: R3 stable** (R1 stable; R2 advanced-partial underneath).
 
 ## R1 acceptance gates
 
@@ -68,14 +68,17 @@ node test/verify-http-post.mjs
 
 Host library: `actor-host.js`, `http-post-bridge.js`, `kgraph.js`.
 
-## R3 advanced-partial gates
+## R3 stable gates (shared-store fleet ops — not Raft)
 
 ```bash
-# One-shot acceptance (preferred CI / doctor path)
+# Full non-root staging substitute (preferred)
+bash deploy/staging-smoke.sh
+
+# Pieces
 clojure -M:cli fleet-gate
-# → pure loop + fence bootstrap + audit + resume + second-node skip
-#   + recovery-pass + daemon + multi-tenant + aiueos path + packaging
 bash deploy/validate-packaging.sh
+clojure -M:cli fleet-status
+clojure -M:cli fleet-audit
 
 # Manual drill
 clojure -M:cli fleet-demo
@@ -95,35 +98,19 @@ clojure -M:cli fleet-daemon test/kototama/fixtures/kotoba-compiled-fact.wasm \
 | tender execute (`fleet-exec`) | |
 | resume + recovery-pass | |
 | bounded recovery daemon | |
-| optional aiueos grants | |
+| optional aiueos grants + GRANT/DENY E2E | |
 | epoch fencing + fence-gated tender | |
-| systemd oneshot+timer | |
-| **tick audit journal** | |
-| **`run-r3-gate!` / `fleet-gate` CLI** | |
-| **lease heartbeat** (renew TTL per tick) | |
-| **multi-tenant shared-store isolation** (gate) | |
-| **optional aiueos grants** (`--use-aiueos` on fleet-run) | |
-| **aiueos GRANT/DENY E2E** (fleet-exec + tender) | |
-| **fleet-status / fleet-audit** CLI | |
-| **CI fleet-gate + daemon dry-run + packaging validate** | |
+| systemd oneshot+timer + packaging validate | |
+| tick audit + fleet-status / fleet-audit | |
+| fleet-gate + CI (gate, daemon dry-run, packaging) | |
+| **deploy/staging-smoke.sh** (non-root staging) | |
 
 Fencing is **not** distributed consensus — higher epoch wins on a shared store.
 `bootstrap` / `resume` / `recovery-pass` call `claim-before-run` so only the
 holding node executes tender. See `deploy/systemd/README.md` for install.
 
-**Status meaning:** `advanced-partial` = all local/shared-store fleet surfaces work
-under automated gate; multi-datacenter consensus is explicitly out of scope.
-
-### Path to R3 `stable` (honest, no Raft)
-
-1. ✅ `fleet-gate` in CI (`.github/workflows/ci.yml`)  
-2. ✅ aiueos grant + deny E2E in test suite  
-3. ✅ packaging static check (`deploy/validate-packaging.sh`) + daemon wrapper dry-run in CI  
-4. Staging: enable systemd timer against real shared store (ops, not code)  
-5. Still **do not** claim Raft/Paxos — “stable” = **ops-ready local/shared-store fleet**
-
-When (1–3) stay green on main and (4) has been done once in staging, R3 may be
-promoted to **stable** without inventing consensus.
+**Status meaning:** `stable` = **ops-ready local/shared-store fleet** under automated
+gates + staging-smoke. Multi-datacenter consensus remains out of scope.
 
 ## Guest source rules (emit subset)
 

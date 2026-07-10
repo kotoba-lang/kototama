@@ -48,6 +48,10 @@ jobs:
             --max-ticks 1
       - name: R3 packaging static check
         run: bash deploy/validate-packaging.sh
+      - name: R3 staging-smoke (non-root)
+        run: |
+          chmod +x deploy/staging-smoke.sh
+          bash deploy/staging-smoke.sh
 
   web:
     name: browser WASM AOT demo gate

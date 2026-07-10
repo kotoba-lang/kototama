@@ -269,13 +269,13 @@
              :wasm "kototama/fixtures/kotoba-compiled-fact.wasm"
              :dir dir)]
     (is (true? (:ok? out)) (pr-str (remove :ok? (:checks out))))
-    (is (= :advanced-partial (:status out)))
+    (is (= :stable (:status out)))
     (is (>= (:pass-count out) 11))
     (is (zero? (:fail-count out)))
     (is (some #(= :multi-tenant-shared-store (:id %)) (:checks out)))
     (is (some #(= :aiueos-optional-host-free (:id %)) (:checks out)))
-    (is (= :advanced-partial (get-in guest/maturity-levels [:r3 :status])))
-    (is (= :advanced-partial (:status (fleet/r3-report))))
+    (is (= :stable (get-in guest/maturity-levels [:r3 :status])))
+    (is (= :stable (:status (fleet/r3-report))))
     (doseq [f (reverse (file-seq (io/file dir)))]
       (.delete f))))
 

@@ -42,7 +42,7 @@
   (let [m (guest/maturity-report)
         r3-note (get-in m [:levels :r3 :note] "")]
     (is (= :r3 (:current m)))
-    (is (= :advanced-partial (get-in m [:levels :r3 :status])))
+    (is (= :stable (get-in m [:levels :r3 :status])))
     (is (contains? (:levels m) :r1))
     (is (contains? (:levels m) :r2))
     (is (contains? (:levels m) :r3))

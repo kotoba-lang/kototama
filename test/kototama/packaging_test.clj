@@ -9,6 +9,13 @@
   (let [{:keys [exit out err]} (shell/sh "bash" "deploy/validate-packaging.sh")]
     (is (zero? exit) (str "stdout=" out " stderr=" err))))
 
+(deftest staging-smoke-script-exists-and-is-documented
+  (is (.exists (io/file "deploy/staging-smoke.sh")))
+  (let [sh (slurp "deploy/staging-smoke.sh")]
+    (is (str/includes? sh "fleet-gate"))
+    (is (str/includes? sh "validate-packaging"))
+    (is (str/includes? sh "kototama-fleet-daemon"))))
+
 (deftest service-unit-is-oneshot-bounded
   (let [svc (slurp "deploy/systemd/kototama-fleet-daemon.service")]
     (is (str/includes? svc "Type=oneshot"))
