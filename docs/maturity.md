@@ -49,7 +49,7 @@ clojure -M:cli parity           # JVM vs browser import matrix
 | gen-keypair / sign / verify | yes | yes (noble sync) | yes |
 | sha256-hex / clock / log-* | yes | yes | yes |
 | llm-infer | yes | **no** | inject |
-| http-post | yes | **no** | **no** |
+| http-post | yes | inject / SAB+COOP | inject |
 
 Score today: **8/9** browser-linkable (`llm-infer` still Node-inject only).
 

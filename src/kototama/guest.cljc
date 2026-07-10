@@ -142,13 +142,13 @@
    (loaded optionally by CLI to keep this ns free of those requires)."
   []
   {:current :r2
-   :current-note "R1 stable + R2 advanced-partial; R3 skeleton landed"
+   :current-note "R1 stable + R2 advanced-partial; R3 skeleton+persist"
    :levels maturity-levels
    :import-surface (mapv :import/id (:abi/imports contract/import-surface))
    :wasm-fields wasm-field-by-import-id
    :notes ["R1 gate: clojure -M:test (tender + contract + aiueos + guest + maturity)"
            "R2 gate: node web/verify*.mjs (+ verify-host-free.mjs)"
-           "R3: pure fleet loop — wire tender/run-report at host edges"
+           "R3: fleet-run + disk/B2 checkpoint; tender execute at fleet-exec edge"
            "Host-free pure guests: empty requested-imports + empty grants"
            "Emit path: kotoba-lang/kotoba `wasm emit` → .wasm → tender/run-report"
            "Lint .kotoba with kototama.guest/lint-kotoba-source before emit"]})

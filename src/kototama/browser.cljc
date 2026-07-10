@@ -6,7 +6,7 @@
    vs what the JVM tender implements. Used by doctor / maturity report.
 
    Honest gaps:
-   - http-post: absent in browser (needs JSPI or COOP/COEP SAB bridge)
+   - http-post: not bare-sync in a tab; inject and/or SAB+COOP bridge
    - llm-infer: browser absent; Node can inject synchronous backend
    - kgraph-*: separate surface (kgraph.js), not actor:host"
   (:require [kototama.contract :as contract]
