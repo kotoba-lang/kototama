@@ -79,12 +79,18 @@
       (count (fleet/tenant-leases restored "tenant-a"))})
     {:ok? true}))
 
-(defn cmd-fleet-run [wasm-path]
-  (let [out (fleet-exec/bootstrap-and-run!
+(defn- flag? [args flag]
+  (boolean (some #{flag} args)))
+
+(defn cmd-fleet-run [wasm-path & args]
+  (let [args (vec args)
+        use-aiueos? (flag? args "--use-aiueos")
+        out (fleet-exec/bootstrap-and-run!
              "cli-tenant" "cli-guest" wasm-path
              :store (fleet-store/disk-store "tmp/kototama-fleet")
              :max-ticks 2
-             :budget {:fuel 5000000 :ticks 5})]
+             :budget {:fuel 5000000 :ticks 5}
+             :use-aiueos? use-aiueos?)]
     (pp/pprint
      {:ok? true
       :lease-id (:lease-id out)
@@ -92,13 +98,40 @@
       :result (get-in out [:last :result])
       :checkpoint-path (:checkpoint-path out)
       :checkpoint-key (:checkpoint-key out)
-      :steps (count (:steps out))})
+      :steps (count (:steps out))
+      :grant-source (:grant-source out)
+      :use-aiueos? use-aiueos?})
     {:ok? true}))
 
 (defn cmd-fleet-list []
   (let [s (fleet-store/disk-store "tmp/kototama-fleet")
         keys (fleet-store/list-checkpoint-keys s)]
     (pp/pprint {:ok? true :root "tmp/kototama-fleet" :keys keys :count (count keys)})
+    {:ok? true}))
+
+(defn cmd-fleet-status []
+  (let [s (fleet-store/disk-store "tmp/kototama-fleet")
+        summary (fleet-store/summarize-store s)]
+    (pp/pprint (assoc summary :ok? true))
+    {:ok? true}))
+
+(defn cmd-fleet-audit []
+  (let [s (fleet-store/disk-store "tmp/kototama-fleet")
+        entries (fleet-store/list-audit-entries s)]
+    (pp/pprint
+     {:ok? true
+      :root "tmp/kototama-fleet"
+      :count (count entries)
+      :entries
+      (mapv (fn [{:keys [key data]}]
+              {:key key
+               :lease-id (:kototama.fleet/lease-id data)
+               :tick (:kototama.fleet/tick data)
+               :ok? (:ok? data)
+               :result (:result data)
+               :fuel-used (:fuel-used data)
+               :error (:error data)})
+            entries)})
     {:ok? true}))
 
 (defn cmd-fleet-resume [checkpoint-key wasm-path]
@@ -150,6 +183,16 @@
       (try (Long/parseLong (str (nth xs (inc i))))
            (catch Exception _ default))
       default)))
+
+(defn cmd-fleet-gate
+  "R3 acceptance harness — exit non-zero if any check fails."
+  []
+  (let [out (fleet-exec/run-r3-gate!
+             :wasm "test/kototama/fixtures/kotoba-compiled-fact.wasm")]
+    (pp/pprint
+     (select-keys out [:ok? :status :pass-count :fail-count :checks
+                       :not-claimed :gate :store-root]))
+    {:ok? (boolean (:ok? out))}))
 
 (defn cmd-fleet-daemon [wasm-path args]
   (let [interval (parse-long-opt args "--interval-ms" 500)
@@ -253,11 +296,13 @@
           "parity" (cmd-parity)
           "fleet-demo" (cmd-fleet-demo)
           "fleet-run" (if-let [p (first more)]
-                        (cmd-fleet-run p)
+                        (apply cmd-fleet-run p (rest more))
                         (do (binding [*out* *err*]
-                              (println "usage: fleet-run <guest.wasm>"))
+                              (println "usage: fleet-run <guest.wasm> [--use-aiueos]"))
                             {:ok? false}))
           "fleet-list" (cmd-fleet-list)
+          "fleet-status" (cmd-fleet-status)
+          "fleet-audit" (cmd-fleet-audit)
           "fleet-resume" (let [k (first more) w (second more)]
                            (if (and k w)
                              (cmd-fleet-resume k w)
@@ -275,6 +320,7 @@
                                  (println "usage: fleet-daemon <guest.wasm> [--interval-ms N] [--max-passes N]"))
                                {:ok? false}))
           "fleet-fence-demo" (cmd-fleet-fence-demo)
+          "fleet-gate" (cmd-fleet-gate)
           "lint" (if-let [p (first more)]
                    (cmd-lint p)
                    (do (binding [*out* *err*]
@@ -291,19 +337,26 @@
                         (println "usage: run <file.wasm> [--grant id …]"))
                       {:ok? false}))
           (do
-            (println "kototama CLI (maturity R2 + R3 skeleton+persist)")
+            (println "kototama — .kotoba WASM runtime (tender)")
+            (println "  Role: run guests emitted by kotoba (language). Compile elsewhere:")
+            (println "        kotoba wasm emit cell.kotoba -o cell.wasm")
+            (println "  Maturity: R3 stable (shared-store fleet; not Raft)")
+            (println)
             (println "  doctor              maturity snapshot R0–R3")
             (println "  parity              R2 browser/JVM import matrix")
+            (println "  fleet-gate          R3 acceptance harness (CI)")
             (println "  fleet-demo          R3 lease→tick→checkpoint demo")
-            (println "  fleet-run <wasm>    R3 tender run + disk checkpoint")
+            (println "  fleet-run <wasm>    R3 tender run + disk checkpoint [--use-aiueos]")
             (println "  fleet-list          list disk checkpoint keys")
+            (println "  fleet-status        store summary (tenants/leases/audits)")
+            (println "  fleet-audit         tick audit journal")
             (println "  fleet-resume <key> <wasm>  resume from checkpoint")
             (println "  fleet-recover <wasm> one recovery pass over checkpoints")
             (println "  fleet-daemon <wasm> [--interval-ms N] [--max-passes N]")
             (println "  fleet-fence-demo    cross-node epoch fencing demo")
-            (println "  lint <file.kotoba>  emit-pitfall lint")
+            (println "  lint <file.kotoba>  emit-pitfall lint (no compile)")
             (println "  inspect <file.wasm> structural surface")
-            (println "  run <file.wasm> [--grant id …]")
+            (println "  run <file.wasm> [--grant id …]   ← canonical execute")
             (println "  help")
             {:ok? true}))]
     (System/exit (if (:ok? result) 0 1))))

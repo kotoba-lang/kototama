@@ -94,7 +94,7 @@
    :r2  browser-native host parity matrix + host-free web fixtures
         (8/9 linkable; http-post inject|SAB-COOP; llm-infer Node-inject only)
    :r3  fleet lease/budget/tick/governor/checkpoint + disk/B2 + fence-gated
-        tender (claim before run) + daemon + systemd (not Raft consensus)"
+        tender + daemon + systemd + CI gates (not Raft consensus)"
   {:r0 {:id :r0
         :title "Contract / dry-run"
         :status :stable
@@ -109,8 +109,8 @@
         :note "8/9 linkable; http-post inject|SAB-COOP; see kototama.browser."}
    :r3 {:id :r3
         :title "Fleet multi-tenant tender"
-        :status :skeleton+persist
-        :note "disk/B2 + fence-gated tender (claim before run; held-by-other skips) + daemon + systemd — not Raft."}})
+        :status :stable
+        :note "ops-ready local/shared-store fleet: fence+daemon+CI+staging-smoke — not Raft."}})
 
 (defn host-free?
   "True when the guest requests no host imports (pure compute)."
@@ -142,14 +142,14 @@
    R2/R3 detail lives in kototama.browser/r2-report and kototama.fleet/r3-report
    (loaded optionally by CLI to keep this ns free of those requires)."
   []
-  {:current :r2
-   :current-note "R1 stable + R2 advanced-partial; R3 skeleton+persist"
+  {:current :r3
+   :current-note "R1 stable + R2 advanced-partial + R3 stable (shared-store fleet; not Raft)"
    :levels maturity-levels
    :import-surface (mapv :import/id (:abi/imports contract/import-surface))
    :wasm-fields wasm-field-by-import-id
    :notes ["R1 gate: clojure -M:test (tender + contract + aiueos + guest + maturity)"
            "R2 gate: node web/verify*.mjs (+ verify-host-free.mjs)"
-           "R3: fleet-run + disk/B2 checkpoint; tender execute at fleet-exec edge"
+           "R3 gate: clojure -M:cli fleet-gate + deploy/staging-smoke.sh"
            "Host-free pure guests: empty requested-imports + empty grants"
            "Emit path: kotoba-lang/kotoba `wasm emit` → .wasm → tender/run-report"
            "Lint .kotoba with kototama.guest/lint-kotoba-source before emit"]})

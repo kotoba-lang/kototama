@@ -82,6 +82,8 @@
 (deftest r3-report-skeleton
   (let [r (fleet/r3-report)]
     (is (= :r3 (:level r)))
-    (is (#{:skeleton :skeleton+persist} (:status r)))
+    (is (= :stable (:status r)))
     (is (seq (:landed r)))
-    (is (seq (:not-yet r)))))
+    (is (seq (:not-yet r)))
+    (is (some #(re-find #"fleet-gate|tick audit|staging-smoke" %) (:landed r)))
+    (is (string? (:staging r)))))

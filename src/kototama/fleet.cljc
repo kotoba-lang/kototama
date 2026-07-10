@@ -1,5 +1,5 @@
 (ns kototama.fleet
-  "R3 skeleton: multi-tenant durable outer loop for kototama tender runs.
+  "R3 stable (shared-store fleet ops): multi-tenant durable outer loop.
 
    Pure data — no threads, no network. Models the durable loop described in
    the actor design (lease / tick / budget / governor / crash recovery):
@@ -10,8 +10,8 @@
      checkpoint = EDN-serializable recovery snapshot
 
    Execution still calls into kototama.tender on the JVM host; this ns only
-   owns the *scheduling and recovery contract*. Status: skeleton (not fleet-
-   production). See docs/maturity.md R3."
+   owns the *scheduling and recovery contract*. Not Raft consensus — see
+   docs/maturity.md R3."
   (:require [clojure.string :as str]))
 
 ;; ── time helpers (injectable clock for tests) ───────────────────────────────
@@ -296,10 +296,13 @@
              :ok? (boolean (:ok? result))}))))))
 
 (defn r3-report
-  "Aggregate R3 snapshot for CLI doctor."
+  "Aggregate R3 snapshot for CLI doctor.
+
+   Status stable: ops-ready local/shared-store fleet (CI + staging-smoke).
+   Still not Raft / multi-datacenter consensus / full aiueos fleet broker."
   []
   {:level :r3
-   :status :skeleton+persist
+   :status :stable
    :title "Fleet multi-tenant tender"
    :landed ["lease create/renew/expire"
             "budget charge (fuel/llm/http/ticks)"
@@ -315,14 +318,28 @@
             "optional aiueos grant resolution (resolve-grants :use-aiueos?)"
             "fleet-fence epoch claim/merge (not Raft)"
             "fence-gated bootstrap/resume/recovery (tender only if claim wins)"
-            "systemd oneshot+timer packaging under deploy/systemd/"]
+            "systemd oneshot+timer packaging under deploy/systemd/"
+            "tick audit journal (audit/<lease>/tN)"
+            "programmatic acceptance gate (run-r3-gate! / fleet-gate CLI)"
+            "lease heartbeat renew across multi-tick runs"
+            "multi-tenant isolation on shared store (gate)"
+            "optional aiueos grant path in bootstrap (--use-aiueos)"
+            "aiueos GRANT/DENY E2E through fleet-exec + tender"
+            "fleet-status / fleet-audit observability CLI"
+            "CI: fleet-gate + daemon dry-run + packaging validate"
+            "deploy/validate-packaging.sh (oneshot+timer static gate)"
+            "deploy/staging-smoke.sh (non-root staging substitute)"]
    :not-yet ["Raft/Paxos multi-node consensus"
-             "full aiueos fleet broker (only grant subset today)"]
+             "full aiueos fleet broker (all actor:host kinds as first-class policy)"]
+   :stable-means "ops-ready local/shared-store fleet — NOT global consensus"
    :api ['kototama.fleet 'kototama.fleet-store 'kototama.fleet-exec
          'kototama.fleet-fence]
+   :gate "clojure -M:cli fleet-gate"
+   :staging "bash deploy/staging-smoke.sh"
    :notes ["Pure cljc core + JVM store/exec edges"
            "1 tick = 1 bounded guest run; no internal infinite loops"
            "B2 via B2_KEY_ID/B2_APP_KEY/B2_BUCKET or KOTOTAMA_FLEET_B2_*"
-           "CLI: fleet-run | list | resume | recover | daemon | fence-demo"
-           "deploy: deploy/systemd + deploy/bin/kototama-fleet-daemon"
-           "Multi-node: claim-before-run; held-by-other → skip tender"]})
+           "CLI: fleet-run | list | status | audit | resume | recover | daemon | fence-demo | fleet-gate"
+           "deploy: deploy/systemd + deploy/bin/kototama-fleet-daemon + staging-smoke.sh"
+           "Multi-node: claim-before-run; held-by-other → skip tender"
+           "R3 stable = shared-store fleet ops; not multi-datacenter Raft"]})

@@ -1,23 +1,37 @@
 # kototama
 
+**Role: the `.kotoba` WASM runtime** — tender / host that **runs** guest
+modules produced by the **kotoba language** (`kotoba wasm emit`).  
+It does **not** own the language or the AOT compiler.
+
+```text
+kotoba   = language   (.kotoba → check → wasm emit → guest.wasm)  ← kotoba-lang/kotoba
+kototama = runtime    (host & run that .wasm)                     ← this repo
+aiueos   = OS / broker (decides grants; tender only enforces)
+```
+
+Stack vocabulary: [ADR-2607022400](https://github.com/com-junkawasaki/root/blob/main/90-docs/adr/2607022400-kototama-unikernel-tender-runtime-vocabulary.md).
+
 **Not to be confused with [`kotoba-lang/kotodama`](https://github.com/kotoba-lang/kotodama)**
 — both names romanize the same word (言霊/言魂, "word-spirit"; "kototama" and
 "kotodama" are two real, independently-attested readings of the same kanji,
 not a typo), but the repos are unrelated in scope: `kotodama` is the generic
 functional-organism runtime (organism/ReAct machinery injected into any
 actor, extracted from `etzhayyim/kototama`'s UNSPSC-specific predecessor);
-this repo is the Wasm execution/tender runtime described below.
+this repo is the Wasm **execution** tender described below.
 ADR-2607050900 audited the naming overlap and found no functional
 duplication — just an undocumented spelling split, which this note closes.
 
-## Role
+## Role (detail)
 
-In the `kotoba-lang → kototama → aiueos` stack
+In the `kotoba → kototama → aiueos` stack
 ([ADR-2607022400](https://github.com/com-junkawasaki/root/blob/main/90-docs/adr/2607022400-kototama-unikernel-tender-runtime-vocabulary.md)),
 kototama is the **Wasm tender runtime**: it hosts the Wasm guests that
-`kotoba-lang` compiles (`.kotoba` → `kotoba wasm emit` → AOT `.wasm`), under
-capability grants that `aiueos` decides. Solo5's *tender* pattern — kototama
-hosts, the component is guest.
+**kotoba** (the language) compiles (`.kotoba` → `kotoba wasm emit` → AOT `.wasm`),
+under capability grants that `aiueos` decides. Solo5's *tender* pattern —
+kototama hosts, the component is guest. **Do not reimplement the compiler here.**
+
+**Compile guests with [`kotoba-lang/kotoba`](https://github.com/kotoba-lang/kotoba).**
 
 ### Runtime priority (ADR-2607100100 / ADR-2607102200 addendum 3)
 
@@ -41,6 +55,7 @@ kotoba wasm AOT  >  clojurewasm  >  ClojureScript  >  nbb
 to a Chicory `HostFunction` with pre-flight + per-call grant checks,
 `RuntimeLimits`, memory limits, and fuel. Useful as a verification harness
 against real Wasm bytes — **not** what "use kototama" means for new work.
+Language-repo `kotoba wasm run` is the same class of **compat bootstrap**.
 
 ## Contract Surface
 
@@ -68,30 +83,32 @@ against real Wasm bytes — **not** what "use kototama" means for new work.
   gates, membrane, heartbeat, did:key, atproto shaping, and identity helpers.
 - `lib/actor/publish.bb` is the shared actor publish runner.
 
-## Browser WASM AOT demo (`web/`)
+## Quick start (runtime)
+
+```bash
+# Guest must already be AOT-compiled by the language (kotoba):
+#   kotoba wasm emit cell.kotoba --package-lock L -o cell.wasm
+
+clojure -M:cli run path/to/guest.wasm --grant …     # execute (tender / CLI)
+clojure -M:cli lint path/to/guest.kotoba            # emit-pitfall lint only (no compile)
+clojure -M:cli inspect path/to/guest.wasm
+clojure -M:doctor
+node web/verify-host-free.mjs                       # first path: native WebAssembly engine
+```
+
+## Browser / native WASM host (`web/`)
 
 [ADR-2607061630](https://github.com/com-junkawasaki/root/blob/main/90-docs/adr/2607061630-kototama-browser-wasm-aot-webcomponent.md)
-and ADR-2607100100 make the **first** execution premise "the host's native
-WebAssembly engine runs already-AOT-compiled `.kotoba` binaries" — not
-"JVM hosts a Wasm interpreter". kototama supplies tender policy; the
-browser packaging shell is a WebComponent. The hosting code itself
-(`KotobaWasmElement`, `kgraph.js`) has since been extracted into
+and ADR-2607100100: the **first** execution premise is the host's native
+WebAssembly engine on already-AOT `.wasm` from **kotoba** — not "JVM hosts a
+Wasm interpreter". Hosting library:
 [`kotoba-lang/wasm-webcomponent`](https://github.com/kotoba-lang/wasm-webcomponent)
-so other repos can reuse it — `web/` is now a **consumer** of that library,
-not its canonical source. It defines `<kototama-wasm-run>` (a zero-import
-`.kotoba`-emitted `.wasm` module) and `<kototama-wasm-kgraph-demo>` (a
-module that calls `kgraph-assert!`/`kgraph-query`, backed by the library's
-browser-side port of kotoba's in-memory EAVT datom store) — verified
-against the exact same demo and expected values as kotoba-lang/kotoba's
-own JVM/Chicory test. See `web/README.md` for the
-remaining honest R0 scope (only `kgraph-*` is ported, not `kse`/`auth`/`llm`/
-etc.; no capability/policy re-enforcement at load time). JVM+Chicory paths in kotoba-lang/kotoba and `kototama.tender` remain as
-compile-time / test-time / compat proof — demoted relative to AOT native WASM
-(ADR-2607100100).
+(`web/` is a consumer). See `web/README.md` for R0 scope.  
+`kotoba wasm run` and `kototama.tender` Chicory paths are **compat / CI**.
 
 ## Maturity
 
-**Current level: R2 advanced-partial** (R1 stable underneath; R3 skeleton+persist).
+**Current level: R3 stable** (shared-store fleet ops; R1 stable; R2 advanced-partial).
 Ladder and gates: [`docs/maturity.md`](docs/maturity.md).
 
 | Level | Status |
@@ -99,15 +116,18 @@ Ladder and gates: [`docs/maturity.md`](docs/maturity.md).
 | R0 contract / dry-run | stable |
 | R1 tender (compat: JVM/Chicory) | stable as **compat suite** — session report, host-free guests, emit lint, CLI (not the first path) |
 | **R2 browser / native WASM host** | **first product path** (advanced-partial) — AOT `.wasm` via wasm-webcomponent; 8/9 linkable; host-free web fixtures |
-| R3 fleet multi-tenant | skeleton+persist — disk/B2 + fence-gated tender + daemon + systemd |
+| **R3 fleet multi-tenant** | **stable** — ops-ready local/shared-store fleet (fence+daemon+CI+staging-smoke; **not Raft**) |
 
 ```bash
 clojure -M:doctor                                    # R0–R3 snapshot
 clojure -M:cli parity                                # R2 import matrix
+clojure -M:cli fleet-gate                            # R3 acceptance harness (CI)
+bash deploy/validate-packaging.sh                    # systemd oneshot+timer static gate
+bash deploy/staging-smoke.sh                         # non-root staging substitute
 clojure -M:cli fleet-demo                            # R3 pure loop demo
 clojure -M:cli fleet-run path/to/guest.wasm          # tender execute + disk checkpoint
-clojure -M:cli lint  path/to/guest.kotoba
-clojure -M:cli run     path/to/guest.wasm
+clojure -M:cli lint  path/to/guest.kotoba            # lint only — compile with kotoba
+clojure -M:cli run     path/to/guest.wasm            # RUNTIME: run AOT guest
 node web/verify-host-free.mjs                        # R2 host-free under browser Wasm
 ```
 

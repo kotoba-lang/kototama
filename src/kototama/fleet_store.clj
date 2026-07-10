@@ -36,6 +36,11 @@
      :load! (fn [k] (get @a k))
      :dump (fn [] @a)}))
 
+(defn- safe-key [k]
+  (-> (str k)
+      (str/replace #"[^A-Za-z0-9._/-]" "_")
+      (str/replace #"/" "__")))
+
 (defn disk-store
   "Write EDN checkpoints under root-dir (default ./tmp/kototama-fleet)."
   ([] (disk-store "tmp/kototama-fleet"))
@@ -45,20 +50,32 @@
      {:kind :disk
       :root (.getPath root)
       :save! (fn [k data]
-               (let [safe (-> (str k)
-                              (str/replace #"[^A-Za-z0-9._/-]" "_")
-                              (str/replace #"/" "__"))
-                     f (io/file root (str safe ".edn"))]
+               (let [f (io/file root (str (safe-key k) ".edn"))]
                  (ensure-parent! f)
                  (spit f (pr-str data))
                  (.getPath f)))
       :load! (fn [k]
-               (let [safe (-> (str k)
-                              (str/replace #"[^A-Za-z0-9._/-]" "_")
-                              (str/replace #"/" "__"))
-                     f (io/file root (str safe ".edn"))]
+               (let [f (io/file root (str (safe-key k) ".edn"))]
                  (when (.exists f)
                    (edn/read-string (slurp f)))))})))
+
+(defn append-tick-audit!
+  "Persist one tick's run-report under audit/<lease-id>/tN-ts for R3 observability.
+
+   Schema v1 — not a full SIEM; enough for recovery and local forensics."
+  [store lease-id tick-n report]
+  (let [key (str "audit/" lease-id "/t" tick-n "-" (System/currentTimeMillis))
+        data {:kototama.fleet/audit-schema 1
+              :kototama.fleet/lease-id (str lease-id)
+              :kototama.fleet/tick (long tick-n)
+              :kototama.fleet/at (System/currentTimeMillis)
+              :ok? (boolean (:ok? report))
+              :result (:result report)
+              :fuel-used (:fuel-used report)
+              :error (or (:error report) (:reason report))}]
+    (when-let [save! (:save! store)]
+      (let [path (save! key data)]
+        {:key key :path path :data data}))))
 
 ;; ── B2 native (authorize + upload/download by name) ─────────────────────────
 
@@ -246,12 +263,21 @@
          path ((:save! store) key cp)]
      {:path path :key key :checkpoint cp})))
 
+(defn checkpoint-edn?
+  "True when EDN looks like a fleet checkpoint (not tick audit / other blobs)."
+  [cp]
+  (and (map? cp)
+       (= 1 (:kototama.fleet/checkpoint-schema cp))))
+
 (defn load-checkpoint!
-  "Load + restore registry from store key. Returns registry or nil."
+  "Load + restore registry from store key. Returns registry or nil.
+
+   Skips non-checkpoint blobs (e.g. tick audit journal entries)."
   ([key] (load-checkpoint! key (default-store)))
   ([key store]
    (when-let [cp ((:load! store) key)]
-     (fleet/restore cp))))
+     (when (checkpoint-edn? cp)
+       (fleet/restore cp)))))
 
 (defn load-checkpoint-raw!
   "Load checkpoint map without restore (includes :meta with wasm path etc.)."
@@ -259,11 +285,8 @@
   ([key store]
    ((:load! store) key)))
 
-(defn list-checkpoint-keys
-  "List checkpoint keys known to the store.
-
-   Disk: scan root for *.edn basenames (without extension).
-   Memory: dump keys. B2-only remote: empty unless dump provided."
+(defn- raw-store-keys
+  "All keys on store (includes audit). Prefer list-checkpoint-keys for fleet."
   [store]
   (case (:kind store)
     :disk
@@ -282,14 +305,85 @@
       (vec (sort (keys (dump))))
       [])
     :composite
-    ;; prefer disk child if present via :root on nested — scan both via load only
     (let [disk-keys (when (:root store)
-                      (list-checkpoint-keys (disk-store (:root store))))]
+                      (raw-store-keys (disk-store (:root store))))]
       (or disk-keys []))
-    ;; b2 / unknown
     []))
+
+(defn list-checkpoint-keys
+  "List checkpoint keys known to the store (excludes tick audit keys).
+
+   Disk: scan root for *.edn basenames (without extension).
+   Memory: dump keys. B2-only remote: empty unless dump provided."
+  [store]
+  (->> (raw-store-keys store)
+       (remove (fn [k]
+                 (let [s (str/replace (str k) #"__" "/")]
+                   (str/starts-with? s "audit/"))))
+       vec))
 
 (defn list-disk-checkpoint-keys
   "Convenience: list keys under a disk root path."
   ([] (list-checkpoint-keys (disk-store)))
   ([root] (list-checkpoint-keys (disk-store root))))
+
+(defn list-audit-keys
+  "Keys that look like tick audits (prefix audit/ after __ unescape on disk)."
+  [store]
+  (->> (raw-store-keys store)
+       (map (fn [k]
+              ;; disk basenames keep __ for /
+              (str/replace (str k) #"__" "/")))
+       (filter #(str/starts-with? (str %) "audit/"))
+       vec))
+
+(defn load-audit!
+  "Load one tick audit map by key (audit/…), or nil."
+  [key store]
+  (when-let [data ((:load! store) key)]
+    (when (= 1 (:kototama.fleet/audit-schema data))
+      data)))
+
+(defn list-audit-entries
+  "All audit entries as [{:key :data}…], newest last (key sort)."
+  [store]
+  (->> (list-audit-keys store)
+       sort
+       (mapv (fn [k]
+               {:key k :data (load-audit! k store)}))
+       (filterv :data)))
+
+(defn summarize-store
+  "R3 observability snapshot for a store root (checkpoints + audits + tenants)."
+  [store]
+  (let [cp-keys (list-checkpoint-keys store)
+        audits (list-audit-entries store)
+        regs (keep (fn [k]
+                     (try (load-checkpoint! k store)
+                          (catch Exception _ nil)))
+                   cp-keys)
+        tenants (->> regs
+                     (mapcat (fn [reg]
+                               (keys (:kototama.fleet/tenants reg {}))))
+                     set
+                     sort
+                     vec)
+        leases (->> regs
+                    (mapcat (fn [reg] (vals (:kototama.fleet/leases reg {}))))
+                    (map (fn [l]
+                           {:lease-id (:kototama.fleet/lease-id l)
+                            :tenant (:kototama.fleet/tenant l)
+                            :guest (:kototama.fleet/guest l)
+                            :status (:kototama.fleet/status l)
+                            :owner (:kototama.fleet/owner l)
+                            :epoch (:kototama.fleet/epoch l)}))
+                    vec)]
+    {:kind (:kind store)
+     :root (:root store)
+     :checkpoint-count (count cp-keys)
+     :checkpoint-keys cp-keys
+     :audit-count (count audits)
+     :audit-ok-count (count (filter #(get-in % [:data :ok?]) audits))
+     :tenants tenants
+     :lease-summaries leases
+     :ok? true}))

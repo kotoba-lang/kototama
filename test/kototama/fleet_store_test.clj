@@ -1,9 +1,36 @@
 (ns kototama.fleet-store-test
   (:require [clojure.java.io :as io]
+            [clojure.java.shell :as shell]
             [clojure.test :refer [deftest is testing]]
             [kototama.fleet :as fleet]
             [kototama.fleet-store :as store]
-            [kototama.fleet-exec :as exec]))
+            [kototama.fleet-exec :as exec]
+            [kototama.guest :as guest]))
+
+(defn- wat->wasm [wat]
+  (let [in (java.io.File/createTempFile "fleet-aiueos" ".wat")
+        out (java.io.File/createTempFile "fleet-aiueos" ".wasm")]
+    (try
+      (spit in wat)
+      (let [{:keys [exit err]} (shell/sh "wasm-tools" "parse" (.getPath in) "-o" (.getPath out))]
+        (when-not (zero? exit)
+          (throw (ex-info "wasm-tools parse failed" {:stderr err}))))
+      (with-open [is (io/input-stream out)]
+        (.readAllBytes is))
+      (finally
+        (.delete in)
+        (.delete out)))))
+
+(def ^:private clock-wat
+  "(module
+     (import \"kotoba\" \"clock_monotonic\" (func $cm (result i64)))
+     (func (export \"main\") (result i64) (call $cm)))")
+
+(defn- write-temp-wasm [bytes]
+  (let [f (java.io.File/createTempFile "fleet-guest" ".wasm")]
+    (with-open [o (io/output-stream f)]
+      (.write o ^bytes bytes))
+    (.getPath f)))
 
 (deftest disk-checkpoint-roundtrip
   (let [dir (str "tmp/kototama-fleet-test-" (System/currentTimeMillis))
@@ -218,5 +245,136 @@
     (is (= 120 (get-in first [:last :result :result])))
     (is (some? ex))
     (is (= :held-by-other (:reason (ex-data ex))))
+    (doseq [f (reverse (file-seq (io/file dir)))]
+      (.delete f))))
+
+(deftest tick-audit-written-on-run-lease
+  (let [dir (str "tmp/fleet-audit-" (System/currentTimeMillis))
+        s (store/disk-store dir)
+        wasm "kototama/fixtures/kotoba-compiled-fact.wasm"
+        boot (exec/bootstrap-and-run!
+              "audit-t" "fact" wasm
+              :store s :max-ticks 2
+              :budget {:fuel 5000000 :ticks 5}
+              :node-id "audit-node")
+        audits (store/list-audit-keys s)]
+    (is (= 120 (get-in boot [:last :result :result])))
+    (is (seq audits) (str "expected audit keys, got " audits))
+    (doseq [f (reverse (file-seq (io/file dir)))]
+      (.delete f))))
+
+(deftest r3-gate-passes-end-to-end
+  (let [dir (str "tmp/r3-gate-test-" (System/currentTimeMillis))
+        out (exec/run-r3-gate!
+             :wasm "kototama/fixtures/kotoba-compiled-fact.wasm"
+             :dir dir)]
+    (is (true? (:ok? out)) (pr-str (remove :ok? (:checks out))))
+    (is (= :stable (:status out)))
+    (is (>= (:pass-count out) 11))
+    (is (zero? (:fail-count out)))
+    (is (some #(= :multi-tenant-shared-store (:id %)) (:checks out)))
+    (is (some #(= :aiueos-optional-host-free (:id %)) (:checks out)))
+    (is (= :stable (get-in guest/maturity-levels [:r3 :status])))
+    (is (= :stable (:status (fleet/r3-report))))
+    (doseq [f (reverse (file-seq (io/file dir)))]
+      (.delete f))))
+
+(deftest heartbeat-extends-lease-across-ticks
+  (let [dir (str "tmp/fleet-hb-" (System/currentTimeMillis))
+        s (store/disk-store dir)
+        wasm "kototama/fixtures/kotoba-compiled-fact.wasm"
+        lease (fleet/make-lease "hb" "fact"
+                                :ttl-ms 50
+                                :budget {:fuel 5000000 :ticks 5}
+                                :owner "hb-node"
+                                :meta {:wasm wasm})
+        reg (fleet/register-lease (fleet/empty-registry) lease)
+        id (:kototama.fleet/lease-id lease)
+        ;; short TTL; without heartbeat multi-tick would expire mid-run
+        out (binding [fleet/*now-ms* 1000]
+              (let [reg (assoc-in reg [:kototama.fleet/leases id]
+                                  (assoc (fleet/get-lease reg id)
+                                         :kototama.fleet/expires-at 1050
+                                         :kototama.fleet/issued-at 1000))]
+                (exec/run-lease! reg id
+                                 {:wasm wasm
+                                  :store s
+                                  :max-ticks 3
+                                  :heartbeat? true
+                                  :renew-ttl-ms 60000
+                                  :execute (exec/make-execute {:wasm wasm :grants []})})))
+        lease' (fleet/get-lease (:registry out) id)]
+    (is (true? (get-in out [:last :result :ok?])))
+    (is (= 120 (get-in out [:last :result :result])))
+    (is (pos? (:kototama.fleet/expires-at lease')))
+    (is (> (:kototama.fleet/expires-at lease') 1050))
+    (doseq [f (reverse (file-seq (io/file dir)))]
+      (.delete f))))
+
+(deftest bootstrap-aiueos-grant-runs-clock-guest
+  "Real aiueos GRANT → fleet-exec tender runs clock_monotonic guest."
+  (let [wasm-path (write-temp-wasm (wat->wasm clock-wat))
+        dir (str "tmp/fleet-aiueos-grant-" (System/currentTimeMillis))
+        s (store/disk-store dir)
+        out (exec/bootstrap-and-run!
+             "aiueos-g" "clock" wasm-path
+             :store s
+             :max-ticks 1
+             :budget {:fuel 5000000 :ticks 2}
+             :grants [:clock-monotonic]
+             :use-aiueos? true
+             :trust :verified
+             :node-id "aiueos-grant-node"
+             :fence? true)]
+    (is (= :aiueos (:grant-source out)))
+    (is (= :grant (get-in out [:aiueos-decision :aiueos/decision])))
+    (is (true? (get-in out [:last :result :ok?])))
+    (is (pos? (get-in out [:last :result :result])))
+    (is (seq (store/list-audit-entries s)))
+    (.delete (io/file wasm-path))
+    (doseq [f (reverse (file-seq (io/file dir)))]
+      (.delete f))))
+
+(deftest bootstrap-aiueos-deny-fail-closed-on-clock-guest
+  "Real aiueos DENY (require-signed) → empty grants → tender step fails closed."
+  (let [wasm-path (write-temp-wasm (wat->wasm clock-wat))
+        dir (str "tmp/fleet-aiueos-deny-" (System/currentTimeMillis))
+        s (store/disk-store dir)
+        out (exec/bootstrap-and-run!
+             "aiueos-d" "clock" wasm-path
+             :store s
+             :max-ticks 1
+             :budget {:fuel 5000000 :ticks 2}
+             :grants [:clock-monotonic]
+             :use-aiueos? true
+             :trust :verified
+             :policy-overlay {:aiueos/require-signed true}
+             :node-id "aiueos-deny-node"
+             :fence? true)]
+    (is (= :aiueos (:grant-source out)))
+    (is (= :deny (get-in out [:aiueos-decision :aiueos/decision])))
+    (is (false? (get-in out [:last :result :ok?]))
+        "denied grants must not successfully run host-import guest")
+    (.delete (io/file wasm-path))
+    (doseq [f (reverse (file-seq (io/file dir)))]
+      (.delete f))))
+
+(deftest summarize-store-and-audit-entries
+  (let [dir (str "tmp/fleet-summary-" (System/currentTimeMillis))
+        s (store/disk-store dir)
+        boot (exec/bootstrap-and-run!
+              "sum-t" "fact" "kototama/fixtures/kotoba-compiled-fact.wasm"
+              :store s :max-ticks 2
+              :budget {:fuel 5000000 :ticks 4}
+              :node-id "sum-node")
+        summary (store/summarize-store s)
+        audits (store/list-audit-entries s)]
+    (is (true? (:ok? summary)))
+    (is (pos? (:checkpoint-count summary)))
+    (is (pos? (:audit-count summary)))
+    (is (seq (:tenants summary)))
+    (is (= 2 (count audits)))
+    (is (every? :data audits))
+    (is (= 120 (get-in boot [:last :result :result])))
     (doseq [f (reverse (file-seq (io/file dir)))]
       (.delete f))))
