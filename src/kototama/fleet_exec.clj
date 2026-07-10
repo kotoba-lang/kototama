@@ -9,6 +9,7 @@
             [kototama.aiueos-adapter :as aiueos]
             [kototama.contract :as contract]
             [kototama.fleet :as fleet]
+            [kototama.fleet-fence :as fence]
             [kototama.fleet-store :as store]
             [kototama.tender :as tender]))
 
@@ -124,50 +125,6 @@
              :host-caps (contract/host-caps {:grants final :limits limits})}))))))
 
 
-(defn bootstrap-and-run!
-  "make-lease + register + run-lease! + final checkpoint.
-
-   Stores :wasm path in lease meta so resume-from-checkpoint! can recover.
-   Optional :use-aiueos? routes grants through aiueos-adapter (fail-closed).
-   Returns full result map including :lease-id :path (final checkpoint)."
-  [tenant guest wasm-path & {:keys [budget grants store max-ticks ttl-ms
-                                    use-aiueos? limits trust]
-                             :or {max-ticks 3 ttl-ms 300000 use-aiueos? false
-                                  trust :verified}}]
-  (let [store (or store (store/default-store))
-        resolved (resolve-grants (or grants [])
-                                 {:use-aiueos? use-aiueos?
-                                  :grants grants
-                                  :limits limits
-                                  :trust trust})
-        g (:grants resolved)
-        lease (fleet/make-lease tenant guest
-                                :budget budget
-                                :grants g
-                                :ttl-ms ttl-ms
-                                :meta {:wasm (str wasm-path)
-                                       :guest (str guest)
-                                       :tenant (str tenant)
-                                       :grant-source (:source resolved)})
-        reg (fleet/register-lease (fleet/empty-registry) lease)
-        id (:kototama.fleet/lease-id lease)
-        result (run-lease! reg id {:wasm wasm-path
-                                   :store store
-                                   :max-ticks max-ticks
-                                   :grants g})
-        final (store/save-checkpoint!
-               (:registry result) store
-               {:key (str "final-" id)
-                :lease-id id
-                :wasm (str wasm-path)})]
-    (assoc result
-           :lease-id id
-           :checkpoint-path (:path final)
-           :checkpoint-key (:key final)
-           :wasm (str wasm-path)
-           :grant-source (:source resolved)
-           :aiueos-decision (:decision resolved))))
-
 (defn- lease-wasm
   "Resolve wasm path from lease meta or explicit override."
   [lease wasm-override]
@@ -177,88 +134,237 @@
                       {:lease-id (:kototama.fleet/lease-id lease)
                        :meta (:kototama.fleet/meta lease)}))))
 
+(defn load-merged-registry
+  "Load and fence-merge registries from multiple checkpoint keys.
+   Empty keys → empty registry."
+  [keys store]
+  (reduce (fn [acc k]
+            (if-let [reg (store/load-checkpoint! k store)]
+              (fence/merge-registries acc reg)
+              acc))
+          (fleet/empty-registry)
+          keys))
+
+(defn claim-before-run
+  "Fence-claim LEASE as NODE-ID on REGISTRY before tender runs.
+
+   Returns {:ok? true :registry :lease :claim} or {:ok? false :reason :holder}."
+  [registry lease node-id]
+  (let [node (str (or node-id (fence/node-id)))
+        claim (fence/claim-lease registry lease node)]
+    (if (:ok? claim)
+      {:ok? true
+       :registry (:registry claim)
+       :lease (:lease claim)
+       :claim claim
+       :node-id node}
+      {:ok? false
+       :reason (:reason claim)
+       :holder (:holder claim)
+       :registry registry
+       :node-id node})))
+
+(defn bootstrap-and-run!
+  "make-lease + fence-claim + run-lease! + final checkpoint.
+
+   Stores :wasm path in lease meta so resume-from-checkpoint! can recover.
+   Optional :use-aiueos? routes grants through aiueos-adapter (fail-closed).
+   :node-id defaults to fence/node-id. :fence? (default true) enables claim.
+   Returns full result map including :lease-id :path (final checkpoint)."
+  [tenant guest wasm-path & {:keys [budget grants store max-ticks ttl-ms
+                                    use-aiueos? limits trust node-id fence?]
+                             :or {max-ticks 3 ttl-ms 300000 use-aiueos? false
+                                  trust :verified fence? true}}]
+  (let [store (or store (store/default-store))
+        node (str (or node-id (fence/node-id)))
+        resolved (resolve-grants (or grants [])
+                                 {:use-aiueos? use-aiueos?
+                                  :grants grants
+                                  :limits limits
+                                  :trust trust})
+        g (:grants resolved)
+        lease0 (fleet/make-lease tenant guest
+                                 :budget budget
+                                 :grants g
+                                 :ttl-ms ttl-ms
+                                 :owner node
+                                 :meta {:wasm (str wasm-path)
+                                        :guest (str guest)
+                                        :tenant (str tenant)
+                                        :grant-source (:source resolved)})
+        ;; Seed registry from existing disk checkpoints (shared store multi-node)
+        prior-keys (try (store/list-checkpoint-keys store) (catch Exception _ []))
+        prior (load-merged-registry (take 50 prior-keys) store)
+        claimed (if fence?
+                  (claim-before-run prior lease0 node)
+                  {:ok? true
+                   :registry (fleet/register-lease prior lease0)
+                   :lease lease0
+                   :node-id node})
+        _ (when-not (:ok? claimed)
+            (throw (ex-info "fleet-exec: fence claim refused at bootstrap"
+                            {:reason (:reason claimed)
+                             :holder (:holder claimed)
+                             :node-id node})))
+        lease (:lease claimed)
+        reg (:registry claimed)
+        id (:kototama.fleet/lease-id lease)
+        result (run-lease! reg id {:wasm wasm-path
+                                   :store store
+                                   :max-ticks max-ticks
+                                   :grants g})
+        final (store/save-checkpoint!
+               (:registry result) store
+               {:key (str "final-" id)
+                :lease-id id
+                :wasm (str wasm-path)
+                :node-id node})]
+    (assoc result
+           :lease-id id
+           :checkpoint-path (:path final)
+           :checkpoint-key (:key final)
+           :wasm (str wasm-path)
+           :grant-source (:source resolved)
+           :aiueos-decision (:decision resolved)
+           :fenced? (boolean fence?)
+           :node-id node
+           :claim-reason (get-in claimed [:claim :reason] :no-fence))))
+
 (defn resume-lease!
   "Continue an existing lease from a restored registry.
 
-   opts: :wasm (override) :store :max-ticks :grants :caps-extra :execute"
-  [registry lease-id {:keys [wasm store max-ticks grants caps-extra execute]
-                      :or {max-ticks 10}
+   Fence-claims as :node-id before tender. Skip (no throw) when held-by-other
+   if :skip-if-held? true (default true for recovery paths).
+
+   opts: :wasm :store :max-ticks :grants :caps-extra :execute
+         :node-id :fence? (default true) :skip-if-held? (default true)"
+  [registry lease-id {:keys [wasm store max-ticks grants caps-extra execute
+                             node-id fence? skip-if-held?]
+                      :or {max-ticks 10 fence? true skip-if-held? true}
                       :as opts}]
   (let [lease (fleet/get-lease registry lease-id)
         _ (when-not lease
             (throw (ex-info "fleet-exec: unknown lease" {:lease-id lease-id})))
+        node (str (or node-id (fence/node-id)))
         wasm-path (lease-wasm lease wasm)
-        result (run-lease! registry lease-id
-                           (merge opts
-                                  {:wasm wasm-path
-                                   :store store
-                                   :max-ticks max-ticks
-                                   :grants (or grants (:kototama.fleet/grants lease))
-                                   :caps-extra caps-extra
-                                   :execute execute}))
-        final (when store
-                (store/save-checkpoint!
-                 (:registry result) store
-                 {:key (str "resume-" lease-id "-" (System/currentTimeMillis))
-                  :lease-id lease-id
-                  :wasm (str wasm-path)}))]
-    (cond-> (assoc result :lease-id lease-id :wasm (str wasm-path) :resumed? true)
-      final (assoc :checkpoint-path (:path final) :checkpoint-key (:key final)))))
+        claimed (if fence?
+                  (claim-before-run registry lease node)
+                  {:ok? true :registry registry :lease lease :node-id node})]
+    (if-not (:ok? claimed)
+      (if skip-if-held?
+        {:registry registry
+         :lease-id lease-id
+         :wasm (str wasm-path)
+         :resumed? false
+         :skipped? true
+         :skip-reason (:reason claimed)
+         :holder (:holder claimed)
+         :node-id node
+         :ok? false
+         :last {:ok? false :reason (:reason claimed)}}
+        (throw (ex-info "fleet-exec: fence claim refused on resume"
+                        {:reason (:reason claimed)
+                         :holder (:holder claimed)
+                         :lease-id lease-id})))
+      (let [reg (:registry claimed)
+            lease' (:lease claimed)
+            id (:kototama.fleet/lease-id lease')
+            result (run-lease! reg id
+                               (merge opts
+                                      {:wasm wasm-path
+                                       :store store
+                                       :max-ticks max-ticks
+                                       :grants (or grants (:kototama.fleet/grants lease'))
+                                       :caps-extra caps-extra
+                                       :execute execute}))
+            final (when store
+                    (store/save-checkpoint!
+                     (:registry result) store
+                     {:key (str "resume-" id "-" (System/currentTimeMillis))
+                      :lease-id id
+                      :wasm (str wasm-path)
+                      :node-id node}))]
+        (cond-> (assoc result
+                       :lease-id id
+                       :wasm (str wasm-path)
+                       :resumed? true
+                       :skipped? false
+                       :node-id node
+                       :claim-reason (get-in claimed [:claim :reason] :no-fence)
+                       :fenced? (boolean fence?))
+          final (assoc :checkpoint-path (:path final) :checkpoint-key (:key final)))))))
 
 (defn resume-from-checkpoint!
-  "Load checkpoint key from store, resume every active lease (or :lease-id).
+  "Load checkpoint key from store, fence-claim + resume active leases.
 
    opts:
-     :store :wasm (global override) :max-ticks :lease-id (single)
-     :grants :caps-extra
+     :store :wasm :max-ticks :lease-id :grants :caps-extra
+     :node-id :fence? :skip-if-held?
 
-   Returns {:registry :resumes [result…] :active-before n}."
-  [checkpoint-key & {:keys [store wasm max-ticks lease-id grants caps-extra]
-                     :or {max-ticks 5}
+   Returns {:registry :resumes :active-before :skipped-count}."
+  [checkpoint-key & {:keys [store wasm max-ticks lease-id grants caps-extra
+                            node-id fence? skip-if-held?]
+                     :or {max-ticks 5 fence? true skip-if-held? true}
                      :as opts}]
   (let [store (or store (store/default-store))
-        reg (store/load-checkpoint! checkpoint-key store)
-        _ (when-not reg
-            (throw (ex-info "fleet-exec: checkpoint not found"
-                            {:key checkpoint-key})))
+        node (str (or node-id (fence/node-id)))
+        ;; Merge this checkpoint with other keys on the store for multi-node view
+        keys (try (store/list-checkpoint-keys store) (catch Exception _ []))
+        merged (load-merged-registry
+                (distinct (cons checkpoint-key (or keys [])))
+                store)
+        reg (or (store/load-checkpoint! checkpoint-key store)
+                (throw (ex-info "fleet-exec: checkpoint not found"
+                                {:key checkpoint-key})))
+        ;; Prefer merged world for fencing, but targets from primary checkpoint
+        fence-reg (if (seq (fleet/all-leases merged)) merged reg)
         targets (if lease-id
-                  (if-let [l (fleet/get-lease reg lease-id)]
+                  (if-let [l (or (fleet/get-lease fence-reg lease-id)
+                                 (fleet/get-lease reg lease-id))]
                     [l]
                     (throw (ex-info "fleet-exec: lease not in checkpoint"
                                     {:lease-id lease-id :key checkpoint-key})))
-                  (fleet/active-leases reg))
+                  (fleet/active-leases fence-reg))
         resumes (mapv (fn [lease]
-                        (resume-lease! reg
+                        (resume-lease! fence-reg
                                        (:kototama.fleet/lease-id lease)
                                        {:wasm wasm
                                         :store store
                                         :max-ticks max-ticks
                                         :grants grants
-                                        :caps-extra caps-extra}))
+                                        :caps-extra caps-extra
+                                        :node-id node
+                                        :fence? fence?
+                                        :skip-if-held? skip-if-held?}))
                       targets)
-        reg' (or (some-> resumes last :registry) reg)]
+        ran (filterv (complement :skipped?) resumes)
+        skipped (filterv :skipped? resumes)
+        reg' (or (some-> (last ran) :registry) fence-reg)]
     {:checkpoint-key checkpoint-key
      :active-before (count targets)
      :resumes resumes
+     :ran-count (count ran)
+     :skipped-count (count skipped)
      :registry reg'
+     :node-id node
+     :fenced? (boolean fence?)
      :ok? (or (empty? targets)
-              (boolean (some :ok? (map :last resumes))))}))
+              (boolean (some #(get-in % [:last :ok?]) ran))
+              (and (seq skipped) (empty? ran)))}))
 
 (defn recovery-pass!
-  "One recovery pass: scan disk keys (or provided keys), resume active leases.
-
-   Not a long-running daemon — call in a loop/cron. Bounded by :max-keys and
-   :max-ticks per lease. Prefer `run-daemon!` for multi-pass with sleep.
+  "One recovery pass: merge store view, fence-claim, resume only if we hold.
 
    opts:
-     :store :wasm :max-keys :max-ticks :key-filter (fn [k] bool)"
-  [& {:keys [store wasm max-keys max-ticks key-filter]
-      :or {max-keys 20 max-ticks 3
+     :store :wasm :max-keys :max-ticks :key-filter :node-id :fence?"
+  [& {:keys [store wasm max-keys max-ticks key-filter node-id fence?]
+      :or {max-keys 20 max-ticks 3 fence? true
            key-filter (fn [k]
                         (or (str/starts-with? (str k) "final-")
                             (str/starts-with? (str k) "resume-")
                             (str/starts-with? (str k) "lease-")))}}]
   (let [store (or store (store/disk-store))
+        node (str (or node-id (fence/node-id)))
         keys (->> (if (= :disk (:kind store))
                     (store/list-checkpoint-keys store)
                     (store/list-disk-checkpoint-keys
@@ -271,7 +377,9 @@
                           (assoc (resume-from-checkpoint! k
                                                           :store store
                                                           :wasm wasm
-                                                          :max-ticks max-ticks)
+                                                          :max-ticks max-ticks
+                                                          :node-id node
+                                                          :fence? fence?)
                                  :key k)
                           (catch Exception e
                             {:key k :ok? false :error (.getMessage e)})))
@@ -280,6 +388,9 @@
      :results results
      :ok-count (count (filter :ok? results))
      :fail-count (count (remove :ok? results))
+     :skipped-total (reduce + 0 (map #(or (:skipped-count %) 0) results))
+     :node-id node
+     :fenced? (boolean fence?)
      :at (System/currentTimeMillis)}))
 
 ;; ── recovery daemon (bounded multi-pass) ────────────────────────────────────

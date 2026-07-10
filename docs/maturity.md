@@ -92,10 +92,12 @@ clojure -M:cli fleet-daemon test/kototama/fixtures/kotoba-compiled-fact.wasm \
 | **bounded recovery daemon** (`run-daemon!` / CLI) | |
 | **optional aiueos grants** (`:use-aiueos?`) | |
 | **epoch fencing** (`fleet-fence` claim/merge) | |
+| **fence-gated tender** (claim before run; skip if held) | |
 | **systemd oneshot+timer** (`deploy/systemd/`) | |
 
 Fencing is **not** distributed consensus — higher epoch wins on a shared store.
-See `deploy/systemd/README.md` for install.
+`bootstrap` / `resume` / `recovery-pass` call `claim-before-run` so only the
+holding node executes tender. See `deploy/systemd/README.md` for install.
 
 ## Guest source rules (emit subset)
 
