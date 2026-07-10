@@ -6,6 +6,9 @@
      parity              — R2 browser/JVM import parity matrix
      fleet-demo          — R3 lease→tick→checkpoint pure demo
      fleet-run <wasm>    — R3 tender execute + disk checkpoint
+     fleet-list          — list disk checkpoint keys
+     fleet-resume <key> <wasm> — resume active leases from checkpoint
+     fleet-recover <wasm> — one recovery pass over recent checkpoints
      lint <file.kotoba>  — emit-pitfall lint (no execution)
      inspect <file.wasm> — structural Wasm surface (no run)
      run <file.wasm> [--grant id …]  — run-report via tender
@@ -89,6 +92,54 @@
       :steps (count (:steps out))})
     {:ok? true}))
 
+(defn cmd-fleet-list []
+  (let [s (fleet-store/disk-store "tmp/kototama-fleet")
+        keys (fleet-store/list-checkpoint-keys s)]
+    (pp/pprint {:ok? true :root "tmp/kototama-fleet" :keys keys :count (count keys)})
+    {:ok? true}))
+
+(defn cmd-fleet-resume [checkpoint-key wasm-path]
+  (let [s (fleet-store/disk-store "tmp/kototama-fleet")
+        ;; disk keys use __ for /; accept either form
+        out (fleet-exec/resume-from-checkpoint!
+             checkpoint-key
+             :store s
+             :wasm wasm-path
+             :max-ticks 2)]
+    (pp/pprint
+     {:ok? (boolean (:ok? out))
+      :checkpoint-key (:checkpoint-key out)
+      :active-before (:active-before out)
+      :resumes
+      (mapv (fn [r]
+              {:lease-id (:lease-id r)
+               :stopped (:stopped r)
+               :result (get-in r [:last :result])
+               :checkpoint-key (:checkpoint-key r)
+               :resumed? (:resumed? r)})
+            (:resumes out))})
+    {:ok? (boolean (:ok? out))}))
+
+(defn cmd-fleet-recover [wasm-path]
+  (let [out (fleet-exec/recovery-pass!
+             :store (fleet-store/disk-store "tmp/kototama-fleet")
+             :wasm wasm-path
+             :max-keys 10
+             :max-ticks 1)]
+    (pp/pprint
+     {:ok? true
+      :keys (:keys out)
+      :ok-count (:ok-count out)
+      :fail-count (:fail-count out)
+      :results
+      (mapv (fn [r]
+              {:key (:key r)
+               :ok? (:ok? r)
+               :active-before (:active-before r)
+               :error (:error r)})
+            (:results out))})
+    {:ok? true}))
+
 (defn cmd-lint [path]
   (let [src (slurp path)
         report (guest/lint-kotoba-source src)]
@@ -146,6 +197,18 @@
                         (do (binding [*out* *err*]
                               (println "usage: fleet-run <guest.wasm>"))
                             {:ok? false}))
+          "fleet-list" (cmd-fleet-list)
+          "fleet-resume" (let [k (first more) w (second more)]
+                           (if (and k w)
+                             (cmd-fleet-resume k w)
+                             (do (binding [*out* *err*]
+                                   (println "usage: fleet-resume <checkpoint-key> <guest.wasm>"))
+                                 {:ok? false})))
+          "fleet-recover" (if-let [w (first more)]
+                            (cmd-fleet-recover w)
+                            (do (binding [*out* *err*]
+                                  (println "usage: fleet-recover <guest.wasm>"))
+                                {:ok? false}))
           "lint" (if-let [p (first more)]
                    (cmd-lint p)
                    (do (binding [*out* *err*]
@@ -162,11 +225,14 @@
                         (println "usage: run <file.wasm> [--grant id …]"))
                       {:ok? false}))
           (do
-            (println "kototama CLI (maturity R2 + R3 skeleton)")
+            (println "kototama CLI (maturity R2 + R3 skeleton+persist)")
             (println "  doctor              maturity snapshot R0–R3")
             (println "  parity              R2 browser/JVM import matrix")
             (println "  fleet-demo          R3 lease→tick→checkpoint demo")
             (println "  fleet-run <wasm>    R3 tender run + disk checkpoint")
+            (println "  fleet-list          list disk checkpoint keys")
+            (println "  fleet-resume <key> <wasm>  resume from checkpoint")
+            (println "  fleet-recover <wasm> one recovery pass over checkpoints")
             (println "  lint <file.kotoba>  emit-pitfall lint")
             (println "  inspect <file.wasm> structural surface")
             (println "  run <file.wasm> [--grant id …]")

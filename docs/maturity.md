@@ -74,15 +74,19 @@ Host library: `actor-host.js`, `http-post-bridge.js`, `kgraph.js`.
 clojure -M:cli fleet-demo
 clojure -M:cli fleet-run test/kototama/fixtures/kotoba-compiled-fact.wasm
 # writes tmp/kototama-fleet/*.edn
+clojure -M:cli fleet-list
+clojure -M:cli fleet-resume <checkpoint-key> test/kototama/fixtures/kotoba-compiled-fact.wasm
+clojure -M:cli fleet-recover test/kototama/fixtures/kotoba-compiled-fact.wasm
 ```
 
 | Landed | Not yet |
 |---|---|
 | lease / budget / tick / governor | cross-node consensus |
-| checkpoint/restore EDN v1 | recovery daemon |
+| checkpoint/restore EDN v1 | long-running recovery *daemon* (use cron + fleet-recover) |
 | **disk store** (`fleet-store`) | aiueos fleet broker |
 | **B2 optional** (env creds) | |
 | **tender execute** (`fleet-exec`) | |
+| **resume + recovery-pass** | |
 
 ## Guest source rules (emit subset)
 

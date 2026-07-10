@@ -252,3 +252,44 @@
   ([key store]
    (when-let [cp ((:load! store) key)]
      (fleet/restore cp))))
+
+(defn load-checkpoint-raw!
+  "Load checkpoint map without restore (includes :meta with wasm path etc.)."
+  ([key] (load-checkpoint-raw! key (default-store)))
+  ([key store]
+   ((:load! store) key)))
+
+(defn list-checkpoint-keys
+  "List checkpoint keys known to the store.
+
+   Disk: scan root for *.edn basenames (without extension).
+   Memory: dump keys. B2-only remote: empty unless dump provided."
+  [store]
+  (case (:kind store)
+    :disk
+    (let [root (io/file (:root store))]
+      (if-not (.isDirectory root)
+        []
+        (->> (.listFiles root)
+             (filter #(.isFile %))
+             (map #(.getName %))
+             (filter #(str/ends-with? % ".edn"))
+             (map #(subs % 0 (- (count %) 4)))
+             sort
+             vec)))
+    :memory
+    (if-let [dump (:dump store)]
+      (vec (sort (keys (dump))))
+      [])
+    :composite
+    ;; prefer disk child if present via :root on nested — scan both via load only
+    (let [disk-keys (when (:root store)
+                      (list-checkpoint-keys (disk-store (:root store))))]
+      (or disk-keys []))
+    ;; b2 / unknown
+    []))
+
+(defn list-disk-checkpoint-keys
+  "Convenience: list keys under a disk root path."
+  ([] (list-checkpoint-keys (disk-store)))
+  ([root] (list-checkpoint-keys (disk-store root))))
