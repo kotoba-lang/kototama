@@ -9,10 +9,10 @@ guest = Wasm component). Not a marketing scorecard.
 |---|---|---|---|
 | **R0** | Contract / dry-run | **stable** | `kototama.contract` HostCaps + import surface; organism membrane refuses live publish |
 | **R1** | Tender execution (JVM/Chicory) | **stable** | `kototama.tender` runs real `.wasm`; fuel + memory limits; aiueos adapter; session report; source lint; host-free + host-import fixtures from `kotoba wasm emit` |
-| **R2** | Browser-native host parity | **advanced-partial** | parity matrix (`kototama.browser`); 7/9 actor:host sync in `actor-host.js`; host-free web fixtures + `verify-host-free.mjs`; http-post/llm absent in tab |
-| **R3** | Fleet multi-tenant tender | **skeleton** | pure `kototama.fleet`: lease / budget / tick / governor / checkpoint / run-loop-step — no cross-node consensus |
+| **R2** | Browser-native host parity | **advanced-partial** | parity matrix; 8/9 browser-linkable; http-post via inject / SAB+COOP bridge (`http-post-bridge.js`); host-free web fixtures |
+| **R3** | Fleet multi-tenant tender | **skeleton+persist** | fleet + disk/B2 checkpoint store + tender `run-report` execute bridge |
 
-**Current declared level: R2 (advanced-partial), with R3 skeleton landed.**
+**Current declared level: R2 (advanced-partial), R3 skeleton+persist.**
 
 ## R1 acceptance gates
 
@@ -51,27 +51,38 @@ clojure -M:cli parity           # JVM vs browser import matrix
 | llm-infer | yes | **no** | inject |
 | http-post | yes | **no** | **no** |
 
-Score today: **7/9** browser-yes (`kototama.browser/parity-score`).
+Score today: **8/9** browser-linkable (`llm-infer` still Node-inject only).
 
-Host library: `kotoba-lang/wasm-webcomponent` (`actor-host.js`, `kgraph.js`).
-Policy re-enforcement at load: **actor-host.js yes**; **kgraph.js no**.
+### http-post paths (R2)
 
-## R3 skeleton gates
+| Path | Env | How |
+|---|---|---|
+| inject | Node / tests | `opts.httpPost(url, body) => Uint8Array` |
+| SAB + COOP | Browser `crossOriginIsolated` | `createSabHttpPostBridge()` + COOP/COEP headers |
+| JSPI | Chrome experimental | not default; detect via `httpPostCapabilities().jspi` |
+
+```bash
+# in wasm-webcomponent
+node test/verify-http-post.mjs
+```
+
+Host library: `actor-host.js`, `http-post-bridge.js`, `kgraph.js`.
+
+## R3 skeleton+persist gates
 
 ```bash
 clojure -M:cli fleet-demo
-# covered by kototama.fleet-test in clojure -M:test
+clojure -M:cli fleet-run test/kototama/fixtures/kotoba-compiled-fact.wasm
+# writes tmp/kototama-fleet/*.edn
 ```
 
-| Landed (pure cljc) | Not yet |
+| Landed | Not yet |
 |---|---|
-| lease create/renew/expire | cross-node consensus |
-| budget charge | persistent store |
-| plan-tick + apply-tick-result | recovery daemon |
-| governor-allow? | aiueos fleet broker |
-| registry multi-tenant index | |
-| checkpoint/restore schema v1 | |
-| run-loop-step (inject execute) | |
+| lease / budget / tick / governor | cross-node consensus |
+| checkpoint/restore EDN v1 | recovery daemon |
+| **disk store** (`fleet-store`) | aiueos fleet broker |
+| **B2 optional** (env creds) | |
+| **tender execute** (`fleet-exec`) | |
 
 ## Guest source rules (emit subset)
 

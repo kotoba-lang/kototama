@@ -8,20 +8,21 @@
         mids (set (map :import (browser/parity-matrix)))]
     (is (= ids mids))))
 
-(deftest browser-yes-includes-crypto-and-log
+(deftest browser-yes-includes-crypto-log-and-http-path
   (let [yes (set (browser/browser-available-ids))]
     (is (contains? yes :sha256-hex))
     (is (contains? yes :gen-keypair))
     (is (contains? yes :sign))
     (is (contains? yes :clock-monotonic))
-    (is (not (contains? yes :http-post)))))
+    (is (contains? yes :http-post) "http-post linkable via inject/COOP")
+    (is (not (contains? yes :llm-infer)))))
 
 (deftest parity-score-ratio
   (let [s (browser/parity-score)]
     (is (= 9 (:total s)))
-    (is (= 7 (:browser-yes s)))
-    (is (= 2 (:browser-no s)))
-    (is (< 0.7 (:ratio s) 0.8))))
+    (is (= 8 (:browser-yes s)))
+    (is (= 1 (:browser-no s)))
+    (is (< 0.85 (:ratio s) 0.95))))
 
 (deftest r2-report-shape
   (let [r (browser/r2-report)]

@@ -5,6 +5,7 @@
      doctor              — maturity snapshot (R0–R3) + import surface
      parity              — R2 browser/JVM import parity matrix
      fleet-demo          — R3 lease→tick→checkpoint pure demo
+     fleet-run <wasm>    — R3 tender execute + disk checkpoint
      lint <file.kotoba>  — emit-pitfall lint (no execution)
      inspect <file.wasm> — structural Wasm surface (no run)
      run <file.wasm> [--grant id …]  — run-report via tender
@@ -15,6 +16,8 @@
             [kototama.browser :as browser]
             [kototama.contract :as contract]
             [kototama.fleet :as fleet]
+            [kototama.fleet-exec :as fleet-exec]
+            [kototama.fleet-store :as fleet-store]
             [kototama.guest :as guest]
             [kototama.tender :as tender])
   (:gen-class))
@@ -70,6 +73,22 @@
       (count (fleet/tenant-leases restored "tenant-a"))})
     {:ok? true}))
 
+(defn cmd-fleet-run [wasm-path]
+  (let [out (fleet-exec/bootstrap-and-run!
+             "cli-tenant" "cli-guest" wasm-path
+             :store (fleet-store/disk-store "tmp/kototama-fleet")
+             :max-ticks 2
+             :budget {:fuel 5000000 :ticks 5})]
+    (pp/pprint
+     {:ok? true
+      :lease-id (:lease-id out)
+      :stopped (:stopped out)
+      :result (get-in out [:last :result])
+      :checkpoint-path (:checkpoint-path out)
+      :checkpoint-key (:checkpoint-key out)
+      :steps (count (:steps out))})
+    {:ok? true}))
+
 (defn cmd-lint [path]
   (let [src (slurp path)
         report (guest/lint-kotoba-source src)]
@@ -122,6 +141,11 @@
           "doctor" (cmd-doctor)
           "parity" (cmd-parity)
           "fleet-demo" (cmd-fleet-demo)
+          "fleet-run" (if-let [p (first more)]
+                        (cmd-fleet-run p)
+                        (do (binding [*out* *err*]
+                              (println "usage: fleet-run <guest.wasm>"))
+                            {:ok? false}))
           "lint" (if-let [p (first more)]
                    (cmd-lint p)
                    (do (binding [*out* *err*]
@@ -142,6 +166,7 @@
             (println "  doctor              maturity snapshot R0–R3")
             (println "  parity              R2 browser/JVM import matrix")
             (println "  fleet-demo          R3 lease→tick→checkpoint demo")
+            (println "  fleet-run <wasm>    R3 tender run + disk checkpoint")
             (println "  lint <file.kotoba>  emit-pitfall lint")
             (println "  inspect <file.wasm> structural surface")
             (println "  run <file.wasm> [--grant id …]")
