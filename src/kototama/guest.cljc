@@ -92,8 +92,8 @@
    :r1  tender runs real .wasm (host-free + actor:host imports), fuel + memory
         limits, session report, source lint, checked-in emit fixtures
    :r2  browser-native host parity matrix + host-free web fixtures
-        (7/9 actor:host sync; http-post/llm absent in tab)
-   :r3  fleet lease/budget/tick/governor/checkpoint skeleton (pure cljc)"
+        (8/9 linkable; http-post inject|SAB-COOP; llm-infer Node-inject only)
+   :r3  fleet lease/budget/tick/governor/checkpoint + disk/B2 + tender execute"
   {:r0 {:id :r0
         :title "Contract / dry-run"
         :status :stable
