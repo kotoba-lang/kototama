@@ -100,7 +100,7 @@ Ladder and gates: [`docs/maturity.md`](docs/maturity.md).
 | R0 contract / dry-run | stable |
 | R1 tender (JVM/Chicory) | stable — session report, host-free guests, emit lint, CLI |
 | **R2 browser host parity** | **advanced-partial** — 8/9 linkable; http-post inject\|SAB-COOP; host-free web fixtures |
-| R3 fleet multi-tenant | skeleton+persist — disk/B2 checkpoint + fleet-exec tender run-report |
+| R3 fleet multi-tenant | skeleton+persist — disk/B2 + fence-gated tender + daemon + systemd |
 
 ```bash
 clojure -M:doctor                                    # R0–R3 snapshot
