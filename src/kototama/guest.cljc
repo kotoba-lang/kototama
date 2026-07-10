@@ -93,7 +93,8 @@
         limits, session report, source lint, checked-in emit fixtures
    :r2  browser-native host parity matrix + host-free web fixtures
         (8/9 linkable; http-post inject|SAB-COOP; llm-infer Node-inject only)
-   :r3  fleet lease/budget/tick/governor/checkpoint + disk/B2 + tender execute"
+   :r3  fleet lease/budget/tick/governor/checkpoint + disk/B2 + fence-gated
+        tender (claim before run) + daemon + systemd (not Raft consensus)"
   {:r0 {:id :r0
         :title "Contract / dry-run"
         :status :stable
@@ -109,7 +110,7 @@
    :r3 {:id :r3
         :title "Fleet multi-tenant tender"
         :status :skeleton+persist
-        :note "fleet + disk/B2 store + tender execute — not cross-node."}})
+        :note "disk/B2 + fence-gated tender (claim before run; held-by-other skips) + daemon + systemd — not Raft."}})
 
 (defn host-free?
   "True when the guest requests no host imports (pure compute)."
