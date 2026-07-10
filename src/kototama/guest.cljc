@@ -91,8 +91,9 @@
    :r0  contract-only / dry-run membrane (pre-tender)
    :r1  tender runs real .wasm (host-free + actor:host imports), fuel + memory
         limits, session report, source lint, checked-in emit fixtures
-   :r2  browser-native host parity + policy re-enforcement at load (partial today)
-   :r3  durable multi-tenant fleet tender (lease/budget/crash recovery) — not yet"
+   :r2  browser-native host parity matrix + host-free web fixtures
+        (7/9 actor:host sync; http-post/llm absent in tab)
+   :r3  fleet lease/budget/tick/governor/checkpoint skeleton (pure cljc)"
   {:r0 {:id :r0
         :title "Contract / dry-run"
         :status :stable
@@ -103,12 +104,12 @@
         :note "kototama.tender + aiueos adapter + real kotoba-emitted fixtures."}
    :r2 {:id :r2
         :title "Browser-native host parity"
-        :status :partial
-        :note "web/ actor-host + kgraph demo; not full import surface."}
+        :status :advanced-partial
+        :note "parity matrix + host-free web wasm; 7/9 sync imports; see kototama.browser."}
    :r3 {:id :r3
         :title "Fleet multi-tenant tender"
-        :status :planned
-        :note "lease / budget / crash recovery durable outer loop — not landed."}})
+        :status :skeleton
+        :note "kototama.fleet lease/budget/tick/governor/checkpoint — not cross-node."}})
 
 (defn host-free?
   "True when the guest requests no host imports (pure compute)."
@@ -136,13 +137,18 @@
       :write? (boolean (some #{:write} effects))})))
 
 (defn maturity-report
-  "Aggregate maturity snapshot for CLI doctor / CI."
+  "Aggregate maturity snapshot for CLI doctor / CI.
+   R2/R3 detail lives in kototama.browser/r2-report and kototama.fleet/r3-report
+   (loaded optionally by CLI to keep this ns free of those requires)."
   []
-  {:current :r1
+  {:current :r2
+   :current-note "R1 stable + R2 advanced-partial; R3 skeleton landed"
    :levels maturity-levels
    :import-surface (mapv :import/id (:abi/imports contract/import-surface))
    :wasm-fields wasm-field-by-import-id
-   :notes ["R1 gate: clojure -M:test (tender + contract + aiueos adapter)"
+   :notes ["R1 gate: clojure -M:test (tender + contract + aiueos + guest + maturity)"
+           "R2 gate: node web/verify*.mjs (+ verify-host-free.mjs)"
+           "R3: pure fleet loop — wire tender/run-report at host edges"
            "Host-free pure guests: empty requested-imports + empty grants"
            "Emit path: kotoba-lang/kotoba `wasm emit` → .wasm → tender/run-report"
            "Lint .kotoba with kototama.guest/lint-kotoba-source before emit"]})

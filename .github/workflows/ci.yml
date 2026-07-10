@@ -47,3 +47,4 @@ jobs:
       - run: node web/verify.mjs
       - run: node web/verify-kgraph.mjs
       - run: node web/verify-actor-host.mjs
+      - run: node web/verify-host-free.mjs

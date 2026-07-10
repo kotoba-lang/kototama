@@ -56,30 +56,43 @@ cd web && python3 -m http.server 8123
 # open http://localhost:8123/ in a browser
 ```
 
-## Scope (honest R0)
+## Scope (honest R2 advanced-partial)
 
-- **`kgraph-*` and 4 of 8 `actor:host` imports are the only ported
-  host-import surfaces** (in `kotoba-lang/wasm-webcomponent`'s
-  `kgraph.js`/`actor-host.js`). `kse`/`auth`/`llm`/`evm`/`btc`/`egress`/
-  `chain` and friends (referenced in the wider kotoba/kototama design
-  docs) have no browser implementation, and neither do `actor:host`'s
-  `gen-keypair`/`sign`/`verify`/`http-post` (a synchronous Wasm host
-  import can't `await` the Web Crypto/`fetch` calls those would need —
-  see `actor-host.js`'s header comment in wasm-webcomponent). A component
-  that calls any other `(module "kotoba")` import will still fail to
-  instantiate against this page.
-- **`kgraph.js` has no capability/policy enforcement at load time**
-  (the `--policy` gate kotoba-lang/kotoba applies at `wasm emit` time is
-  a build-time check only). `actor-host.js` is the exception: it
-  re-verifies `HostCaps`/`RuntimeLimits` pre-flight and per call, mirroring
-  `kototama.tender`'s (JVM/Chicory) enforcement. Don't treat this page as
-  a sandboxed multi-tenant host in general.
-- This is the first slice of the shift kototama's role is taking (see the
-  ADR referenced from the top-level README): execution premise moves from
-  "JVM hosts a Wasm interpreter" (`kotoba wasm run` + Chicory) to "the
-  browser's own engine runs the AOT binary", with kototama supplying the
-  WebComponent hosting shell. The JVM+Chicory path is unaffected and
-  remains the compile-time/test-time proof in `kotoba-lang/kotoba`.
+Maturity ladder: top-level [`docs/maturity.md`](../docs/maturity.md).
+Parity matrix: `kototama.browser` / `clojure -M:cli parity`.
+
+### actor:host (wasm-webcomponent `actor-host.js`)
+
+| Import | Browser tab | Notes |
+|---|---|---|
+| gen-keypair / sign / verify | **yes** | sync via vendored `@noble/curves` |
+| sha256-hex / clock-monotonic | **yes** | |
+| log-read / log-write | **yes** | injectable store |
+| llm-infer | **no** in tab | Node can inject `opts.llmInfer` |
+| http-post | **no** | needs JSPI or COOP/COEP SAB; absent on purpose |
+
+**7/9** imports are browser-linkable. A guest that imports `http_post` fails
+to link with a clear unknown-import error (not a silent skip).
+
+### Host-free guests (R2)
+
+| File | Expected `main` |
+|---|---|
+| `demo.wasm` | 42 |
+| `host-free-fact.wasm` | 120 |
+| `host-free-peak-cells.wasm` | 240 |
+
+```bash
+node web/verify-host-free.mjs
+```
+
+### Other surfaces
+
+- **`kgraph.js`**: kgraph assert/query only; **no** HostCaps re-enforcement at
+  load (emit-time policy only). `actor-host.js` **does** re-verify grants.
+- Wider kotoba imports (`kse`/`auth`/`evm`/…) — not ported here.
+- This is not a multi-tenant sandboxed fleet host (that's R3 skeleton on JVM
+  pure data: `kototama.fleet`).
 
 ## History
 

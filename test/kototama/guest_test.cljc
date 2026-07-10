@@ -40,6 +40,8 @@
 
 (deftest maturity-report-shape
   (let [m (guest/maturity-report)]
-    (is (= :r1 (:current m)))
+    (is (= :r2 (:current m)))
     (is (contains? (:levels m) :r1))
+    (is (contains? (:levels m) :r2))
+    (is (contains? (:levels m) :r3))
     (is (seq (:import-surface m)))))

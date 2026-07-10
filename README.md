@@ -92,26 +92,27 @@ test-time proof; this is additive, not a replacement.
 
 ## Maturity
 
-**Current level: R1** (tender execution stable). Ladder and gates:
-[`docs/maturity.md`](docs/maturity.md).
+**Current level: R2 advanced-partial** (R1 stable underneath; R3 skeleton landed).
+Ladder and gates: [`docs/maturity.md`](docs/maturity.md).
 
 | Level | Status |
 |---|---|
 | R0 contract / dry-run | stable |
-| **R1 tender (JVM/Chicory)** | **stable** — session report, host-free guests, emit lint, CLI |
-| R2 browser host parity | partial (`web/`) |
-| R3 fleet multi-tenant | planned |
+| R1 tender (JVM/Chicory) | stable — session report, host-free guests, emit lint, CLI |
+| **R2 browser host parity** | **advanced-partial** — 7/9 sync imports; host-free web fixtures |
+| R3 fleet multi-tenant | skeleton — lease/budget/tick/governor/checkpoint (pure cljc) |
 
 ```bash
-clojure -M:doctor                                    # maturity snapshot
-clojure -M:cli lint  path/to/guest.kotoba            # pre-emit pitfalls
-clojure -M:cli inspect path/to/guest.wasm            # exports/imports
-clojure -M:cli run     path/to/guest.wasm            # host-free or --grant id
-clojure -M:cli run     guest.wasm --grant sha256-hex
+clojure -M:doctor                                    # R0–R3 snapshot
+clojure -M:cli parity                                # R2 import matrix
+clojure -M:cli fleet-demo                            # R3 pure loop demo
+clojure -M:cli lint  path/to/guest.kotoba
+clojure -M:cli run     path/to/guest.wasm
+node web/verify-host-free.mjs                        # R2 host-free under browser Wasm
 ```
 
-Host-free pure guests (empty import list) are first-class: checked-in
-fixtures include `fact(5)=120` and Williams integer peak-cells `@S=4096 → 240`.
+Host-free pure guests are first-class on **both** JVM tender and browser/Node
+Wasm (`fact(5)=120`, peak-cells `@4096→240`, also under `web/`).
 
 ## Test
 
