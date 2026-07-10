@@ -278,7 +278,7 @@
   "Aggregate R3 snapshot for CLI doctor."
   []
   {:level :r3
-   :status :skeleton
+   :status :skeleton+persist
    :title "Fleet multi-tenant tender"
    :landed ["lease create/renew/expire"
             "budget charge (fuel/llm/http/ticks)"
@@ -286,11 +286,13 @@
             "governor-allow? fail-closed"
             "registry multi-tenant index"
             "checkpoint/restore EDN schema v1"
-            "run-loop-step (injectable execute)"]
+            "run-loop-step (injectable execute)"
+            "fleet-store disk + optional B2"
+            "fleet-exec tender/run-report bridge"]
    :not-yet ["cross-node lease consensus"
-             "persistent store (only pure map)"
              "automatic crash recovery daemon"
              "aiueos-integrated fleet broker"]
-   :api 'kototama.fleet
-   :notes ["Pure cljc — wire tender/run-report at host edges"
-           "1 tick = 1 bounded guest run; no internal infinite loops"]})
+   :api ['kototama.fleet 'kototama.fleet-store 'kototama.fleet-exec]
+   :notes ["Pure cljc core + JVM store/exec edges"
+           "1 tick = 1 bounded guest run; no internal infinite loops"
+           "B2 via B2_KEY_ID/B2_APP_KEY/B2_BUCKET or KOTOTAMA_FLEET_B2_*"]})

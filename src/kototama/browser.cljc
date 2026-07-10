@@ -23,8 +23,8 @@
    :sign            {:jvm :yes :browser :yes :node :yes}
    :verify          {:jvm :yes :browser :yes :node :yes}
    :sha256-hex      {:jvm :yes :browser :yes :node :yes}
-   :http-post       {:jvm :yes :browser :no  :node :no
-                     :note "sync fetch unavailable; JSPI/COOP-COEP not assumed"}
+   :http-post       {:jvm :yes :browser :coop-or-inject :node :inject
+                     :note "inject opts.httpPost; browser SAB bridge needs COOP/COEP; JSPI experimental"}
    :log-read        {:jvm :yes :browser :yes :node :yes}
    :log-write       {:jvm :yes :browser :yes :node :yes}
    :clock-monotonic {:jvm :yes :browser :yes :node :yes}
@@ -56,32 +56,39 @@
              :note (:note row)}))
         (map :import/id (:abi/imports contract/import-surface))))
 
+(defn- browser-linkable?
+  "True when browser can link the import (possibly needing COOP/inject)."
+  [status]
+  (contains? #{:yes :coop-or-inject :inject} status))
+
 (defn browser-available-ids
-  "Import ids with :browser :yes (linkable in a tab without inject)."
+  "Import ids linkable in a browser (incl. COOP/inject paths)."
   []
   (vec (keep (fn [[id row]]
-               (when (= :yes (:browser row)) id))
+               (when (browser-linkable? (:browser row)) id))
              host-impl)))
 
 (defn browser-missing-ids
-  "Import ids not available as sync host imports in a standard browser tab."
+  "Import ids not available as host imports in a standard browser tab
+   without a special backend."
   []
   (vec (keep (fn [[id row]]
-               (when (not= :yes (:browser row)) id))
+               (when-not (browser-linkable? (:browser row)) id))
              host-impl)))
 
 (defn parity-score
-  "Rough R2 score: fraction of actor:host imports with browser :yes."
+  "R2 score: fraction of actor:host imports browser-linkable."
   []
   (let [rows (parity-matrix)
         n (count rows)
-        yes (count (filter #(= :yes (:browser %)) rows))]
+        yes (count (filter #(browser-linkable? (:browser %)) rows))]
     {:total n
      :browser-yes yes
      :browser-no (- n yes)
      :ratio (if (pos? n) (double (/ yes n)) 0.0)
      :available (browser-available-ids)
-     :missing (browser-missing-ids)}))
+     :missing (browser-missing-ids)
+     :http-post-paths [:inject :sab-coop :jspi-experimental]}))
 
 (defn r2-report
   "Aggregate R2 snapshot for CLI doctor."
@@ -95,11 +102,12 @@
                       "web/host-free-peak-cells.wasm"
                       "web/demo.wasm"]
    :actor-host-demo "web/actor-host-demo.wasm"
-   :library "kotoba-lang/wasm-webcomponent (actor-host.js, kgraph.js)"
+   :library "kotoba-lang/wasm-webcomponent (actor-host.js, http-post-bridge.js, kgraph.js)"
    :verify ["node web/verify.mjs"
             "node web/verify-kgraph.mjs"
             "node web/verify-actor-host.mjs"
-            "node web/verify-host-free.mjs"]
+            "node web/verify-host-free.mjs"
+            "node test/verify-http-post.mjs  ; in wasm-webcomponent"]
    :notes ["Policy re-enforcement at load: actor-host.js yes; kgraph.js no"
-           "http-post remains absent by design until JSPI/COOP-COEP path"
+           "http-post: inject (Node) | SAB+COOP bridge (browser) | JSPI experimental"
            "llm-infer injectable on Node only"]})

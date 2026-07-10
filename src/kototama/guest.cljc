@@ -105,11 +105,11 @@
    :r2 {:id :r2
         :title "Browser-native host parity"
         :status :advanced-partial
-        :note "parity matrix + host-free web wasm; 7/9 sync imports; see kototama.browser."}
+        :note "8/9 linkable; http-post inject|SAB-COOP; see kototama.browser."}
    :r3 {:id :r3
         :title "Fleet multi-tenant tender"
-        :status :skeleton
-        :note "kototama.fleet lease/budget/tick/governor/checkpoint — not cross-node."}})
+        :status :skeleton+persist
+        :note "fleet + disk/B2 store + tender execute — not cross-node."}})
 
 (defn host-free?
   "True when the guest requests no host imports (pure compute)."
