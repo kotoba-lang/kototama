@@ -90,6 +90,29 @@ etc.; no capability/policy re-enforcement at load time). The JVM+Chicory
 path in kotoba-lang/kotoba is unaffected and remains the compile-time/
 test-time proof; this is additive, not a replacement.
 
+## Maturity
+
+**Current level: R1** (tender execution stable). Ladder and gates:
+[`docs/maturity.md`](docs/maturity.md).
+
+| Level | Status |
+|---|---|
+| R0 contract / dry-run | stable |
+| **R1 tender (JVM/Chicory)** | **stable** — session report, host-free guests, emit lint, CLI |
+| R2 browser host parity | partial (`web/`) |
+| R3 fleet multi-tenant | planned |
+
+```bash
+clojure -M:doctor                                    # maturity snapshot
+clojure -M:cli lint  path/to/guest.kotoba            # pre-emit pitfalls
+clojure -M:cli inspect path/to/guest.wasm            # exports/imports
+clojure -M:cli run     path/to/guest.wasm            # host-free or --grant id
+clojure -M:cli run     guest.wasm --grant sha256-hex
+```
+
+Host-free pure guests (empty import list) are first-class: checked-in
+fixtures include `fact(5)=120` and Williams integer peak-cells `@S=4096 → 240`.
+
 ## Test
 
 ```bash
@@ -98,7 +121,8 @@ bb --classpath lib lib/kototama/test_actor.clj
 bb --classpath lib lib/kototama/test_atproto.cljc
 ```
 
-`clojure -M:test` is the default repository gate. `kototama.tender-test`
+`clojure -M:test` is the default repository gate (contract + tender + aiueos
+adapter + guest lint + maturity fixtures). `kototama.tender-test`
 shells out to the `wasm-tools` CLI (Bytecode Alliance) to assemble its WAT
 fixtures into real Wasm bytes at test time — install it (`cargo install
 wasm-tools` or your package manager) if it isn't already on `PATH`. The
