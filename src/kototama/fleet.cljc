@@ -323,16 +323,22 @@
             "programmatic acceptance gate (run-r3-gate! / fleet-gate CLI)"
             "lease heartbeat renew across multi-tick runs"
             "multi-tenant isolation on shared store (gate)"
-            "optional aiueos grant path in bootstrap (--use-aiueos)"]
+            "optional aiueos grant path in bootstrap (--use-aiueos)"
+            "aiueos GRANT/DENY E2E through fleet-exec + tender"
+            "fleet-status / fleet-audit observability CLI"]
    :not-yet ["Raft/Paxos multi-node consensus"
-             "full aiueos fleet broker (grant subset + optional path only)"]
+             "full aiueos fleet broker (all actor:host kinds as first-class policy)"]
+   :stable-when ["fleet-gate green in CI on every merge"
+                 "aiueos grant+deny E2E green without flakiness"
+                 "documented ops runbook for systemd daemon"
+                 "still NOT claiming Raft — stable means local/shared-store fleet ops"]
    :api ['kototama.fleet 'kototama.fleet-store 'kototama.fleet-exec
          'kototama.fleet-fence]
    :gate "clojure -M:cli fleet-gate"
    :notes ["Pure cljc core + JVM store/exec edges"
            "1 tick = 1 bounded guest run; no internal infinite loops"
            "B2 via B2_KEY_ID/B2_APP_KEY/B2_BUCKET or KOTOTAMA_FLEET_B2_*"
-           "CLI: fleet-run | list | resume | recover | daemon | fence-demo | fleet-gate"
+           "CLI: fleet-run | list | status | audit | resume | recover | daemon | fence-demo | fleet-gate"
            "deploy: deploy/systemd + deploy/bin/kototama-fleet-daemon"
            "Multi-node: claim-before-run; held-by-other → skip tender"
            "R3 advanced-partial — not production multi-datacenter"]})

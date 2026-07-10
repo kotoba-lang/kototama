@@ -1,10 +1,36 @@
 (ns kototama.fleet-store-test
   (:require [clojure.java.io :as io]
+            [clojure.java.shell :as shell]
             [clojure.test :refer [deftest is testing]]
             [kototama.fleet :as fleet]
             [kototama.fleet-store :as store]
             [kototama.fleet-exec :as exec]
             [kototama.guest :as guest]))
+
+(defn- wat->wasm [wat]
+  (let [in (java.io.File/createTempFile "fleet-aiueos" ".wat")
+        out (java.io.File/createTempFile "fleet-aiueos" ".wasm")]
+    (try
+      (spit in wat)
+      (let [{:keys [exit err]} (shell/sh "wasm-tools" "parse" (.getPath in) "-o" (.getPath out))]
+        (when-not (zero? exit)
+          (throw (ex-info "wasm-tools parse failed" {:stderr err}))))
+      (with-open [is (io/input-stream out)]
+        (.readAllBytes is))
+      (finally
+        (.delete in)
+        (.delete out)))))
+
+(def ^:private clock-wat
+  "(module
+     (import \"kotoba\" \"clock_monotonic\" (func $cm (result i64)))
+     (func (export \"main\") (result i64) (call $cm)))")
+
+(defn- write-temp-wasm [bytes]
+  (let [f (java.io.File/createTempFile "fleet-guest" ".wasm")]
+    (with-open [o (io/output-stream f)]
+      (.write o ^bytes bytes))
+    (.getPath f)))
 
 (deftest disk-checkpoint-roundtrip
   (let [dir (str "tmp/kototama-fleet-test-" (System/currentTimeMillis))
@@ -282,5 +308,73 @@
     (is (= 120 (get-in out [:last :result :result])))
     (is (pos? (:kototama.fleet/expires-at lease')))
     (is (> (:kototama.fleet/expires-at lease') 1050))
+    (doseq [f (reverse (file-seq (io/file dir)))]
+      (.delete f))))
+
+(deftest bootstrap-aiueos-grant-runs-clock-guest
+  "Real aiueos GRANT → fleet-exec tender runs clock_monotonic guest."
+  (let [wasm-path (write-temp-wasm (wat->wasm clock-wat))
+        dir (str "tmp/fleet-aiueos-grant-" (System/currentTimeMillis))
+        s (store/disk-store dir)
+        out (exec/bootstrap-and-run!
+             "aiueos-g" "clock" wasm-path
+             :store s
+             :max-ticks 1
+             :budget {:fuel 5000000 :ticks 2}
+             :grants [:clock-monotonic]
+             :use-aiueos? true
+             :trust :verified
+             :node-id "aiueos-grant-node"
+             :fence? true)]
+    (is (= :aiueos (:grant-source out)))
+    (is (= :grant (get-in out [:aiueos-decision :aiueos/decision])))
+    (is (true? (get-in out [:last :result :ok?])))
+    (is (pos? (get-in out [:last :result :result])))
+    (is (seq (store/list-audit-entries s)))
+    (.delete (io/file wasm-path))
+    (doseq [f (reverse (file-seq (io/file dir)))]
+      (.delete f))))
+
+(deftest bootstrap-aiueos-deny-fail-closed-on-clock-guest
+  "Real aiueos DENY (require-signed) → empty grants → tender step fails closed."
+  (let [wasm-path (write-temp-wasm (wat->wasm clock-wat))
+        dir (str "tmp/fleet-aiueos-deny-" (System/currentTimeMillis))
+        s (store/disk-store dir)
+        out (exec/bootstrap-and-run!
+             "aiueos-d" "clock" wasm-path
+             :store s
+             :max-ticks 1
+             :budget {:fuel 5000000 :ticks 2}
+             :grants [:clock-monotonic]
+             :use-aiueos? true
+             :trust :verified
+             :policy-overlay {:aiueos/require-signed true}
+             :node-id "aiueos-deny-node"
+             :fence? true)]
+    (is (= :aiueos (:grant-source out)))
+    (is (= :deny (get-in out [:aiueos-decision :aiueos/decision])))
+    (is (false? (get-in out [:last :result :ok?]))
+        "denied grants must not successfully run host-import guest")
+    (.delete (io/file wasm-path))
+    (doseq [f (reverse (file-seq (io/file dir)))]
+      (.delete f))))
+
+(deftest summarize-store-and-audit-entries
+  (let [dir (str "tmp/fleet-summary-" (System/currentTimeMillis))
+        s (store/disk-store dir)
+        boot (exec/bootstrap-and-run!
+              "sum-t" "fact" "kototama/fixtures/kotoba-compiled-fact.wasm"
+              :store s :max-ticks 2
+              :budget {:fuel 5000000 :ticks 4}
+              :node-id "sum-node")
+        summary (store/summarize-store s)
+        audits (store/list-audit-entries s)]
+    (is (true? (:ok? summary)))
+    (is (pos? (:checkpoint-count summary)))
+    (is (pos? (:audit-count summary)))
+    (is (seq (:tenants summary)))
+    (is (= 2 (count audits)))
+    (is (every? :data audits))
+    (is (= 120 (get-in boot [:last :result :result])))
     (doseq [f (reverse (file-seq (io/file dir)))]
       (.delete f))))

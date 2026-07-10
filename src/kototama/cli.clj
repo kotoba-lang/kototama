@@ -109,6 +109,31 @@
     (pp/pprint {:ok? true :root "tmp/kototama-fleet" :keys keys :count (count keys)})
     {:ok? true}))
 
+(defn cmd-fleet-status []
+  (let [s (fleet-store/disk-store "tmp/kototama-fleet")
+        summary (fleet-store/summarize-store s)]
+    (pp/pprint (assoc summary :ok? true))
+    {:ok? true}))
+
+(defn cmd-fleet-audit []
+  (let [s (fleet-store/disk-store "tmp/kototama-fleet")
+        entries (fleet-store/list-audit-entries s)]
+    (pp/pprint
+     {:ok? true
+      :root "tmp/kototama-fleet"
+      :count (count entries)
+      :entries
+      (mapv (fn [{:keys [key data]}]
+              {:key key
+               :lease-id (:kototama.fleet/lease-id data)
+               :tick (:kototama.fleet/tick data)
+               :ok? (:ok? data)
+               :result (:result data)
+               :fuel-used (:fuel-used data)
+               :error (:error data)})
+            entries)})
+    {:ok? true}))
+
 (defn cmd-fleet-resume [checkpoint-key wasm-path]
   (let [s (fleet-store/disk-store "tmp/kototama-fleet")
         ;; disk keys use __ for /; accept either form
@@ -276,6 +301,8 @@
                               (println "usage: fleet-run <guest.wasm> [--use-aiueos]"))
                             {:ok? false}))
           "fleet-list" (cmd-fleet-list)
+          "fleet-status" (cmd-fleet-status)
+          "fleet-audit" (cmd-fleet-audit)
           "fleet-resume" (let [k (first more) w (second more)]
                            (if (and k w)
                              (cmd-fleet-resume k w)
@@ -319,8 +346,10 @@
             (println "  parity              R2 browser/JVM import matrix")
             (println "  fleet-gate          R3 acceptance harness (CI)")
             (println "  fleet-demo          R3 lease→tick→checkpoint demo")
-            (println "  fleet-run <wasm>    R3 tender run + disk checkpoint")
+            (println "  fleet-run <wasm>    R3 tender run + disk checkpoint [--use-aiueos]")
             (println "  fleet-list          list disk checkpoint keys")
+            (println "  fleet-status        store summary (tenants/leases/audits)")
+            (println "  fleet-audit         tick audit journal")
             (println "  fleet-resume <key> <wasm>  resume from checkpoint")
             (println "  fleet-recover <wasm> one recovery pass over checkpoints")
             (println "  fleet-daemon <wasm> [--interval-ms N] [--max-passes N]")

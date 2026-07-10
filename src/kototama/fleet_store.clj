@@ -336,3 +336,54 @@
               (str/replace (str k) #"__" "/")))
        (filter #(str/starts-with? (str %) "audit/"))
        vec))
+
+(defn load-audit!
+  "Load one tick audit map by key (audit/…), or nil."
+  [key store]
+  (when-let [data ((:load! store) key)]
+    (when (= 1 (:kototama.fleet/audit-schema data))
+      data)))
+
+(defn list-audit-entries
+  "All audit entries as [{:key :data}…], newest last (key sort)."
+  [store]
+  (->> (list-audit-keys store)
+       sort
+       (mapv (fn [k]
+               {:key k :data (load-audit! k store)}))
+       (filterv :data)))
+
+(defn summarize-store
+  "R3 observability snapshot for a store root (checkpoints + audits + tenants)."
+  [store]
+  (let [cp-keys (list-checkpoint-keys store)
+        audits (list-audit-entries store)
+        regs (keep (fn [k]
+                     (try (load-checkpoint! k store)
+                          (catch Exception _ nil)))
+                   cp-keys)
+        tenants (->> regs
+                     (mapcat (fn [reg]
+                               (keys (:kototama.fleet/tenants reg {}))))
+                     set
+                     sort
+                     vec)
+        leases (->> regs
+                    (mapcat (fn [reg] (vals (:kototama.fleet/leases reg {}))))
+                    (map (fn [l]
+                           {:lease-id (:kototama.fleet/lease-id l)
+                            :tenant (:kototama.fleet/tenant l)
+                            :guest (:kototama.fleet/guest l)
+                            :status (:kototama.fleet/status l)
+                            :owner (:kototama.fleet/owner l)
+                            :epoch (:kototama.fleet/epoch l)}))
+                    vec)]
+    {:kind (:kind store)
+     :root (:root store)
+     :checkpoint-count (count cp-keys)
+     :checkpoint-keys cp-keys
+     :audit-count (count audits)
+     :audit-ok-count (count (filter #(get-in % [:data :ok?]) audits))
+     :tenants tenants
+     :lease-summaries leases
+     :ok? true}))

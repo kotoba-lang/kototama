@@ -102,6 +102,8 @@ clojure -M:cli fleet-daemon test/kototama/fixtures/kotoba-compiled-fact.wasm \
 | **lease heartbeat** (renew TTL per tick) | |
 | **multi-tenant shared-store isolation** (gate) | |
 | **optional aiueos grants** (`--use-aiueos` on fleet-run) | |
+| **aiueos GRANT/DENY E2E** (fleet-exec + tender) | |
+| **fleet-status / fleet-audit** CLI | |
 
 Fencing is **not** distributed consensus — higher epoch wins on a shared store.
 `bootstrap` / `resume` / `recovery-pass` call `claim-before-run` so only the
@@ -109,6 +111,13 @@ holding node executes tender. See `deploy/systemd/README.md` for install.
 
 **Status meaning:** `advanced-partial` = all local/shared-store fleet surfaces work
 under automated gate; multi-datacenter consensus is explicitly out of scope.
+
+### Path to R3 `stable` (honest, no Raft)
+
+1. `fleet-gate` green on every CI merge  
+2. aiueos grant + deny E2E green (no flake)  
+3. systemd daemon runbook exercised in staging  
+4. Still **do not** claim Raft/Paxos — “stable” here means **ops-ready local/shared-store fleet**, not global consensus  
 
 ## Guest source rules (emit subset)
 
