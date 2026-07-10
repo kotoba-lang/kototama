@@ -183,6 +183,23 @@
   (let [ids (get-in registry [:kototama.fleet/tenants tenant-id] #{})]
     (mapv #(get-in registry [:kototama.fleet/leases %]) ids)))
 
+(defn all-leases
+  "Vector of every lease in the registry."
+  [registry]
+  (vec (vals (:kototama.fleet/leases registry))))
+
+(defn active-leases
+  "Leases that are not expired and still have budget (resumable)."
+  ([registry] (active-leases registry (clock)))
+  ([registry now]
+   (vec (filter (fn [lease]
+                  (and lease
+                       (not (lease-expired? lease now))
+                       (budget-remaining? (:kototama.fleet/budget lease))
+                       (not= :expired (:kototama.fleet/status lease))
+                       (not= :budget-exhausted (:kototama.fleet/status lease))))
+                (all-leases registry)))))
+
 (defn sweep-expired
   "Mark all expired leases :expired; returns updated registry."
   ([registry] (sweep-expired registry (clock)))
@@ -288,11 +305,13 @@
             "checkpoint/restore EDN schema v1"
             "run-loop-step (injectable execute)"
             "fleet-store disk + optional B2"
-            "fleet-exec tender/run-report bridge"]
+            "fleet-exec tender/run-report bridge"
+            "resume-from-checkpoint! + recovery-pass! (bounded, not daemon)"]
    :not-yet ["cross-node lease consensus"
-             "automatic crash recovery daemon"
+             "long-running recovery daemon (cron/service wrapper)"
              "aiueos-integrated fleet broker"]
    :api ['kototama.fleet 'kototama.fleet-store 'kototama.fleet-exec]
    :notes ["Pure cljc core + JVM store/exec edges"
            "1 tick = 1 bounded guest run; no internal infinite loops"
-           "B2 via B2_KEY_ID/B2_APP_KEY/B2_BUCKET or KOTOTAMA_FLEET_B2_*"]})
+           "B2 via B2_KEY_ID/B2_APP_KEY/B2_BUCKET or KOTOTAMA_FLEET_B2_*"
+           "CLI: fleet-run | fleet-list | fleet-resume | fleet-recover"]})

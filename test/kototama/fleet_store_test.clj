@@ -58,3 +58,41 @@
       (is (seq (fleet/tenant-leases reg' "tenant-x"))))
     (doseq [f (reverse (file-seq (io/file dir)))]
       (.delete f))))
+
+(deftest resume-from-checkpoint-continues-lease
+  (let [dir (str "tmp/fleet-resume-" (System/currentTimeMillis))
+        s (store/disk-store dir)
+        wasm "kototama/fixtures/kotoba-compiled-fact.wasm"
+        boot (exec/bootstrap-and-run!
+              "tenant-r" "fact" wasm
+              :store s
+              :max-ticks 1
+              :budget {:fuel 5000000 :ticks 4})
+        key (:checkpoint-key boot)
+        keys (store/list-checkpoint-keys s)
+        ;; list uses filesystem basenames (__ for /); load accepts original key
+        _ (is (seq keys) (str "keys=" keys))
+        _ (is (some? (store/load-checkpoint! key s)))
+        resume (exec/resume-from-checkpoint! key
+                                             :store s
+                                             :wasm wasm
+                                             :max-ticks 2)]
+    (is (pos? (:active-before resume)))
+    (is (true? (get-in (first (:resumes resume)) [:last :result :ok?])))
+    (is (= 120 (get-in (first (:resumes resume)) [:last :result :result])))
+    (is (true? (:resumed? (first (:resumes resume)))))
+    (doseq [f (reverse (file-seq (io/file dir)))]
+      (.delete f))))
+
+(deftest recovery-pass-scans-disk
+  (let [dir (str "tmp/fleet-recover-" (System/currentTimeMillis))
+        s (store/disk-store dir)
+        wasm "kototama/fixtures/kotoba-compiled-fact.wasm"
+        _ (exec/bootstrap-and-run! "tenant-c" "fact" wasm
+                                   :store s :max-ticks 1
+                                   :budget {:fuel 5000000 :ticks 3})
+        pass (exec/recovery-pass! :store s :wasm wasm :max-keys 5 :max-ticks 1)]
+    (is (seq (:keys pass)))
+    (is (pos? (:ok-count pass)))
+    (doseq [f (reverse (file-seq (io/file dir)))]
+      (.delete f))))

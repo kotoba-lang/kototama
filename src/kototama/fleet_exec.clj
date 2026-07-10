@@ -5,6 +5,7 @@
    the lease's grants + fuel limit. Checkpoints after each successful step
    when a store is provided."
   (:require [clojure.java.io :as io]
+            [clojure.string :as str]
             [kototama.contract :as contract]
             [kototama.fleet :as fleet]
             [kototama.fleet-store :as store]
@@ -91,6 +92,7 @@
 (defn bootstrap-and-run!
   "make-lease + register + run-lease! + final checkpoint.
 
+   Stores :wasm path in lease meta so resume-from-checkpoint! can recover.
    Returns full result map including :lease-id :path (final checkpoint)."
   [tenant guest wasm-path & {:keys [budget grants store max-ticks ttl-ms]
                              :or {max-ticks 3 ttl-ms 300000}}]
@@ -98,7 +100,10 @@
         lease (fleet/make-lease tenant guest
                                 :budget budget
                                 :grants (or grants [])
-                                :ttl-ms ttl-ms)
+                                :ttl-ms ttl-ms
+                                :meta {:wasm (str wasm-path)
+                                       :guest (str guest)
+                                       :tenant (str tenant)})
         reg (fleet/register-lease (fleet/empty-registry) lease)
         id (:kototama.fleet/lease-id lease)
         result (run-lease! reg id {:wasm wasm-path
@@ -107,8 +112,124 @@
                                    :grants grants})
         final (store/save-checkpoint!
                (:registry result) store
-               {:key (str "final-" id) :lease-id id})]
+               {:key (str "final-" id)
+                :lease-id id
+                :wasm (str wasm-path)})]
     (assoc result
            :lease-id id
            :checkpoint-path (:path final)
-           :checkpoint-key (:key final))))
+           :checkpoint-key (:key final)
+           :wasm (str wasm-path))))
+
+(defn- lease-wasm
+  "Resolve wasm path from lease meta or explicit override."
+  [lease wasm-override]
+  (or wasm-override
+      (get-in lease [:kototama.fleet/meta :wasm])
+      (throw (ex-info "fleet-exec: no wasm path on lease meta; pass :wasm"
+                      {:lease-id (:kototama.fleet/lease-id lease)
+                       :meta (:kototama.fleet/meta lease)}))))
+
+(defn resume-lease!
+  "Continue an existing lease from a restored registry.
+
+   opts: :wasm (override) :store :max-ticks :grants :caps-extra :execute"
+  [registry lease-id {:keys [wasm store max-ticks grants caps-extra execute]
+                      :or {max-ticks 10}
+                      :as opts}]
+  (let [lease (fleet/get-lease registry lease-id)
+        _ (when-not lease
+            (throw (ex-info "fleet-exec: unknown lease" {:lease-id lease-id})))
+        wasm-path (lease-wasm lease wasm)
+        result (run-lease! registry lease-id
+                           (merge opts
+                                  {:wasm wasm-path
+                                   :store store
+                                   :max-ticks max-ticks
+                                   :grants (or grants (:kototama.fleet/grants lease))
+                                   :caps-extra caps-extra
+                                   :execute execute}))
+        final (when store
+                (store/save-checkpoint!
+                 (:registry result) store
+                 {:key (str "resume-" lease-id "-" (System/currentTimeMillis))
+                  :lease-id lease-id
+                  :wasm (str wasm-path)}))]
+    (cond-> (assoc result :lease-id lease-id :wasm (str wasm-path) :resumed? true)
+      final (assoc :checkpoint-path (:path final) :checkpoint-key (:key final)))))
+
+(defn resume-from-checkpoint!
+  "Load checkpoint key from store, resume every active lease (or :lease-id).
+
+   opts:
+     :store :wasm (global override) :max-ticks :lease-id (single)
+     :grants :caps-extra
+
+   Returns {:registry :resumes [result…] :active-before n}."
+  [checkpoint-key & {:keys [store wasm max-ticks lease-id grants caps-extra]
+                     :or {max-ticks 5}
+                     :as opts}]
+  (let [store (or store (store/default-store))
+        reg (store/load-checkpoint! checkpoint-key store)
+        _ (when-not reg
+            (throw (ex-info "fleet-exec: checkpoint not found"
+                            {:key checkpoint-key})))
+        targets (if lease-id
+                  (if-let [l (fleet/get-lease reg lease-id)]
+                    [l]
+                    (throw (ex-info "fleet-exec: lease not in checkpoint"
+                                    {:lease-id lease-id :key checkpoint-key})))
+                  (fleet/active-leases reg))
+        resumes (mapv (fn [lease]
+                        (resume-lease! reg
+                                       (:kototama.fleet/lease-id lease)
+                                       {:wasm wasm
+                                        :store store
+                                        :max-ticks max-ticks
+                                        :grants grants
+                                        :caps-extra caps-extra}))
+                      targets)
+        reg' (or (some-> resumes last :registry) reg)]
+    {:checkpoint-key checkpoint-key
+     :active-before (count targets)
+     :resumes resumes
+     :registry reg'
+     :ok? (or (empty? targets)
+              (boolean (some :ok? (map :last resumes))))}))
+
+(defn recovery-pass!
+  "One recovery pass: scan disk keys (or provided keys), resume active leases.
+
+   Not a long-running daemon — call in a loop/cron. Bounded by :max-keys and
+   :max-ticks per lease.
+
+   opts:
+     :store :wasm :max-keys :max-ticks :key-filter (fn [k] bool)"
+  [& {:keys [store wasm max-keys max-ticks key-filter]
+      :or {max-keys 20 max-ticks 3
+           key-filter (fn [k]
+                        (or (str/starts-with? (str k) "final-")
+                            (str/starts-with? (str k) "resume-")
+                            (str/starts-with? (str k) "lease-")))}}]
+  (let [store (or store (store/disk-store))
+        keys (->> (if (= :disk (:kind store))
+                    (store/list-checkpoint-keys store)
+                    (store/list-disk-checkpoint-keys
+                     (or (:root store) "tmp/kototama-fleet")))
+                  (filter key-filter)
+                  (take max-keys)
+                  vec)
+        results (mapv (fn [k]
+                        (try
+                          (assoc (resume-from-checkpoint! k
+                                                          :store store
+                                                          :wasm wasm
+                                                          :max-ticks max-ticks)
+                                 :key k)
+                          (catch Exception e
+                            {:key k :ok? false :error (.getMessage e)})))
+                      keys)]
+    {:keys keys
+     :results results
+     :ok-count (count (filter :ok? results))
+     :fail-count (count (remove :ok? results))}))
