@@ -314,6 +314,7 @@
             "run-daemon! bounded multi-pass recovery loop"
             "optional aiueos grant resolution (resolve-grants :use-aiueos?)"
             "fleet-fence epoch claim/merge (not Raft)"
+            "fence-gated bootstrap/resume/recovery (tender only if claim wins)"
             "systemd oneshot+timer packaging under deploy/systemd/"]
    :not-yet ["Raft/Paxos multi-node consensus"
              "full aiueos fleet broker (only grant subset today)"]
@@ -323,4 +324,5 @@
            "1 tick = 1 bounded guest run; no internal infinite loops"
            "B2 via B2_KEY_ID/B2_APP_KEY/B2_BUCKET or KOTOTAMA_FLEET_B2_*"
            "CLI: fleet-run | list | resume | recover | daemon | fence-demo"
-           "deploy: deploy/systemd + deploy/bin/kototama-fleet-daemon"]})
+           "deploy: deploy/systemd + deploy/bin/kototama-fleet-daemon"
+           "Multi-node: claim-before-run; held-by-other → skip tender"]})

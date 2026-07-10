@@ -140,3 +140,58 @@
     (is (#{:grant :deny} (get-in r [:decision :aiueos/decision])))
     (when (= :deny (get-in r [:decision :aiueos/decision]))
       (is (empty? (:grants r)) "fail-closed on deny"))))
+
+(deftest fenced-resume-skips-when-held-by-other
+  (let [dir (str "tmp/fleet-fence-hold-" (System/currentTimeMillis))
+        s (store/disk-store dir)
+        wasm "kototama/fixtures/kotoba-compiled-fact.wasm"
+        boot (exec/bootstrap-and-run!
+              "tenant-hold" "fact" wasm
+              :store s
+              :node-id "node-a"
+              :max-ticks 1
+              :budget {:fuel 5000000 :ticks 5}
+              :fence? true)
+        key (:checkpoint-key boot)
+        ;; node-b tries same checkpoint without higher epoch → skip
+        resume (exec/resume-from-checkpoint! key
+                                             :store s
+                                             :wasm wasm
+                                             :node-id "node-b"
+                                             :max-ticks 1
+                                             :fence? true
+                                             :skip-if-held? true)]
+    (is (true? (:fenced? resume)))
+    (is (pos? (:skipped-count resume)))
+    (is (zero? (:ran-count resume)))
+    (is (true? (:skipped? (first (:resumes resume)))))
+    (is (= :held-by-other (:skip-reason (first (:resumes resume)))))
+    ;; same owner renews and runs
+    (let [renew (exec/resume-from-checkpoint! key
+                                              :store s
+                                              :wasm wasm
+                                              :node-id "node-a"
+                                              :max-ticks 1
+                                              :fence? true)]
+      (is (pos? (:ran-count renew)))
+      (is (= 120 (get-in (first (:resumes renew)) [:last :result :result]))))
+    (doseq [f (reverse (file-seq (io/file dir)))]
+      (.delete f))))
+
+(deftest bootstrap-fence-second-node-refused
+  (let [dir (str "tmp/fleet-fence-boot-" (System/currentTimeMillis))
+        s (store/disk-store dir)
+        wasm "kototama/fixtures/kotoba-compiled-fact.wasm"
+        _ (exec/bootstrap-and-run! "tenant-x" "same-guest" wasm
+                                   :store s :node-id "node-a" :max-ticks 1
+                                   :budget {:fuel 5000000 :ticks 3})
+        ex (try
+             (exec/bootstrap-and-run! "tenant-x" "same-guest" wasm
+                                      :store s :node-id "node-b" :max-ticks 1
+                                      :budget {:fuel 5000000 :ticks 3})
+             nil
+             (catch Exception e e))]
+    (is (some? ex))
+    (is (= :held-by-other (:reason (ex-data ex))))
+    (doseq [f (reverse (file-seq (io/file dir)))]
+      (.delete f))))
