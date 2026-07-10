@@ -129,19 +129,36 @@
     (is (= :explicit (:source r)))
     (is (= [:log-write] (:grants r)))))
 
-(deftest resolve-grants-aiueos-fail-closed-untrusted
-  ;; untrusted trust level should deny under default aiueos policy
+(deftest resolve-grants-aiueos-fail-closed-on-deny
+  ;; Real aiueos deny path (same as aiueos-adapter-test require-signed),
+  ;; not a trust-label heuristic — :untrusted alone may still GRANT under
+  ;; default kernel caps. Fail-closed: empty grants for the translatable subset.
   (let [r (exec/resolve-grants [:log-write]
                                {:use-aiueos? true
                                 :grants [:log-write]
-                                :trust :untrusted
+                                :trust :verified
+                                :policy-overlay {:aiueos/require-signed true}
                                 :limits {:allow-write-imports? true}})]
     (is (= :aiueos (:source r)))
-    (is (#{:grant :deny} (get-in r [:decision :aiueos/decision])))
-    (when (= :deny (get-in r [:decision :aiueos/decision]))
-      (is (empty? (:grants r)) "fail-closed on deny"))))
+    (is (some? (:decision r)) "decision must come from aiueos adapter")
+    (is (= :deny (get-in r [:decision :aiueos/decision]))
+        (str "require-signed must deny unsigned guest; got " (:decision r)))
+    (is (empty? (:grants r)) "fail-closed on deny — no invented grants")))
+
+(deftest resolve-grants-aiueos-verified-grant
+  ;; verified trust + default kernel caps → grant for log-write/clock
+  (let [r (exec/resolve-grants [:log-write :clock-monotonic]
+                               {:use-aiueos? true
+                                :grants [:log-write :clock-monotonic]
+                                :trust :verified
+                                :limits {:allow-write-imports? true}})]
+    (is (= :aiueos (:source r)))
+    (is (= :grant (get-in r [:decision :aiueos/decision]))
+        (str "expected grant under verified trust; got " (:decision r)))
+    (is (= #{:log-write :clock-monotonic} (set (:grants r))))))
 
 (deftest fenced-resume-skips-when-held-by-other
+  "Shared disk store: node-a runs fact→120; node-b skipped; node-a renews→120."
   (let [dir (str "tmp/fleet-fence-hold-" (System/currentTimeMillis))
         s (store/disk-store dir)
         wasm "kototama/fixtures/kotoba-compiled-fact.wasm"
@@ -153,7 +170,7 @@
               :budget {:fuel 5000000 :ticks 5}
               :fence? true)
         key (:checkpoint-key boot)
-        ;; node-b tries same checkpoint without higher epoch → skip
+        ;; node-b tries same checkpoint without higher epoch → skip (no tender)
         resume (exec/resume-from-checkpoint! key
                                              :store s
                                              :wasm wasm
@@ -161,11 +178,17 @@
                                              :max-ticks 1
                                              :fence? true
                                              :skip-if-held? true)]
+    (is (true? (:fenced? boot)))
+    (is (= 120 (get-in boot [:last :result :result]))
+        "holding node must run real tender fact fixture")
+    (is (pos? (get-in boot [:last :result :fuel-used])))
     (is (true? (:fenced? resume)))
     (is (pos? (:skipped-count resume)))
-    (is (zero? (:ran-count resume)))
+    (is (zero? (:ran-count resume)) "second node must not run tender")
     (is (true? (:skipped? (first (:resumes resume)))))
     (is (= :held-by-other (:skip-reason (first (:resumes resume)))))
+    (is (nil? (get-in (first (:resumes resume)) [:last :result :result]))
+        "skipped resume has no successful guest main result")
     ;; same owner renews and runs
     (let [renew (exec/resume-from-checkpoint! key
                                               :store s
@@ -179,18 +202,20 @@
       (.delete f))))
 
 (deftest bootstrap-fence-second-node-refused
+  "Shared disk: first node runs fact→120; second bootstrap refuses without tender."
   (let [dir (str "tmp/fleet-fence-boot-" (System/currentTimeMillis))
         s (store/disk-store dir)
         wasm "kototama/fixtures/kotoba-compiled-fact.wasm"
-        _ (exec/bootstrap-and-run! "tenant-x" "same-guest" wasm
-                                   :store s :node-id "node-a" :max-ticks 1
-                                   :budget {:fuel 5000000 :ticks 3})
+        first (exec/bootstrap-and-run! "tenant-x" "same-guest" wasm
+                                       :store s :node-id "node-a" :max-ticks 1
+                                       :budget {:fuel 5000000 :ticks 3})
         ex (try
              (exec/bootstrap-and-run! "tenant-x" "same-guest" wasm
                                       :store s :node-id "node-b" :max-ticks 1
                                       :budget {:fuel 5000000 :ticks 3})
              nil
              (catch Exception e e))]
+    (is (= 120 (get-in first [:last :result :result])))
     (is (some? ex))
     (is (= :held-by-other (:reason (ex-data ex))))
     (doseq [f (reverse (file-seq (io/file dir)))]

@@ -10,7 +10,7 @@ guest = Wasm component). Not a marketing scorecard.
 | **R0** | Contract / dry-run | **stable** | `kototama.contract` HostCaps + import surface; organism membrane refuses live publish |
 | **R1** | Tender execution (JVM/Chicory) | **stable** | `kototama.tender` runs real `.wasm`; fuel + memory limits; aiueos adapter; session report; source lint; host-free + host-import fixtures from `kotoba wasm emit` |
 | **R2** | Browser-native host parity | **advanced-partial** | parity matrix; 8/9 browser-linkable; http-post via inject / SAB+COOP bridge (`http-post-bridge.js`); host-free web fixtures |
-| **R3** | Fleet multi-tenant tender | **skeleton+persist** | fleet + disk/B2 checkpoint store + tender `run-report` execute bridge |
+| **R3** | Fleet multi-tenant tender | **skeleton+persist** | disk/B2 + fence-gated tender (claim before run) + daemon + systemd |
 
 **Current declared level: R2 (advanced-partial), R3 skeleton+persist.**
 

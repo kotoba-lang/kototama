@@ -101,9 +101,13 @@
   "Resolve HostCaps grants for a lease.
 
    If :use-aiueos? and imports intersect aiueos-translatable-imports,
-   ask aiueos; on deny → empty grants (fail-closed). Explicit :grants
-   always win when :use-aiueos? is false."
-  [import-ids {:keys [use-aiueos? grants limits trust]
+   ask aiueos; on deny → empty grants for that subset (fail-closed).
+   Explicit :grants always win when :use-aiueos? is false.
+
+   :policy-overlay is forwarded to aiueos (e.g. {:aiueos/require-signed true}
+   forces a real deny for unsigned components — same path as
+   aiueos-adapter-test)."
+  [import-ids {:keys [use-aiueos? grants limits trust policy-overlay]
                :or {use-aiueos? false trust :verified}}]
   (let [ids (vec (or grants import-ids))]
     (if-not use-aiueos?
@@ -115,7 +119,8 @@
            :host-caps (contract/host-caps {:grants ids :limits limits})}
           (let [{:keys [host-caps decision]}
                 (aiueos/host-caps-for-imports translatable
-                                              {:trust trust :limits limits})
+                                              (cond-> {:trust trust :limits limits}
+                                                policy-overlay (assoc :policy-overlay policy-overlay)))
                 granted (set (:grants host-caps))
                 ;; fail-closed: only what aiueos granted + non-translatable explicit
                 final (vec (concat (filter granted translatable) rest-ids))]
@@ -172,7 +177,8 @@
    :node-id defaults to fence/node-id. :fence? (default true) enables claim.
    Returns full result map including :lease-id :path (final checkpoint)."
   [tenant guest wasm-path & {:keys [budget grants store max-ticks ttl-ms
-                                    use-aiueos? limits trust node-id fence?]
+                                    use-aiueos? limits trust policy-overlay
+                                    node-id fence?]
                              :or {max-ticks 3 ttl-ms 300000 use-aiueos? false
                                   trust :verified fence? true}}]
   (let [store (or store (store/default-store))
@@ -181,7 +187,8 @@
                                  {:use-aiueos? use-aiueos?
                                   :grants grants
                                   :limits limits
-                                  :trust trust})
+                                  :trust trust
+                                  :policy-overlay policy-overlay})
         g (:grants resolved)
         lease0 (fleet/make-lease tenant guest
                                  :budget budget
