@@ -10,9 +10,9 @@ guest = Wasm component). Not a marketing scorecard.
 | **R0** | Contract / dry-run | **stable** | `kototama.contract` HostCaps + import surface; organism membrane refuses live publish |
 | **R1** | Tender execution (JVM/Chicory) | **stable** | `kototama.tender` runs real `.wasm`; fuel + memory limits; aiueos adapter; session report; source lint; host-free + host-import fixtures from `kotoba wasm emit` |
 | **R2** | Browser-native host parity | **advanced-partial** | parity matrix; 8/9 browser-linkable; http-post via inject / SAB+COOP bridge (`http-post-bridge.js`); host-free web fixtures |
-| **R3** | Fleet multi-tenant tender | **skeleton+persist** | disk/B2 + fence-gated tender (claim before run) + daemon + systemd |
+| **R3** | Fleet multi-tenant tender | **advanced-partial** | disk/B2 + fence-gated tender + daemon + systemd + tick audit + `fleet-gate` harness (not Raft) |
 
-**Current declared level: R2 (advanced-partial), R3 skeleton+persist.**
+**Current declared level: R3 advanced-partial** (R1 stable; R2 advanced-partial underneath).
 
 ## R1 acceptance gates
 
@@ -68,12 +68,17 @@ node test/verify-http-post.mjs
 
 Host library: `actor-host.js`, `http-post-bridge.js`, `kgraph.js`.
 
-## R3 skeleton+persist gates
+## R3 advanced-partial gates
 
 ```bash
+# One-shot acceptance (preferred CI / doctor path)
+clojure -M:cli fleet-gate
+# → pure loop + fence bootstrap + audit + resume + second-node skip
+#   + recovery-pass + daemon + systemd packaging check
+
+# Manual drill
 clojure -M:cli fleet-demo
 clojure -M:cli fleet-run test/kototama/fixtures/kotoba-compiled-fact.wasm
-# writes tmp/kototama-fleet/*.edn
 clojure -M:cli fleet-list
 clojure -M:cli fleet-resume <checkpoint-key> test/kototama/fixtures/kotoba-compiled-fact.wasm
 clojure -M:cli fleet-recover test/kototama/fixtures/kotoba-compiled-fact.wasm
@@ -81,23 +86,26 @@ clojure -M:cli fleet-daemon test/kototama/fixtures/kotoba-compiled-fact.wasm \
   --interval-ms 200 --max-passes 3
 ```
 
-| Landed | Not yet |
+| Landed | Not yet (deliberate) |
 |---|---|
 | lease / budget / tick / governor | Raft/Paxos multi-node consensus |
 | checkpoint/restore EDN v1 | full aiueos fleet broker |
-| **disk store** (`fleet-store`) | |
-| **B2 optional** (env creds) | |
-| **tender execute** (`fleet-exec`) | |
-| **resume + recovery-pass** | |
-| **bounded recovery daemon** (`run-daemon!` / CLI) | |
-| **optional aiueos grants** (`:use-aiueos?`) | |
-| **epoch fencing** (`fleet-fence` claim/merge) | |
-| **fence-gated tender** (claim before run; skip if held) | |
-| **systemd oneshot+timer** (`deploy/systemd/`) | |
+| disk store + optional B2 | |
+| tender execute (`fleet-exec`) | |
+| resume + recovery-pass | |
+| bounded recovery daemon | |
+| optional aiueos grants | |
+| epoch fencing + fence-gated tender | |
+| systemd oneshot+timer | |
+| **tick audit journal** | |
+| **`run-r3-gate!` / `fleet-gate` CLI** | |
 
 Fencing is **not** distributed consensus — higher epoch wins on a shared store.
 `bootstrap` / `resume` / `recovery-pass` call `claim-before-run` so only the
 holding node executes tender. See `deploy/systemd/README.md` for install.
+
+**Status meaning:** `advanced-partial` = all local/shared-store fleet surfaces work
+under automated gate; multi-datacenter consensus is explicitly out of scope.
 
 ## Guest source rules (emit subset)
 

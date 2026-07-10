@@ -3,7 +3,8 @@
             [clojure.test :refer [deftest is testing]]
             [kototama.fleet :as fleet]
             [kototama.fleet-store :as store]
-            [kototama.fleet-exec :as exec]))
+            [kototama.fleet-exec :as exec]
+            [kototama.guest :as guest]))
 
 (deftest disk-checkpoint-roundtrip
   (let [dir (str "tmp/kototama-fleet-test-" (System/currentTimeMillis))
@@ -218,5 +219,34 @@
     (is (= 120 (get-in first [:last :result :result])))
     (is (some? ex))
     (is (= :held-by-other (:reason (ex-data ex))))
+    (doseq [f (reverse (file-seq (io/file dir)))]
+      (.delete f))))
+
+(deftest tick-audit-written-on-run-lease
+  (let [dir (str "tmp/fleet-audit-" (System/currentTimeMillis))
+        s (store/disk-store dir)
+        wasm "kototama/fixtures/kotoba-compiled-fact.wasm"
+        boot (exec/bootstrap-and-run!
+              "audit-t" "fact" wasm
+              :store s :max-ticks 2
+              :budget {:fuel 5000000 :ticks 5}
+              :node-id "audit-node")
+        audits (store/list-audit-keys s)]
+    (is (= 120 (get-in boot [:last :result :result])))
+    (is (seq audits) (str "expected audit keys, got " audits))
+    (doseq [f (reverse (file-seq (io/file dir)))]
+      (.delete f))))
+
+(deftest r3-gate-passes-end-to-end
+  (let [dir (str "tmp/r3-gate-test-" (System/currentTimeMillis))
+        out (exec/run-r3-gate!
+             :wasm "kototama/fixtures/kotoba-compiled-fact.wasm"
+             :dir dir)]
+    (is (true? (:ok? out)) (pr-str (remove :ok? (:checks out))))
+    (is (= :advanced-partial (:status out)))
+    (is (= 9 (:pass-count out)))
+    (is (zero? (:fail-count out)))
+    (is (= :advanced-partial (get-in guest/maturity-levels [:r3 :status])))
+    (is (= :advanced-partial (:status (fleet/r3-report))))
     (doseq [f (reverse (file-seq (io/file dir)))]
       (.delete f))))

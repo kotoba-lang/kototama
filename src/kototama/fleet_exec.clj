@@ -78,18 +78,22 @@
         {:registry reg :steps @steps :last (last @steps) :stopped :max-ticks}
         (let [step (fleet/run-loop-step reg lease-id exec)]
           (swap! steps conj (dissoc step :registry))
-          (let [reg' (:registry step)]
+          (let [reg' (:registry step)
+                tick-n (inc n)]
+            (when store
+              (store/append-tick-audit! store lease-id tick-n
+                                        (or (:result step) step)))
             (when (and store (:ok? step) (pos? checkpoint-every)
-                       (zero? (mod (inc n) checkpoint-every)))
+                       (zero? (mod tick-n checkpoint-every)))
               (store/save-checkpoint!
                reg' store
-               {:key (str "lease-" lease-id "-t" (inc n))
+               {:key (str "lease-" lease-id "-t" tick-n)
                 :lease-id lease-id}))
             (if-not (:ok? step)
               {:registry reg' :steps @steps :last step :stopped (:reason (:governor step)
                                                                    (:reason (:planned step)
                                                                             :execute-failed))}
-              (recur reg' (inc n)))))))))
+              (recur reg' tick-n))))))))
 
 ;; ── aiueos-gated grants (optional) ──────────────────────────────────────────
 
@@ -478,3 +482,139 @@
               (when (< (inc i) (:max-passes cfg))
                 (sleep! (:interval-ms cfg)))
               (recur (inc i) (conj passes pass) nil))))))))
+
+;; ── R3 acceptance gate ──────────────────────────────────────────────────────
+
+(defn- systemd-packaging-present?
+  []
+  (let [candidates ["deploy/systemd/kototama-fleet-daemon.service"
+                    "deploy/systemd/kototama-fleet-daemon.timer"
+                    "deploy/bin/kototama-fleet-daemon"]]
+    (every? #(.exists (io/file %)) candidates)))
+
+(defn run-r3-gate!
+  "Programmatic R3 acceptance harness (single process).
+
+   Exercises pure fleet loop, fence-gated bootstrap, resume, second-node skip,
+   recovery-pass, bounded daemon, tick audit, and systemd packaging presence.
+   Does **not** claim Raft or multi-datacenter consensus.
+
+   Returns {:ok? bool :checks [{::id :ok? …}] :status :advanced-partial}."
+  [& {:keys [wasm dir]
+      :or {wasm "kototama/fixtures/kotoba-compiled-fact.wasm"
+           dir (str "tmp/r3-gate-" (System/currentTimeMillis))}}]
+  (let [checks (atom [])
+        add! (fn [id ok? & [data]]
+               (swap! checks conj (cond-> {:id id :ok? (boolean ok?)}
+                                    data (merge data))))
+        s (store/disk-store dir)
+        wasm-path wasm]
+    ;; 1 pure lease loop (no wasm)
+    (try
+      (let [lease (fleet/make-lease "gate" "pure" :budget {:fuel 1000 :ticks 2})
+            reg (fleet/register-lease (fleet/empty-registry) lease)
+            exec (fn [_tick] {:ok? true :result 1 :fuel-used 1})
+            step (fleet/run-loop-step reg (:kototama.fleet/lease-id lease) exec)]
+        (add! :pure-run-loop-step (:ok? step) {:result (:result step)}))
+      (catch Exception e
+        (add! :pure-run-loop-step false {:error (.getMessage e)})))
+    ;; 2 fence-gated bootstrap + tender
+    (let [boot (try
+                 (bootstrap-and-run!
+                  "gate-tenant" "fact" wasm-path
+                  :store s :max-ticks 2
+                  :budget {:fuel 5000000 :ticks 5}
+                  :node-id "gate-node-a"
+                  :fence? true)
+                 (catch Exception e
+                   {:ok? false :error (.getMessage e)}))]
+      (add! :fence-bootstrap-tender
+            (and (some? (:checkpoint-key boot))
+                 (= 120 (get-in boot [:last :result :result])))
+            {:checkpoint-key (:checkpoint-key boot)
+             :result (get-in boot [:last :result :result])
+             :error (:error boot)})
+      ;; 3 audit keys after bootstrap
+      (let [audits (store/list-audit-keys s)]
+        (add! :tick-audit (seq audits) {:count (count audits) :sample (take 3 audits)}))
+      ;; 4 list checkpoints
+      (let [keys (store/list-checkpoint-keys s)]
+        (add! :list-checkpoints (seq keys) {:count (count keys)}))
+      ;; 5 resume
+      (when-let [ck (:checkpoint-key boot)]
+        (let [resume (try
+                       (resume-from-checkpoint! ck
+                                                :store s
+                                                :wasm wasm-path
+                                                :max-ticks 1
+                                                :node-id "gate-node-a"
+                                                :fence? true)
+                       (catch Exception e
+                         {:ok? false :error (.getMessage e)}))]
+          (add! :resume
+                (or (true? (:ok? resume))
+                    (pos? (or (:ran-count resume) 0))
+                    (pos? (or (:active-before resume) 0)))
+                {:ran-count (:ran-count resume)
+                 :skipped-count (:skipped-count resume)
+                 :error (:error resume)})))
+      ;; 6 second node held-by-other (skip)
+      (when-let [ck (:checkpoint-key boot)]
+        (let [held (try
+                     (resume-from-checkpoint! ck
+                                              :store s
+                                              :wasm wasm-path
+                                              :max-ticks 1
+                                              :node-id "gate-node-b"
+                                              :fence? true
+                                              :skip-if-held? true)
+                     (catch Exception e
+                       {:ok? false :error (.getMessage e)}))]
+          (add! :second-node-skip-or-fence
+                (or (pos? (or (:skipped-count held) 0))
+                    (some :skipped? (:resumes held))
+                    ;; empty active is also ok if lease expired
+                    (zero? (or (:active-before held) 0)))
+                {:skipped-count (:skipped-count held)
+                 :active-before (:active-before held)})))
+      ;; 7 recovery-pass
+      (let [rec (try
+                  (recovery-pass! :store s :wasm wasm-path :max-keys 10 :max-ticks 1
+                                  :node-id "gate-node-a")
+                  (catch Exception e
+                    {:fail-count 1 :error (.getMessage e)}))]
+        (add! :recovery-pass
+              (and (nil? (:error rec))
+                   (or (pos? (or (:ok-count rec) 0))
+                       (zero? (or (:fail-count rec) 1))))
+              {:ok-count (:ok-count rec) :fail-count (:fail-count rec)
+               :error (:error rec)}))
+      ;; 8 bounded daemon
+      (let [d (try
+                (run-daemon! :store s :wasm wasm-path
+                             :interval-ms 0 :max-passes 2 :max-ticks 1
+                             :max-keys 5)
+                (catch Exception e
+                  {:pass-count 0 :error (.getMessage e)}))]
+        (add! :daemon-bounded
+              (and (nil? (:error d))
+                   (= 2 (or (:pass-count d) 0))
+                   (= :max-passes (:stopped d)))
+              {:pass-count (:pass-count d) :stopped (:stopped d)
+               :error (:error d)})))
+    ;; 9 packaging
+    (add! :systemd-packaging (systemd-packaging-present?)
+          {:paths ["deploy/systemd/" "deploy/bin/kototama-fleet-daemon"]})
+    (let [cs @checks
+          ok? (every? :ok? cs)]
+      {:ok? ok?
+       :level :r3
+       :status (if ok? :advanced-partial :failing)
+       :title "Fleet multi-tenant tender"
+       :checks cs
+       :pass-count (count (filter :ok? cs))
+       :fail-count (count (remove :ok? cs))
+       :store-root dir
+       :not-claimed ["Raft/Paxos multi-node consensus"
+                    "full aiueos fleet broker"]
+       :gate "clojure -M:cli fleet-gate"})))

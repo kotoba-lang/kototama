@@ -151,6 +151,16 @@
            (catch Exception _ default))
       default)))
 
+(defn cmd-fleet-gate
+  "R3 acceptance harness — exit non-zero if any check fails."
+  []
+  (let [out (fleet-exec/run-r3-gate!
+             :wasm "test/kototama/fixtures/kotoba-compiled-fact.wasm")]
+    (pp/pprint
+     (select-keys out [:ok? :status :pass-count :fail-count :checks
+                       :not-claimed :gate :store-root]))
+    {:ok? (boolean (:ok? out))}))
+
 (defn cmd-fleet-daemon [wasm-path args]
   (let [interval (parse-long-opt args "--interval-ms" 500)
         max-passes (parse-long-opt args "--max-passes" 3)
@@ -275,6 +285,7 @@
                                  (println "usage: fleet-daemon <guest.wasm> [--interval-ms N] [--max-passes N]"))
                                {:ok? false}))
           "fleet-fence-demo" (cmd-fleet-fence-demo)
+          "fleet-gate" (cmd-fleet-gate)
           "lint" (if-let [p (first more)]
                    (cmd-lint p)
                    (do (binding [*out* *err*]
@@ -294,10 +305,11 @@
             (println "kototama — .kotoba WASM runtime (tender)")
             (println "  Role: run guests emitted by kotoba (language). Compile elsewhere:")
             (println "        kotoba wasm emit cell.kotoba -o cell.wasm")
-            (println "  Maturity: R2 + R3 skeleton+persist  (see docs/maturity.md)")
+            (println "  Maturity: R3 advanced-partial (R1 stable; R2 advanced-partial)")
             (println)
             (println "  doctor              maturity snapshot R0–R3")
             (println "  parity              R2 browser/JVM import matrix")
+            (println "  fleet-gate          R3 acceptance harness (CI)")
             (println "  fleet-demo          R3 lease→tick→checkpoint demo")
             (println "  fleet-run <wasm>    R3 tender run + disk checkpoint")
             (println "  fleet-list          list disk checkpoint keys")

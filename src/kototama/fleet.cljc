@@ -296,10 +296,13 @@
              :ok? (boolean (:ok? result))}))))))
 
 (defn r3-report
-  "Aggregate R3 snapshot for CLI doctor."
+  "Aggregate R3 snapshot for CLI doctor.
+
+   Status advanced-partial: all non-consensus fleet surfaces landed with
+   automated `fleet-gate` harness + tick audit. Still not Raft / full broker."
   []
   {:level :r3
-   :status :skeleton+persist
+   :status :advanced-partial
    :title "Fleet multi-tenant tender"
    :landed ["lease create/renew/expire"
             "budget charge (fuel/llm/http/ticks)"
@@ -315,14 +318,18 @@
             "optional aiueos grant resolution (resolve-grants :use-aiueos?)"
             "fleet-fence epoch claim/merge (not Raft)"
             "fence-gated bootstrap/resume/recovery (tender only if claim wins)"
-            "systemd oneshot+timer packaging under deploy/systemd/"]
+            "systemd oneshot+timer packaging under deploy/systemd/"
+            "tick audit journal (audit/<lease>/tN)"
+            "programmatic acceptance gate (run-r3-gate! / fleet-gate CLI)"]
    :not-yet ["Raft/Paxos multi-node consensus"
              "full aiueos fleet broker (only grant subset today)"]
    :api ['kototama.fleet 'kototama.fleet-store 'kototama.fleet-exec
          'kototama.fleet-fence]
+   :gate "clojure -M:cli fleet-gate"
    :notes ["Pure cljc core + JVM store/exec edges"
            "1 tick = 1 bounded guest run; no internal infinite loops"
            "B2 via B2_KEY_ID/B2_APP_KEY/B2_BUCKET or KOTOTAMA_FLEET_B2_*"
-           "CLI: fleet-run | list | resume | recover | daemon | fence-demo"
+           "CLI: fleet-run | list | resume | recover | daemon | fence-demo | fleet-gate"
            "deploy: deploy/systemd + deploy/bin/kototama-fleet-daemon"
-           "Multi-node: claim-before-run; held-by-other → skip tender"]})
+           "Multi-node: claim-before-run; held-by-other → skip tender"
+           "R3 advanced-partial — not production multi-datacenter"]})
