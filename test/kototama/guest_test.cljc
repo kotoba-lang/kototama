@@ -39,9 +39,16 @@
     (is (true? (:network? p)))))
 
 (deftest maturity-report-shape
-  (let [m (guest/maturity-report)]
+  (let [m (guest/maturity-report)
+        r3-note (get-in m [:levels :r3 :note] "")]
     (is (= :r2 (:current m)))
     (is (contains? (:levels m) :r1))
     (is (contains? (:levels m) :r2))
     (is (contains? (:levels m) :r3))
-    (is (seq (:import-surface m)))))
+    (is (seq (:import-surface m)))
+    ;; Criterion honesty: fence-gated multi-node is landed — do not claim
+    ;; "not cross-node" while doctor surfaces this note.
+    (is (not (re-find #"(?i)not cross-node" r3-note))
+        (str "stale not-cross-node claim in r3 note: " r3-note))
+    (is (re-find #"(?i)fence" r3-note)
+        (str "r3 note should mention fence-gated tender: " r3-note))))
