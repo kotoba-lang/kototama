@@ -9,6 +9,7 @@
      fleet-list          — list disk checkpoint keys
      fleet-resume <key> <wasm> — resume active leases from checkpoint
      fleet-recover <wasm> — one recovery pass over recent checkpoints
+     fleet-daemon <wasm> [--interval-ms N] [--max-passes N] — bounded recovery loop
      lint <file.kotoba>  — emit-pitfall lint (no execution)
      inspect <file.wasm> — structural Wasm surface (no run)
      run <file.wasm> [--grant id …]  — run-report via tender
@@ -140,6 +141,35 @@
             (:results out))})
     {:ok? true}))
 
+(defn- parse-long-opt [args flag default]
+  (let [xs (vec args)
+        i (.indexOf xs flag)]
+    (if (and (>= i 0) (< (inc i) (count xs)))
+      (try (Long/parseLong (str (nth xs (inc i))))
+           (catch Exception _ default))
+      default)))
+
+(defn cmd-fleet-daemon [wasm-path args]
+  (let [interval (parse-long-opt args "--interval-ms" 500)
+        max-passes (parse-long-opt args "--max-passes" 3)
+        max-ticks (parse-long-opt args "--max-ticks" 1)
+        out (fleet-exec/run-daemon!
+             :store (fleet-store/disk-store "tmp/kototama-fleet")
+             :wasm wasm-path
+             :interval-ms interval
+             :max-passes max-passes
+             :max-ticks max-ticks
+             :max-keys 10)]
+    (pp/pprint
+     {:ok? true
+      :stopped (:stopped out)
+      :pass-count (:pass-count out)
+      :ok-count (:ok-count out)
+      :fail-count (:fail-count out)
+      :interval-ms interval
+      :max-passes max-passes})
+    {:ok? true}))
+
 (defn cmd-lint [path]
   (let [src (slurp path)
         report (guest/lint-kotoba-source src)]
@@ -209,6 +239,11 @@
                             (do (binding [*out* *err*]
                                   (println "usage: fleet-recover <guest.wasm>"))
                                 {:ok? false}))
+          "fleet-daemon" (if-let [w (first more)]
+                           (cmd-fleet-daemon w (rest more))
+                           (do (binding [*out* *err*]
+                                 (println "usage: fleet-daemon <guest.wasm> [--interval-ms N] [--max-passes N]"))
+                               {:ok? false}))
           "lint" (if-let [p (first more)]
                    (cmd-lint p)
                    (do (binding [*out* *err*]
@@ -233,6 +268,7 @@
             (println "  fleet-list          list disk checkpoint keys")
             (println "  fleet-resume <key> <wasm>  resume from checkpoint")
             (println "  fleet-recover <wasm> one recovery pass over checkpoints")
+            (println "  fleet-daemon <wasm> [--interval-ms N] [--max-passes N]")
             (println "  lint <file.kotoba>  emit-pitfall lint")
             (println "  inspect <file.wasm> structural surface")
             (println "  run <file.wasm> [--grant id …]")

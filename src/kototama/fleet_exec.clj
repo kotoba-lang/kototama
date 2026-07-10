@@ -6,6 +6,7 @@
    when a store is provided."
   (:require [clojure.java.io :as io]
             [clojure.string :as str]
+            [kototama.aiueos-adapter :as aiueos]
             [kototama.contract :as contract]
             [kototama.fleet :as fleet]
             [kototama.fleet-store :as store]
@@ -89,27 +90,71 @@
                                                                             :execute-failed))}
               (recur reg' (inc n)))))))))
 
+;; ── aiueos-gated grants (optional) ──────────────────────────────────────────
+
+(def aiueos-translatable-imports
+  "Subset host-caps-for-imports can decide (see aiueos-adapter)."
+  #{:log-write :clock-monotonic})
+
+(defn resolve-grants
+  "Resolve HostCaps grants for a lease.
+
+   If :use-aiueos? and imports intersect aiueos-translatable-imports,
+   ask aiueos; on deny → empty grants (fail-closed). Explicit :grants
+   always win when :use-aiueos? is false."
+  [import-ids {:keys [use-aiueos? grants limits trust]
+               :or {use-aiueos? false trust :verified}}]
+  (let [ids (vec (or grants import-ids))]
+    (if-not use-aiueos?
+      {:grants ids :source :explicit :host-caps (contract/host-caps {:grants ids :limits limits})}
+      (let [translatable (filterv aiueos-translatable-imports ids)
+            rest-ids (vec (remove aiueos-translatable-imports ids))]
+        (if (empty? translatable)
+          {:grants ids :source :explicit-no-aiueos-overlap
+           :host-caps (contract/host-caps {:grants ids :limits limits})}
+          (let [{:keys [host-caps decision]}
+                (aiueos/host-caps-for-imports translatable
+                                              {:trust trust :limits limits})
+                granted (set (:grants host-caps))
+                ;; fail-closed: only what aiueos granted + non-translatable explicit
+                final (vec (concat (filter granted translatable) rest-ids))]
+            {:grants final
+             :source :aiueos
+             :decision decision
+             :host-caps (contract/host-caps {:grants final :limits limits})}))))))
+
+
 (defn bootstrap-and-run!
   "make-lease + register + run-lease! + final checkpoint.
 
    Stores :wasm path in lease meta so resume-from-checkpoint! can recover.
+   Optional :use-aiueos? routes grants through aiueos-adapter (fail-closed).
    Returns full result map including :lease-id :path (final checkpoint)."
-  [tenant guest wasm-path & {:keys [budget grants store max-ticks ttl-ms]
-                             :or {max-ticks 3 ttl-ms 300000}}]
+  [tenant guest wasm-path & {:keys [budget grants store max-ticks ttl-ms
+                                    use-aiueos? limits trust]
+                             :or {max-ticks 3 ttl-ms 300000 use-aiueos? false
+                                  trust :verified}}]
   (let [store (or store (store/default-store))
+        resolved (resolve-grants (or grants [])
+                                 {:use-aiueos? use-aiueos?
+                                  :grants grants
+                                  :limits limits
+                                  :trust trust})
+        g (:grants resolved)
         lease (fleet/make-lease tenant guest
                                 :budget budget
-                                :grants (or grants [])
+                                :grants g
                                 :ttl-ms ttl-ms
                                 :meta {:wasm (str wasm-path)
                                        :guest (str guest)
-                                       :tenant (str tenant)})
+                                       :tenant (str tenant)
+                                       :grant-source (:source resolved)})
         reg (fleet/register-lease (fleet/empty-registry) lease)
         id (:kototama.fleet/lease-id lease)
         result (run-lease! reg id {:wasm wasm-path
                                    :store store
                                    :max-ticks max-ticks
-                                   :grants grants})
+                                   :grants g})
         final (store/save-checkpoint!
                (:registry result) store
                {:key (str "final-" id)
@@ -119,7 +164,9 @@
            :lease-id id
            :checkpoint-path (:path final)
            :checkpoint-key (:key final)
-           :wasm (str wasm-path))))
+           :wasm (str wasm-path)
+           :grant-source (:source resolved)
+           :aiueos-decision (:decision resolved))))
 
 (defn- lease-wasm
   "Resolve wasm path from lease meta or explicit override."
@@ -201,7 +248,7 @@
   "One recovery pass: scan disk keys (or provided keys), resume active leases.
 
    Not a long-running daemon — call in a loop/cron. Bounded by :max-keys and
-   :max-ticks per lease.
+   :max-ticks per lease. Prefer `run-daemon!` for multi-pass with sleep.
 
    opts:
      :store :wasm :max-keys :max-ticks :key-filter (fn [k] bool)"
@@ -232,4 +279,84 @@
     {:keys keys
      :results results
      :ok-count (count (filter :ok? results))
-     :fail-count (count (remove :ok? results))}))
+     :fail-count (count (remove :ok? results))
+     :at (System/currentTimeMillis)}))
+
+;; ── recovery daemon (bounded multi-pass) ────────────────────────────────────
+
+(defn daemon-config
+  "Normalize daemon options. Never infinite by default (max-passes required
+   or defaults to 3). interval-ms is sleep between passes."
+  [{:keys [interval-ms max-passes max-keys max-ticks stop? continue-on-error?]
+    :or {interval-ms 1000
+         max-passes 3
+         max-keys 20
+         max-ticks 2
+         continue-on-error? true}}]
+  {:interval-ms (max 0 (long interval-ms))
+   :max-passes (max 1 (long max-passes))
+   :max-keys (max 1 (long max-keys))
+   :max-ticks (max 1 (long max-ticks))
+   :stop? (or stop? (constantly false))
+   :continue-on-error? (boolean continue-on-error?)})
+
+(defn run-daemon!
+  "Run up to :max-passes recovery-pass! iterations with sleep between them.
+
+   This is the long-running recovery *loop* (cron/service can wrap it).
+   Always bounded — never an open-ended while-true without max-passes.
+
+   opts:
+     :store :wasm :interval-ms :max-passes :max-keys :max-ticks
+     :stop? (fn [pass-index last-pass-result] bool)
+     :continue-on-error? (default true)
+     :sleep-fn (fn [ms] ...) for tests (default Thread/sleep)
+     :pass-fn  override recovery-pass! for tests
+
+   Returns {:passes [pass…] :stopped :max-passes|:stop?|:error :ok-count :fail-count}."
+  [& {:keys [store wasm interval-ms max-passes max-keys max-ticks
+             stop? continue-on-error? sleep-fn pass-fn]
+      :as opts}]
+  (let [cfg (daemon-config opts)
+        sleep! (or sleep-fn (fn [ms]
+                              (when (pos? ms)
+                                (Thread/sleep (long ms)))))
+        pass! (or pass-fn
+                  (fn []
+                    (recovery-pass! :store (or store (store/disk-store))
+                                    :wasm wasm
+                                    :max-keys (:max-keys cfg)
+                                    :max-ticks (:max-ticks cfg))))
+        stop?-fn (:stop? cfg)]
+    (loop [i 0
+           passes []
+           stop-reason nil]
+      (cond
+        stop-reason
+        {:passes passes
+         :stopped stop-reason
+         :ok-count (reduce + 0 (map :ok-count passes))
+         :fail-count (reduce + 0 (map :fail-count passes))
+         :pass-count (count passes)}
+
+        (>= i (:max-passes cfg))
+        {:passes passes
+         :stopped :max-passes
+         :ok-count (reduce + 0 (map :ok-count passes))
+         :fail-count (reduce + 0 (map :fail-count passes))
+         :pass-count (count passes)}
+
+        (and (seq passes) (stop?-fn i (last passes)))
+        (recur i passes :stop?)
+
+        :else
+        (let [pass (try
+                     (pass!)
+                     (catch Exception e
+                       {:ok-count 0 :fail-count 1 :error (.getMessage e) :ok? false}))]
+          (if (and (:error pass) (not (:continue-on-error? cfg)))
+            (recur (inc i) (conj passes pass) :error)
+            (do
+              (when (< (inc i) (:max-passes cfg))
+                (sleep! (:interval-ms cfg)))
+              (recur (inc i) (conj passes pass) nil))))))))

@@ -77,16 +77,20 @@ clojure -M:cli fleet-run test/kototama/fixtures/kotoba-compiled-fact.wasm
 clojure -M:cli fleet-list
 clojure -M:cli fleet-resume <checkpoint-key> test/kototama/fixtures/kotoba-compiled-fact.wasm
 clojure -M:cli fleet-recover test/kototama/fixtures/kotoba-compiled-fact.wasm
+clojure -M:cli fleet-daemon test/kototama/fixtures/kotoba-compiled-fact.wasm \
+  --interval-ms 200 --max-passes 3
 ```
 
 | Landed | Not yet |
 |---|---|
 | lease / budget / tick / governor | cross-node consensus |
-| checkpoint/restore EDN v1 | long-running recovery *daemon* (use cron + fleet-recover) |
-| **disk store** (`fleet-store`) | aiueos fleet broker |
+| checkpoint/restore EDN v1 | systemd unit packaging |
+| **disk store** (`fleet-store`) | full aiueos fleet broker |
 | **B2 optional** (env creds) | |
 | **tender execute** (`fleet-exec`) | |
 | **resume + recovery-pass** | |
+| **bounded recovery daemon** (`run-daemon!` / CLI) | |
+| **optional aiueos grants** (`:use-aiueos?`) | |
 
 ## Guest source rules (emit subset)
 
