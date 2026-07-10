@@ -1,5 +1,5 @@
 (ns kototama.fleet
-  "R3 skeleton: multi-tenant durable outer loop for kototama tender runs.
+  "R3 advanced-partial: multi-tenant durable outer loop for kototama tender.
 
    Pure data — no threads, no network. Models the durable loop described in
    the actor design (lease / tick / budget / governor / crash recovery):
@@ -10,8 +10,8 @@
      checkpoint = EDN-serializable recovery snapshot
 
    Execution still calls into kototama.tender on the JVM host; this ns only
-   owns the *scheduling and recovery contract*. Status: skeleton (not fleet-
-   production). See docs/maturity.md R3."
+   owns the *scheduling and recovery contract*. Not Raft consensus — see
+   docs/maturity.md R3."
   (:require [clojure.string :as str]))
 
 ;; ── time helpers (injectable clock for tests) ───────────────────────────────
@@ -320,9 +320,12 @@
             "fence-gated bootstrap/resume/recovery (tender only if claim wins)"
             "systemd oneshot+timer packaging under deploy/systemd/"
             "tick audit journal (audit/<lease>/tN)"
-            "programmatic acceptance gate (run-r3-gate! / fleet-gate CLI)"]
+            "programmatic acceptance gate (run-r3-gate! / fleet-gate CLI)"
+            "lease heartbeat renew across multi-tick runs"
+            "multi-tenant isolation on shared store (gate)"
+            "optional aiueos grant path in bootstrap (--use-aiueos)"]
    :not-yet ["Raft/Paxos multi-node consensus"
-             "full aiueos fleet broker (only grant subset today)"]
+             "full aiueos fleet broker (grant subset + optional path only)"]
    :api ['kototama.fleet 'kototama.fleet-store 'kototama.fleet-exec
          'kototama.fleet-fence]
    :gate "clojure -M:cli fleet-gate"

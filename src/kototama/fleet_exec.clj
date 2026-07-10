@@ -65,11 +65,14 @@
    opts:
      :wasm :store :max-ticks :grants :caps-extra :checkpoint-every (default 1)
      :execute  override make-execute result
+     :heartbeat? (default true) — renew lease TTL after each successful tick
+     :renew-ttl-ms (default 60000) — fence hold extension per tick
 
    Returns {:registry :steps :last}."
   [registry lease-id {:keys [wasm store max-ticks grants caps-extra
-                             checkpoint-every execute]
-                      :or {max-ticks 10 checkpoint-every 1}}]
+                             checkpoint-every execute heartbeat? renew-ttl-ms]
+                      :or {max-ticks 10 checkpoint-every 1
+                           heartbeat? true renew-ttl-ms 60000}}]
   (let [exec (or execute (make-execute {:wasm wasm :grants grants :caps-extra caps-extra}))
         steps (atom [])]
     (loop [reg registry
@@ -78,8 +81,15 @@
         {:registry reg :steps @steps :last (last @steps) :stopped :max-ticks}
         (let [step (fleet/run-loop-step reg lease-id exec)]
           (swap! steps conj (dissoc step :registry))
-          (let [reg' (:registry step)
-                tick-n (inc n)]
+          (let [reg0 (:registry step)
+                tick-n (inc n)
+                ;; Heartbeat: keep fence ownership alive across multi-tick runs
+                reg' (if (and heartbeat? (:ok? step))
+                       (if-let [lease (fleet/get-lease reg0 lease-id)]
+                         (assoc-in reg0 [:kototama.fleet/leases lease-id]
+                                   (fleet/renew-lease lease renew-ttl-ms))
+                         reg0)
+                       reg0)]
             (when store
               (store/append-tick-audit! store lease-id tick-n
                                         (or (:result step) step)))
@@ -98,8 +108,9 @@
 ;; ── aiueos-gated grants (optional) ──────────────────────────────────────────
 
 (def aiueos-translatable-imports
-  "Subset host-caps-for-imports can decide (see aiueos-adapter)."
-  #{:log-write :clock-monotonic})
+  "Subset host-caps-for-imports can decide (see aiueos-adapter).
+   Keep in sync with kototama.aiueos-adapter/kototama-import->aiueos-capability."
+  #{:log-write :clock-monotonic :random-bytes})
 
 (defn resolve-grants
   "Resolve HostCaps grants for a lease.
@@ -605,6 +616,65 @@
     ;; 9 packaging
     (add! :systemd-packaging (systemd-packaging-present?)
           {:paths ["deploy/systemd/" "deploy/bin/kototama-fleet-daemon"]})
+    ;; 10 multi-tenant isolation on shared store (same node-id, two tenants)
+    (let [mt-dir (str dir "-mt")
+          mt (store/disk-store mt-dir)
+          a (try
+              (bootstrap-and-run!
+               "tenant-a" "fact" wasm-path
+               :store mt :max-ticks 1
+               :budget {:fuel 5000000 :ticks 3}
+               :node-id "gate-mt-node"
+               :fence? true)
+              (catch Exception e {:error (.getMessage e)}))
+          b (try
+              (bootstrap-and-run!
+               "tenant-b" "fact" wasm-path
+               :store mt :max-ticks 1
+               :budget {:fuel 5000000 :ticks 3}
+               :node-id "gate-mt-node"
+               :fence? true)
+              (catch Exception e {:error (.getMessage e)}))
+          reg (try
+                (store/load-checkpoint! (:checkpoint-key a) mt)
+                (catch Exception _ nil))
+          tenants-ok?
+          (and (= 120 (get-in a [:last :result :result]))
+               (= 120 (get-in b [:last :result :result]))
+               (not= (:lease-id a) (:lease-id b))
+               (nil? (:error a))
+               (nil? (:error b)))]
+      (add! :multi-tenant-shared-store tenants-ok?
+            {:a-result (get-in a [:last :result :result])
+             :b-result (get-in b [:last :result :result])
+             :a-lease (:lease-id a)
+             :b-lease (:lease-id b)
+             :error (or (:error a) (:error b))})
+      (when-let [root (io/file mt-dir)]
+        (doseq [f (reverse (file-seq root))]
+          (.delete f))))
+    ;; 11 optional aiueos path still runs host-free guests (empty grants)
+    (let [ai-dir (str dir "-aiueos")
+          ai (try
+               (bootstrap-and-run!
+                "aiueos-tenant" "fact" wasm-path
+                :store (store/disk-store ai-dir)
+                :max-ticks 1
+                :budget {:fuel 5000000 :ticks 2}
+                :grants []
+                :use-aiueos? true
+                :node-id "gate-aiueos"
+                :fence? true)
+               (catch Exception e {:error (.getMessage e)}))
+          ai-ok? (and (nil? (:error ai))
+                      (= 120 (get-in ai [:last :result :result])))]
+      (add! :aiueos-optional-host-free ai-ok?
+            {:grant-source (:grant-source ai)
+             :result (get-in ai [:last :result :result])
+             :error (:error ai)})
+      (when-let [root (io/file ai-dir)]
+        (doseq [f (reverse (file-seq root))]
+          (.delete f))))
     (let [cs @checks
           ok? (every? :ok? cs)]
       {:ok? ok?
@@ -616,5 +686,5 @@
        :fail-count (count (remove :ok? cs))
        :store-root dir
        :not-claimed ["Raft/Paxos multi-node consensus"
-                    "full aiueos fleet broker"]
+                    "full aiueos fleet broker (grant subset + optional path only)"]
        :gate "clojure -M:cli fleet-gate"})))

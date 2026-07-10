@@ -244,9 +244,43 @@
              :dir dir)]
     (is (true? (:ok? out)) (pr-str (remove :ok? (:checks out))))
     (is (= :advanced-partial (:status out)))
-    (is (= 9 (:pass-count out)))
+    (is (>= (:pass-count out) 11))
     (is (zero? (:fail-count out)))
+    (is (some #(= :multi-tenant-shared-store (:id %)) (:checks out)))
+    (is (some #(= :aiueos-optional-host-free (:id %)) (:checks out)))
     (is (= :advanced-partial (get-in guest/maturity-levels [:r3 :status])))
     (is (= :advanced-partial (:status (fleet/r3-report))))
+    (doseq [f (reverse (file-seq (io/file dir)))]
+      (.delete f))))
+
+(deftest heartbeat-extends-lease-across-ticks
+  (let [dir (str "tmp/fleet-hb-" (System/currentTimeMillis))
+        s (store/disk-store dir)
+        wasm "kototama/fixtures/kotoba-compiled-fact.wasm"
+        lease (fleet/make-lease "hb" "fact"
+                                :ttl-ms 50
+                                :budget {:fuel 5000000 :ticks 5}
+                                :owner "hb-node"
+                                :meta {:wasm wasm})
+        reg (fleet/register-lease (fleet/empty-registry) lease)
+        id (:kototama.fleet/lease-id lease)
+        ;; short TTL; without heartbeat multi-tick would expire mid-run
+        out (binding [fleet/*now-ms* 1000]
+              (let [reg (assoc-in reg [:kototama.fleet/leases id]
+                                  (assoc (fleet/get-lease reg id)
+                                         :kototama.fleet/expires-at 1050
+                                         :kototama.fleet/issued-at 1000))]
+                (exec/run-lease! reg id
+                                 {:wasm wasm
+                                  :store s
+                                  :max-ticks 3
+                                  :heartbeat? true
+                                  :renew-ttl-ms 60000
+                                  :execute (exec/make-execute {:wasm wasm :grants []})})))
+        lease' (fleet/get-lease (:registry out) id)]
+    (is (true? (get-in out [:last :result :ok?])))
+    (is (= 120 (get-in out [:last :result :result])))
+    (is (pos? (:kototama.fleet/expires-at lease')))
+    (is (> (:kototama.fleet/expires-at lease') 1050))
     (doseq [f (reverse (file-seq (io/file dir)))]
       (.delete f))))

@@ -99,6 +99,9 @@ clojure -M:cli fleet-daemon test/kototama/fixtures/kotoba-compiled-fact.wasm \
 | systemd oneshot+timer | |
 | **tick audit journal** | |
 | **`run-r3-gate!` / `fleet-gate` CLI** | |
+| **lease heartbeat** (renew TTL per tick) | |
+| **multi-tenant shared-store isolation** (gate) | |
+| **optional aiueos grants** (`--use-aiueos` on fleet-run) | |
 
 Fencing is **not** distributed consensus — higher epoch wins on a shared store.
 `bootstrap` / `resume` / `recovery-pass` call `claim-before-run` so only the

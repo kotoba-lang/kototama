@@ -79,12 +79,18 @@
       (count (fleet/tenant-leases restored "tenant-a"))})
     {:ok? true}))
 
-(defn cmd-fleet-run [wasm-path]
-  (let [out (fleet-exec/bootstrap-and-run!
+(defn- flag? [args flag]
+  (boolean (some #{flag} args)))
+
+(defn cmd-fleet-run [wasm-path & args]
+  (let [args (vec args)
+        use-aiueos? (flag? args "--use-aiueos")
+        out (fleet-exec/bootstrap-and-run!
              "cli-tenant" "cli-guest" wasm-path
              :store (fleet-store/disk-store "tmp/kototama-fleet")
              :max-ticks 2
-             :budget {:fuel 5000000 :ticks 5})]
+             :budget {:fuel 5000000 :ticks 5}
+             :use-aiueos? use-aiueos?)]
     (pp/pprint
      {:ok? true
       :lease-id (:lease-id out)
@@ -92,7 +98,9 @@
       :result (get-in out [:last :result])
       :checkpoint-path (:checkpoint-path out)
       :checkpoint-key (:checkpoint-key out)
-      :steps (count (:steps out))})
+      :steps (count (:steps out))
+      :grant-source (:grant-source out)
+      :use-aiueos? use-aiueos?})
     {:ok? true}))
 
 (defn cmd-fleet-list []
@@ -263,9 +271,9 @@
           "parity" (cmd-parity)
           "fleet-demo" (cmd-fleet-demo)
           "fleet-run" (if-let [p (first more)]
-                        (cmd-fleet-run p)
+                        (apply cmd-fleet-run p (rest more))
                         (do (binding [*out* *err*]
-                              (println "usage: fleet-run <guest.wasm>"))
+                              (println "usage: fleet-run <guest.wasm> [--use-aiueos]"))
                             {:ok? false}))
           "fleet-list" (cmd-fleet-list)
           "fleet-resume" (let [k (first more) w (second more)]
