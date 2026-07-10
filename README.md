@@ -14,33 +14,33 @@ duplication — just an undocumented spelling split, which this note closes.
 
 In the `kotoba-lang → kototama → aiueos` stack
 ([ADR-2607022400](https://github.com/com-junkawasaki/root/blob/main/90-docs/adr/2607022400-kototama-unikernel-tender-runtime-vocabulary.md)),
-kototama is the **Wasm execution runtime**: it hosts the Wasm components that
-`kotoba-lang` compiles, under capability grants that `aiueos` (the OS/broker
-layer) decides. That ADR adopts Solo5's *tender* pattern — kototama as
-tender, the Wasm component it runs as guest — and
-[ADR-2607022900](https://github.com/com-junkawasaki/root/blob/main/90-docs/adr/2607022900-aiueos-chicory-jvm-native-adapter.md)
-decided the tender's execution layer is **JVM/Clojure via
-`com.dylibso.chicory`**, not Rust/wasmtime.
+kototama is the **Wasm tender runtime**: it hosts the Wasm guests that
+`kotoba-lang` compiles (`.kotoba` → `kotoba wasm emit` → AOT `.wasm`), under
+capability grants that `aiueos` decides. Solo5's *tender* pattern — kototama
+hosts, the component is guest.
 
-**`kototama.tender` (`src/kototama/tender.clj`) is that execution layer,
-landed** ([ADR-2607062330](https://github.com/com-junkawasaki/root/blob/main/90-docs/adr/2607062330-kototama-tender-chicory-execution-runtime.md)):
-every one of `kototama.contract`'s 8 `actor:host` imports (`gen-keypair`/
-`sign`/`verify`/`sha256-hex`/`http-post`/`log-read`/`log-write`/`clock-monotonic`) is
-wired to a real Chicory `HostFunction` that only performs its effect when
-`contract/validate-import-surface` says the caller's `HostCaps` grant it —
-checked pre-flight (before any `Instance` is built) and again per call
-(defense in depth). `RuntimeLimits` (`:max-http-posts`/`:max-log-*-bytes`)
-are enforced by kototama itself (Chicory has no native per-category call
-counter) as an in-band `-1` a well-behaved guest can see and back off
-from — distinct from a `:grants` violation, which is a structural
-authority breach and hard-aborts the call instead. `:max-memory-pages` is
-enforced too, via Chicory's STABLE `withMemoryLimits` API (not the
-:unsafe fuel-listener hook) — independent of which imports are granted,
-applied to any guest that declares a memory section. A per-instruction
-fuel listener traps a runaway/looping guest. Verified against real Wasm
-binaries (`wasm-tools`-assembled WAT fixtures through the actual Chicory
-`Parser`/`Instance` pipeline, not mocked), including cross-checking a
-real `sign`→`verify` round trip and `sha256-hex` against a known digest.
+### Runtime priority (ADR-2607100100 / ADR-2607102200 addendum 3)
+
+**First path is not JVM/Chicory.** App/runtime order is:
+
+```
+kotoba wasm AOT  >  clojurewasm  >  ClojureScript  >  nbb
+(JVM / Chicory is demoted — last-resort / explicit compat only)
+```
+
+| Path | Status | Notes |
+|---|---|---|
+| **`.kotoba` → AOT `.wasm` on native WebAssembly** | **first** | browser/Node via [`wasm-webcomponent`](https://github.com/kotoba-lang/wasm-webcomponent) (extracted from this repo's `web/`) |
+| **clojurewasm** | next when FFI allows | host-import surface still limited (upstream Phase-16); revisit for host-import guests |
+| **ClojureScript host wire** | when native WASM + CLJS host imports | e.g. portable `kotoba.kami-host` |
+| **`kototama.tender` (JVM/Chicory)** | **demoted compat / CI** | landed historically (ADR-2607022900 / 2607062330); keep for bit-exact fixtures, not the design premise |
+
+### Compat tender (Chicory) — still present, not primary
+
+`src/kototama/tender.clj` wires every `kototama.contract` `actor:host` import
+to a Chicory `HostFunction` with pre-flight + per-call grant checks,
+`RuntimeLimits`, memory limits, and fuel. Useful as a verification harness
+against real Wasm bytes — **not** what "use kototama" means for new work.
 
 ## Contract Surface
 
@@ -71,11 +71,10 @@ real `sign`→`verify` round trip and `sha256-hex` against a known digest.
 ## Browser WASM AOT demo (`web/`)
 
 [ADR-2607061630](https://github.com/com-junkawasaki/root/blob/main/90-docs/adr/2607061630-kototama-browser-wasm-aot-webcomponent.md)
-starts shifting kototama's execution premise from "JVM hosts a Wasm
-interpreter" (`kotoba wasm run` + `com.dylibso.chicory` in
-`kotoba-lang/kotoba`) toward "the browser's own engine runs the
-already-AOT-compiled binary directly", with kototama supplying the hosting
-shell as a WebComponent instead of a JVM process. The hosting code itself
+and ADR-2607100100 make the **first** execution premise "the host's native
+WebAssembly engine runs already-AOT-compiled `.kotoba` binaries" — not
+"JVM hosts a Wasm interpreter". kototama supplies tender policy; the
+browser packaging shell is a WebComponent. The hosting code itself
 (`KotobaWasmElement`, `kgraph.js`) has since been extracted into
 [`kotoba-lang/wasm-webcomponent`](https://github.com/kotoba-lang/wasm-webcomponent)
 so other repos can reuse it — `web/` is now a **consumer** of that library,
@@ -86,9 +85,9 @@ browser-side port of kotoba's in-memory EAVT datom store) — verified
 against the exact same demo and expected values as kotoba-lang/kotoba's
 own JVM/Chicory test. See `web/README.md` for the
 remaining honest R0 scope (only `kgraph-*` is ported, not `kse`/`auth`/`llm`/
-etc.; no capability/policy re-enforcement at load time). The JVM+Chicory
-path in kotoba-lang/kotoba is unaffected and remains the compile-time/
-test-time proof; this is additive, not a replacement.
+etc.; no capability/policy re-enforcement at load time). JVM+Chicory paths in kotoba-lang/kotoba and `kototama.tender` remain as
+compile-time / test-time / compat proof — demoted relative to AOT native WASM
+(ADR-2607100100).
 
 ## Maturity
 
@@ -98,8 +97,8 @@ Ladder and gates: [`docs/maturity.md`](docs/maturity.md).
 | Level | Status |
 |---|---|
 | R0 contract / dry-run | stable |
-| R1 tender (JVM/Chicory) | stable — session report, host-free guests, emit lint, CLI |
-| **R2 browser host parity** | **advanced-partial** — 8/9 linkable; http-post inject\|SAB-COOP; host-free web fixtures |
+| R1 tender (compat: JVM/Chicory) | stable as **compat suite** — session report, host-free guests, emit lint, CLI (not the first path) |
+| **R2 browser / native WASM host** | **first product path** (advanced-partial) — AOT `.wasm` via wasm-webcomponent; 8/9 linkable; host-free web fixtures |
 | R3 fleet multi-tenant | skeleton+persist — disk/B2 + fence-gated tender + daemon + systemd |
 
 ```bash
@@ -112,8 +111,9 @@ clojure -M:cli run     path/to/guest.wasm
 node web/verify-host-free.mjs                        # R2 host-free under browser Wasm
 ```
 
-Host-free pure guests are first-class on **both** JVM tender and browser/Node
-Wasm (`fact(5)=120`, peak-cells `@4096→240`, also under `web/`).
+Host-free pure guests are first-class on **native WASM** (browser/Node via
+wasm-webcomponent / `web/`) and still verified on the demoted JVM tender
+(`fact(5)=120`, peak-cells `@4096→240`).
 
 ## Test
 
