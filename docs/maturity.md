@@ -83,14 +83,19 @@ clojure -M:cli fleet-daemon test/kototama/fixtures/kotoba-compiled-fact.wasm \
 
 | Landed | Not yet |
 |---|---|
-| lease / budget / tick / governor | cross-node consensus |
-| checkpoint/restore EDN v1 | systemd unit packaging |
-| **disk store** (`fleet-store`) | full aiueos fleet broker |
+| lease / budget / tick / governor | Raft/Paxos multi-node consensus |
+| checkpoint/restore EDN v1 | full aiueos fleet broker |
+| **disk store** (`fleet-store`) | |
 | **B2 optional** (env creds) | |
 | **tender execute** (`fleet-exec`) | |
 | **resume + recovery-pass** | |
 | **bounded recovery daemon** (`run-daemon!` / CLI) | |
 | **optional aiueos grants** (`:use-aiueos?`) | |
+| **epoch fencing** (`fleet-fence` claim/merge) | |
+| **systemd oneshot+timer** (`deploy/systemd/`) | |
+
+Fencing is **not** distributed consensus — higher epoch wins on a shared store.
+See `deploy/systemd/README.md` for install.
 
 ## Guest source rules (emit subset)
 

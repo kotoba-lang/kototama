@@ -1,0 +1,13 @@
+[Unit]
+Description=Run kototama fleet recovery on a schedule
+Requires=kototama-fleet-daemon.service
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+AccuracySec=30s
+Persistent=true
+Unit=kototama-fleet-daemon.service
+
+[Install]
+WantedBy=timers.target

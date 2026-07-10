@@ -16,16 +16,19 @@
 
 ;; ── time helpers (injectable clock for tests) ───────────────────────────────
 
-(defn now-ms
-  "Wall clock ms. Override via *now-ms* binding in tests."
-  []
-  #?(:clj (System/currentTimeMillis)
-     :cljs (.now js/Date)))
+(def ^:dynamic *now-ms*
+  "Override wall clock in tests: (binding [fleet/*now-ms* 0] …)."
+  nil)
 
-(def ^:dynamic *now-ms* nil)
+(defn now-ms
+  "Wall clock ms. Honors *now-ms* binding when set."
+  []
+  (or *now-ms*
+      #?(:clj (System/currentTimeMillis)
+         :cljs (.now js/Date))))
 
 (defn- clock []
-  (or *now-ms* (now-ms)))
+  (now-ms))
 
 ;; ── budget ──────────────────────────────────────────────────────────────────
 
@@ -87,6 +90,7 @@
      :kototama.fleet/budget (budget (:budget opts))
      :kototama.fleet/grants (vec grants)
      :kototama.fleet/meta meta
+     :kototama.fleet/epoch (long (or (:epoch opts) 1))
      :kototama.fleet/status :active}))
 
 (defn lease-expired?
@@ -308,12 +312,15 @@
             "fleet-exec tender/run-report bridge"
             "resume-from-checkpoint! + recovery-pass!"
             "run-daemon! bounded multi-pass recovery loop"
-            "optional aiueos grant resolution (resolve-grants :use-aiueos?)"]
-   :not-yet ["cross-node lease consensus"
-             "full aiueos fleet broker (only grant subset today)"
-             "systemd unit packaging"]
-   :api ['kototama.fleet 'kototama.fleet-store 'kototama.fleet-exec]
+            "optional aiueos grant resolution (resolve-grants :use-aiueos?)"
+            "fleet-fence epoch claim/merge (not Raft)"
+            "systemd oneshot+timer packaging under deploy/systemd/"]
+   :not-yet ["Raft/Paxos multi-node consensus"
+             "full aiueos fleet broker (only grant subset today)"]
+   :api ['kototama.fleet 'kototama.fleet-store 'kototama.fleet-exec
+         'kototama.fleet-fence]
    :notes ["Pure cljc core + JVM store/exec edges"
            "1 tick = 1 bounded guest run; no internal infinite loops"
            "B2 via B2_KEY_ID/B2_APP_KEY/B2_BUCKET or KOTOTAMA_FLEET_B2_*"
-           "CLI: fleet-run | list | resume | recover | daemon"]})
+           "CLI: fleet-run | list | resume | recover | daemon | fence-demo"
+           "deploy: deploy/systemd + deploy/bin/kototama-fleet-daemon"]})

@@ -10,6 +10,7 @@
      fleet-resume <key> <wasm> — resume active leases from checkpoint
      fleet-recover <wasm> — one recovery pass over recent checkpoints
      fleet-daemon <wasm> [--interval-ms N] [--max-passes N] — bounded recovery loop
+     fleet-fence-demo    — cross-node epoch fencing demo (pure)
      lint <file.kotoba>  — emit-pitfall lint (no execution)
      inspect <file.wasm> — structural Wasm surface (no run)
      run <file.wasm> [--grant id …]  — run-report via tender
@@ -21,6 +22,7 @@
             [kototama.contract :as contract]
             [kototama.fleet :as fleet]
             [kototama.fleet-exec :as fleet-exec]
+            [kototama.fleet-fence :as fence]
             [kototama.fleet-store :as fleet-store]
             [kototama.guest :as guest]
             [kototama.tender :as tender])
@@ -167,7 +169,35 @@
       :ok-count (:ok-count out)
       :fail-count (:fail-count out)
       :interval-ms interval
-      :max-passes max-passes})
+      :max-passes max-passes
+      :node-id (fence/node-id)})
+    {:ok? true}))
+
+(defn cmd-fleet-fence-demo []
+  (let [node-a "node-a"
+        node-b "node-b"
+        reg0 (fleet/empty-registry)
+        lease-a (fleet/make-lease "t1" "g1" :owner node-a
+                                  :budget {:fuel 1000 :ticks 5})
+        claim-a (fence/claim-lease reg0 lease-a node-a)
+        lease-b (fleet/make-lease "t1" "g1" :owner node-b
+                                  :budget {:fuel 1000 :ticks 5})
+        refuse (fence/claim-lease (:registry claim-a) lease-b node-b)
+        steal (fence/claim-lease (:registry claim-a)
+                                 (assoc lease-b :kototama.fleet/epoch 2)
+                                 node-b)
+        merged (fence/merge-registries
+                (:registry claim-a)
+                (:registry steal))]
+    (pp/pprint
+     {:ok? true
+      :claim-a (:reason claim-a)
+      :refuse-b (:ok? refuse)
+      :refuse-reason (:reason refuse)
+      :steal-b (:reason steal)
+      :merged-owners
+      (mapv :kototama.fleet/owner (fleet/all-leases merged))
+      :node-id (fence/node-id)})
     {:ok? true}))
 
 (defn cmd-lint [path]
@@ -244,6 +274,7 @@
                            (do (binding [*out* *err*]
                                  (println "usage: fleet-daemon <guest.wasm> [--interval-ms N] [--max-passes N]"))
                                {:ok? false}))
+          "fleet-fence-demo" (cmd-fleet-fence-demo)
           "lint" (if-let [p (first more)]
                    (cmd-lint p)
                    (do (binding [*out* *err*]
@@ -269,6 +300,7 @@
             (println "  fleet-resume <key> <wasm>  resume from checkpoint")
             (println "  fleet-recover <wasm> one recovery pass over checkpoints")
             (println "  fleet-daemon <wasm> [--interval-ms N] [--max-passes N]")
+            (println "  fleet-fence-demo    cross-node epoch fencing demo")
             (println "  lint <file.kotoba>  emit-pitfall lint")
             (println "  inspect <file.wasm> structural surface")
             (println "  run <file.wasm> [--grant id …]")
