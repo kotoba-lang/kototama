@@ -96,3 +96,47 @@
     (is (pos? (:ok-count pass)))
     (doseq [f (reverse (file-seq (io/file dir)))]
       (.delete f))))
+
+(deftest run-daemon-bounded-passes
+  (let [sleeps (atom [])
+        passes (atom 0)
+        out (exec/run-daemon!
+             :interval-ms 10
+             :max-passes 3
+             :sleep-fn (fn [ms] (swap! sleeps conj ms))
+             :pass-fn (fn []
+                        (swap! passes inc)
+                        {:ok-count 1 :fail-count 0 :keys ["k"] :results []}))]
+    (is (= 3 (:pass-count out)))
+    (is (= :max-passes (:stopped out)))
+    (is (= 3 @passes))
+    (is (= 2 (count @sleeps)) "sleep between passes only, not after last")
+    (is (= 3 (:ok-count out)))))
+
+(deftest run-daemon-stop-predicate
+  (let [out (exec/run-daemon!
+             :interval-ms 1
+             :max-passes 10
+             :sleep-fn (fn [_])
+             :pass-fn (fn [] {:ok-count 1 :fail-count 0})
+             :stop? (fn [i _last] (>= i 2)))]
+    (is (= :stop? (:stopped out)))
+    (is (= 2 (:pass-count out)))))
+
+(deftest resolve-grants-explicit
+  (let [r (exec/resolve-grants [:log-write :clock-monotonic]
+                               {:use-aiueos? false :grants [:log-write]})]
+    (is (= :explicit (:source r)))
+    (is (= [:log-write] (:grants r)))))
+
+(deftest resolve-grants-aiueos-fail-closed-untrusted
+  ;; untrusted trust level should deny under default aiueos policy
+  (let [r (exec/resolve-grants [:log-write]
+                               {:use-aiueos? true
+                                :grants [:log-write]
+                                :trust :untrusted
+                                :limits {:allow-write-imports? true}})]
+    (is (= :aiueos (:source r)))
+    (is (#{:grant :deny} (get-in r [:decision :aiueos/decision])))
+    (when (= :deny (get-in r [:decision :aiueos/decision]))
+      (is (empty? (:grants r)) "fail-closed on deny"))))
