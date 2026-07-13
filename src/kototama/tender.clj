@@ -66,8 +66,9 @@
            (com.dylibso.chicory.wasm Parser)
            (com.dylibso.chicory.wasm.types FunctionType MemoryLimits ValType)
            (java.security MessageDigest SecureRandom)
-           (java.net URI)
-           (java.net.http HttpClient HttpRequest HttpRequest$BodyPublishers HttpResponse$BodyHandlers)))
+           (java.net InetAddress Inet6Address URI)
+           (java.net.http HttpClient HttpRequest HttpRequest$BodyPublishers HttpResponse$BodyHandlers)
+           (java.time Duration)))
 
 ;; ── memory ABI: (ptr,len) in / (out-ptr,out-cap) out, same convention
 ;; `kotoba.wasm-exec`'s read-str/write-bytes! establish ─────────────────────
@@ -192,27 +193,147 @@
                    hex (apply str (map #(format "%02x" (bit-and (int %) 0xff)) digest))]
                (write-bytes! instance (aget args 2) (aget args 3) (.getBytes hex "UTF-8"))))))
 
+;; ── outbound-HTTP hardening (guest-triggered network calls only) ──────────
+;;
+;; `http-post-host-fn`'s URL is entirely guest-controlled (read straight out
+;; of guest linear memory) and lease/tick execution
+;; (`kototama.fleet`/`kototama.fleet-exec`'s `run-loop-step`/`run-daemon!`/
+;; `recovery-pass!`) is fully synchronous and single-threaded per tick -- a
+;; guest granted `:http-post` that points the POST at a slow-loris /
+;; non-responding endpoint could otherwise block the host thread
+;; indefinitely, stalling the whole daemon process for every other tenant
+;; sharing it (a DoS, not just an SSRF concern). Both `http-post-host-fn`
+;; and `anthropic-infer` below share the same connect/request timeouts so a
+;; non-responding endpoint fails fast (in-band -1 / nil) instead of hanging.
+;; This part -- the DoS fix -- is complete and unconditional.
+;;
+;; `blocked-http-post-destination?` below is a SEPARATE, weaker mitigation:
+;; best-effort SSRF hardening against literal/naive targets (a guest that
+;; hardcodes "http://127.0.0.1/..." or "http://169.254.169.254/...", the
+;; overwhelmingly common real-world shape of this bug class), NOT a proof
+;; against a determined adversary who controls DNS for their own domain
+;; (DNS rebinding: resolve to a public IP when checked, then to
+;; 127.0.0.1/an internal address at the ACTUAL connection time a moment
+;; later, since `java.net.http.HttpClient` re-resolves the hostname
+;; independently and there is no supported per-request hook in its public
+;; API (`HttpClient.Builder`, JDK 24) to pin the connection to a
+;; specific, pre-validated `InetAddress` -- confirmed absent by inspecting
+;; the Builder's method set). A same-process fix exists in principle
+;; (rewrite the connection URI to the validated IP literal, preserve TLS
+;; SNI to the original host via `SSLParameters.setServerNames`) but was
+;; deliberately NOT implemented here: doing that correctly requires also
+;; controlling what hostname the JDK's TLS endpoint-identification
+;; algorithm validates the peer certificate against, which is
+;; implementation-detail-sensitive territory -- getting it subtly wrong
+;; would silently weaken certificate hostname verification for every
+;; legitimate HTTPS call this function makes, trading a narrower SSRF gap
+;; for a broader MITM one. That tradeoff was judged worse than shipping
+;; an honestly-scoped, narrower mitigation. Closing the DNS-rebind gap
+;; for real needs either an HTTP client with a pluggable resolver/
+;; connector (e.g. OkHttp's `Dns`/`EventListener`) or a vetted, tested
+;; SNI-preserving IP-pinning implementation as a dedicated follow-up --
+;; not a rushed addition here.
+
+(def ^:private http-connect-timeout
+  "How long to wait for the TCP/TLS handshake before giving up."
+  (Duration/ofSeconds 5))
+
+(def ^:private http-request-timeout
+  "How long to wait for the whole request (handshake + send + response)
+  before giving up -- guards a peer that accepts the connection but then
+  never responds (slow-loris), which `http-connect-timeout` alone does not."
+  (Duration/ofSeconds 5))
+
+(defn- timed-http-client
+  "A fresh `HttpClient` with `http-connect-timeout` wired in (same shape
+  `kototama.fleet-store/http-client` already establishes for the B2 native
+  API calls elsewhere in this repo, `.connectTimeout` on the builder)."
+  []
+  (-> (HttpClient/newBuilder)
+      (.connectTimeout http-connect-timeout)
+      .build))
+
+(defn- ipv6-unique-local?
+  "True when ADDR is an IPv6 Unique Local Address (RFC 4193, fc00::/7) --
+  the modern private-addressing scheme Docker/Kubernetes/most private
+  cloud networks actually assign today. `Inet6Address.isSiteLocalAddress`
+  only recognizes the legacy, deprecated fec0::/10 prefix, not fc00::/7,
+  so without this explicit check a real internal fc00::/fd00::-range
+  target would sail through unblocked."
+  [^InetAddress addr]
+  (and (instance? Inet6Address addr)
+       (let [b (.getAddress addr)]
+         (= 0xfc (bit-and (aget b 0) 0xfe)))))
+
+(defn- blocked-network-address?
+  "True when ADDR (a resolved `java.net.InetAddress`) is loopback /
+  link-local / site-local (RFC1918) / IPv6 unique-local (RFC4193,
+  fc00::/7) / multicast / any-local, or the well-known cloud-metadata
+  address 169.254.169.254 -- checked explicitly as defense-in-depth even
+  though `isLinkLocalAddress` already covers the 169.254.0.0/16 block
+  that address lives in."
+  [^InetAddress addr]
+  (or (.isLoopbackAddress addr)
+      (.isLinkLocalAddress addr)
+      (.isSiteLocalAddress addr)
+      (ipv6-unique-local? addr)
+      (.isMulticastAddress addr)
+      (.isAnyLocalAddress addr)
+      (= "169.254.169.254" (.getHostAddress addr))))
+
+(defn- blocked-http-post-destination?
+  "True when URL's host is missing/unparseable, or resolves to ANY address
+  `blocked-network-address?` flags -- fail CLOSED (an unresolvable host, or
+  any exception while resolving, is treated as blocked, never allowed
+  through). Best-effort hardening against LITERAL/naive SSRF targets (a
+  guest hardcoding a loopback/private/metadata address), run BEFORE any
+  real connection is attempted -- NOT a defense against DNS rebinding (a
+  host resolving to a public address here, then to an internal one at
+  actual connect time); see the namespace-level comment above for why
+  that gap is not closed in this function."
+  [^String url]
+  (try
+    (let [host (.getHost (URI/create url))]
+      (boolean
+       (or (nil? host)
+           (str/blank? host)
+           (some blocked-network-address? (InetAddress/getAllByName host)))))
+    (catch Exception _ true)))
+
 (defn- http-post-host-fn
   "`(url-ptr url-len body-ptr body-len out-ptr out-cap) -> bytes-written|-1`.
   Synchronous POST (guest calls block on it -- Chicory host functions have
   no async contract); writes the response body. `#{:network}`, metered
   against `:max-http-posts` (default 0 -- fully denied unless a caller's
   HostCaps explicitly raises the limit AND grants the import, matching
-  `kototama.contract/default-runtime-limits`)."
+  `kototama.contract/default-runtime-limits`).
+
+  A slow/non-responding destination fails fast (`http-connect-timeout`/
+  `http-request-timeout`) instead of hanging the host thread -- this is a
+  complete, unconditional fix for the DoS this was built to close. A
+  destination that resolves to a LITERAL loopback/private/link-local/
+  metadata address is refused (-1, the same in-band fail-closed
+  convention every other quota/overflow case here uses -- never an
+  exception) BEFORE any connection is attempted; this is best-effort SSRF
+  hardening, not a DNS-rebinding-proof one (see
+  `blocked-http-post-destination?`'s docstring)."
   [caps limits-state]
   (host-fn "http_post" (mapv valtype [:i32 :i32 :i32 :i32 :i32 :i32]) ValType/I32
            (fn [instance args]
              (ensure-granted! caps :http-post)
              (if-not (within-count-limit? :http-posts :max-http-posts caps limits-state)
                -1
-               (let [url (String. ^bytes (read-bytes! instance (aget args 0) (aget args 1)) "UTF-8")
-                     body (read-bytes! instance (aget args 2) (aget args 3))
-                     req (-> (HttpRequest/newBuilder (URI/create url))
-                            (.POST (HttpRequest$BodyPublishers/ofByteArray body))
-                            .build)
-                     resp (.send (HttpClient/newHttpClient) req (HttpResponse$BodyHandlers/ofByteArray))]
-                 (swap! limits-state update :http-posts inc)
-                 (write-bytes! instance (aget args 4) (aget args 5) (.body resp)))))))
+               (let [url (String. ^bytes (read-bytes! instance (aget args 0) (aget args 1)) "UTF-8")]
+                 (if (blocked-http-post-destination? url)
+                   -1
+                   (let [body (read-bytes! instance (aget args 2) (aget args 3))
+                         req (-> (HttpRequest/newBuilder (URI/create url))
+                                (.timeout http-request-timeout)
+                                (.POST (HttpRequest$BodyPublishers/ofByteArray body))
+                                .build)
+                         resp (.send (timed-http-client) req (HttpResponse$BodyHandlers/ofByteArray))]
+                     (swap! limits-state update :http-posts inc)
+                     (write-bytes! instance (aget args 4) (aget args 5) (.body resp)))))))))
 
 ;; ── llm-infer's injected client: real Anthropic call in production,
 ;; fake `:infer-fn` in tests (same DI shape as `store` below) ──────────────
@@ -242,7 +363,14 @@
   message, authenticated with API-KEY; returns the assistant's text
   reply, or nil on ANY failure (non-2xx status, network error, malformed
   JSON) -- never throws, so a caller can treat nil uniformly with \"no
-  key configured\" and fail closed."
+  key configured\" and fail closed.
+
+  `anthropic-messages-url` is a fixed constant (not guest-controlled), so
+  no destination check is needed here the way `http-post-host-fn` needs
+  one -- but the same `http-connect-timeout`/`http-request-timeout` apply
+  so a non-responding/slow endpoint still fails fast (in-band nil, via the
+  existing catch) instead of hanging the host thread for every tenant
+  sharing this tick."
   [api-key prompt]
   (try
     (let [body (json/write-str {:model default-llm-model
@@ -252,9 +380,10 @@
                  (.header "content-type" "application/json")
                  (.header "x-api-key" api-key)
                  (.header "anthropic-version" "2023-06-01")
+                 (.timeout http-request-timeout)
                  (.POST (HttpRequest$BodyPublishers/ofString body))
                  .build)
-          resp (.send (HttpClient/newHttpClient) req (HttpResponse$BodyHandlers/ofString))]
+          resp (.send (timed-http-client) req (HttpResponse$BodyHandlers/ofString))]
       (when (<= 200 (.statusCode resp) 299)
         (let [resp-body (json/read-str (.body resp) :key-fn keyword)
               text (apply str (keep #(when (= "text" (:type %)) (:text %))
