@@ -39,3 +39,17 @@
     (let [report (cli/cmd-run host-free-wasm [])]
       (is (true? (:ok? report)))
       (is (= [] (:requested report))))))
+
+(deftest run-with-a-wrong-grant-still-denies
+  (testing "granting a DIFFERENT capability than the one the guest actually
+            declares must not satisfy the guest's real import -- --grant is
+            not a blanket \"run it\" flag, it names the specific capability"
+    (let [report (cli/cmd-run gen-keypair-wasm ["--grant" "http-post"])]
+      (is (false? (:ok? report))))))
+
+(deftest run-with-multiple-grants-works-additively
+  (testing "multiple --grant flags accumulate rather than only the last one
+            taking effect"
+    (let [report (cli/cmd-run gen-keypair-wasm ["--grant" "http-post" "--grant" "gen-keypair"])]
+      (is (true? (:ok? report)))
+      (is (= #{:http-post :gen-keypair} (get-in report [:caps :grants]))))))

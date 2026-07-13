@@ -263,9 +263,14 @@
         ;; consent (a guest could declare gen-keypair/http-post/log-write and
         ;; grant itself real access by asking for it). A host-free guest
         ;; (no imports) still runs fine with requested [] unchanged; a guest
-        ;; that does need imports and got no --grant is denied below by
-        ;; tender/run-report's fail-closed contract/validate-import-surface
-        ;; check, not silently self-granted.
+        ;; that does need imports and got no --grant is denied below -- since
+        ;; REQUESTED and CAPS' :grants are now always the same set, this
+        ;; doesn't fire contract/validate-import-surface's :grants/missing
+        ;; branch (requested - granted is always empty here); the actual
+        ;; enforcement is Chicory's own instantiation-time failure to link
+        ;; an import the guest declares but no HostFunction was wired for
+        ;; (caught generically by tender/run-report's `catch Exception`) --
+        ;; not silently self-granted either way.
         requested grants
         caps (contract/host-caps
               {:grants requested
