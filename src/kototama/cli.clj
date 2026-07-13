@@ -258,18 +258,15 @@
   (let [grants (parse-grants args)
         wasm (read-bytes path)
         info (tender/inspect-module wasm)
-        ;; map import field names back to contract ids when possible
-        requested (if (seq grants)
-                    grants
-                    ;; host-free if no imports; else require explicit --grant
-                    (if (empty? (:import-names info))
-                      []
-                      (mapv (fn [field]
-                              (or (some (fn [[id f]]
-                                          (when (= f field) id))
-                                        guest/wasm-field-by-import-id)
-                                  (keyword field)))
-                            (:import-names info))))
+        ;; --grant is the ONLY source of requested capabilities: a guest's
+        ;; own declared imports are never trusted as a stand-in for operator
+        ;; consent (a guest could declare gen-keypair/http-post/log-write and
+        ;; grant itself real access by asking for it). A host-free guest
+        ;; (no imports) still runs fine with requested [] unchanged; a guest
+        ;; that does need imports and got no --grant is denied below by
+        ;; tender/run-report's fail-closed contract/validate-import-surface
+        ;; check, not silently self-granted.
+        requested grants
         caps (contract/host-caps
               {:grants requested
                :limits (cond-> {}
