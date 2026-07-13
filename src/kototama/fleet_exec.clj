@@ -109,7 +109,37 @@
 
 (def aiueos-translatable-imports
   "Subset host-caps-for-imports can decide (see aiueos-adapter).
-   Keep in sync with kototama.aiueos-adapter/kototama-import->aiueos-capability."
+   Keep in sync with kototama.aiueos-adapter/kototama-import->aiueos-capability.
+
+   AUDIT FINDING (2026-07-13, investigated and left as-is): everything NOT
+   in this set (`:gen-keypair`/`:sign`/`:http-post`/`:log-read`/
+   `:llm-infer`) is concatenated back as `rest-ids` in `resolve-grants`
+   UNCONDITIONALLY, bypassing aiueos policy evaluation even when
+   `:use-aiueos? true` is explicitly requested -- so `:use-aiueos?` widens
+   the granted set for a real subset of imports rather than gating the
+   whole requested surface. This is documented, not silently missed: it
+   was checked against the real `io.github.kotoba-lang/aiueos` dependency
+   source (`aiueos.policy/default-kernel-caps`, pinned SHA
+   63c13fd48dc53e0f93fa40f6bfce54e62773c656) and confirmed there is no
+   clean capability-vocabulary mapping to extend onto for these five --
+   `default-kernel-caps` is `#{:log/write :clock/monotonic :random/bytes
+   :topic/publish :topic/subscribe :pci/config :dma/map :irq/subscribe
+   :mmio/map}` (no keypair/sign/http/log-read/llm counterpart at all).
+   aiueos DOES model `:network`/`:secrets` as EFFECT categories
+   (`aiueos.policy/default-forbid-effects`), but that's a coarser,
+   different mechanism: a per-trust-level DENY-if-forbidden check on a
+   manifest's declared `:aiueos/effects`, not a GRANT of a specific
+   capability -- \"network isn't forbidden for this trust level\" doesn't
+   mean \"http-post is granted\", and effects carry none of
+   `kototama.contract`'s own per-import RuntimeLimits semantics (e.g.
+   `:max-http-posts` metering). aiueos's `sign` (ADR-0003 manifest/
+   component-attestation signing) is also a different operation from
+   kototama's guest-controlled `:sign` (arbitrary-message signing with a
+   fresh keypair) -- not the same capability under a different name.
+   Forcing either of these onto the five non-translatable imports would be
+   a plausible-looking but semantically wrong mapping, so this widening
+   was NOT done; see `README.md`'s Contract Surface section for the same
+   conclusion stated as a permanent design note, not a TODO."
   #{:log-write :clock-monotonic :random-bytes})
 
 (defn resolve-grants
@@ -118,6 +148,12 @@
    If :use-aiueos? and imports intersect aiueos-translatable-imports,
    ask aiueos; on deny → empty grants for that subset (fail-closed).
    Explicit :grants always win when :use-aiueos? is false.
+
+   Non-translatable imports (`:gen-keypair`/`:sign`/`:http-post`/
+   `:log-read`/`:llm-infer`) always pass through as `rest-ids` regardless
+   of `:use-aiueos?` -- see `aiueos-translatable-imports`' docstring for
+   why this widening was investigated and NOT done (no clean aiueos
+   capability-vocabulary counterpart exists for them).
 
    :policy-overlay is forwarded to aiueos (e.g. {:aiueos/require-signed true}
    forces a real deny for unsigned components — same path as
