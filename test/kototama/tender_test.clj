@@ -231,6 +231,19 @@
     (is (true? (#'tender/blocked-http-post-destination? "http://169.254.1.1/")))
     (is (true? (#'tender/blocked-http-post-destination? "http://169.254.169.254/latest/meta-data/"))
         "explicit 169.254.169.254 check -- also already covered by isLinkLocalAddress"))
+  (testing "IPv6 unique-local (RFC4193, fc00::/7) -- the modern Docker/Kubernetes/
+            private-cloud addressing scheme, NOT covered by isSiteLocalAddress'
+            legacy fec0::/10-only check"
+    (is (true? (#'tender/blocked-http-post-destination? "http://[fc00::1]/")))
+    (is (true? (#'tender/blocked-http-post-destination? "http://[fd12:3456:789a:1::1]/"))))
+  (testing "IPv6 loopback/link-local/deprecated-site-local/multicast, and a real
+            public IPv6 address is NOT blocked"
+    (is (true? (#'tender/blocked-http-post-destination? "http://[::1]/")))
+    (is (true? (#'tender/blocked-http-post-destination? "http://[fe80::1]/")))
+    (is (true? (#'tender/blocked-http-post-destination? "http://[fec0::1]/")))
+    (is (true? (#'tender/blocked-http-post-destination? "http://[ff02::1]/")))
+    (is (false? (#'tender/blocked-http-post-destination? "http://[2606:4700:4700::1111]/"))
+        "a real public IPv6 address (Cloudflare DNS) is not over-broadly blocked"))
   (testing "multicast"
     (is (true? (#'tender/blocked-http-post-destination? "http://224.0.0.1/"))))
   (testing "unparseable / hostless URLs fail CLOSED, not open"
@@ -239,6 +252,18 @@
   (testing "legitimate public destinations are NOT blocked (IP literals -- no live DNS needed to classify)"
     (is (false? (#'tender/blocked-http-post-destination? "http://1.1.1.1/")))
     (is (false? (#'tender/blocked-http-post-destination? "http://8.8.8.8/")))))
+
+;; DNS-rebinding (resolves to a public address when checked, then to an internal
+;; one at actual connect time) is a KNOWN, DOCUMENTED gap in
+;; blocked-http-post-destination? -- see its docstring and the namespace-level
+;; comment above `http-connect-timeout` for why it isn't closed here (no
+;; supported per-request DNS-pinning hook in java.net.http.HttpClient's public
+;; API without risking a subtle TLS hostname-verification regression). Not
+;; tested here for the same reason the finding was reported rather than
+;; "fixed-and-verified": reproducing it faithfully requires installing a custom
+;; java.net.spi.InetAddressResolverProvider, which is real, heavy, JVM-global
+;; test machinery disproportionate to a mitigation this function was never
+;; supposed to fully provide.
 
 (deftest http-post-host-fn-refuses-a-loopback-destination-before-any-real-connection
   (let [hits (atom 0)

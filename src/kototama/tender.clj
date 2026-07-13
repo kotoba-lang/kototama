@@ -66,7 +66,7 @@
            (com.dylibso.chicory.wasm Parser)
            (com.dylibso.chicory.wasm.types FunctionType MemoryLimits ValType)
            (java.security MessageDigest SecureRandom)
-           (java.net InetAddress URI)
+           (java.net InetAddress Inet6Address URI)
            (java.net.http HttpClient HttpRequest HttpRequest$BodyPublishers HttpResponse$BodyHandlers)
            (java.time Duration)))
 
@@ -205,6 +205,34 @@
 ;; sharing it (a DoS, not just an SSRF concern). Both `http-post-host-fn`
 ;; and `anthropic-infer` below share the same connect/request timeouts so a
 ;; non-responding endpoint fails fast (in-band -1 / nil) instead of hanging.
+;; This part -- the DoS fix -- is complete and unconditional.
+;;
+;; `blocked-http-post-destination?` below is a SEPARATE, weaker mitigation:
+;; best-effort SSRF hardening against literal/naive targets (a guest that
+;; hardcodes "http://127.0.0.1/..." or "http://169.254.169.254/...", the
+;; overwhelmingly common real-world shape of this bug class), NOT a proof
+;; against a determined adversary who controls DNS for their own domain
+;; (DNS rebinding: resolve to a public IP when checked, then to
+;; 127.0.0.1/an internal address at the ACTUAL connection time a moment
+;; later, since `java.net.http.HttpClient` re-resolves the hostname
+;; independently and there is no supported per-request hook in its public
+;; API (`HttpClient.Builder`, JDK 24) to pin the connection to a
+;; specific, pre-validated `InetAddress` -- confirmed absent by inspecting
+;; the Builder's method set). A same-process fix exists in principle
+;; (rewrite the connection URI to the validated IP literal, preserve TLS
+;; SNI to the original host via `SSLParameters.setServerNames`) but was
+;; deliberately NOT implemented here: doing that correctly requires also
+;; controlling what hostname the JDK's TLS endpoint-identification
+;; algorithm validates the peer certificate against, which is
+;; implementation-detail-sensitive territory -- getting it subtly wrong
+;; would silently weaken certificate hostname verification for every
+;; legitimate HTTPS call this function makes, trading a narrower SSRF gap
+;; for a broader MITM one. That tradeoff was judged worse than shipping
+;; an honestly-scoped, narrower mitigation. Closing the DNS-rebind gap
+;; for real needs either an HTTP client with a pluggable resolver/
+;; connector (e.g. OkHttp's `Dns`/`EventListener`) or a vetted, tested
+;; SNI-preserving IP-pinning implementation as a dedicated follow-up --
+;; not a rushed addition here.
 
 (def ^:private http-connect-timeout
   "How long to wait for the TCP/TLS handshake before giving up."
@@ -225,16 +253,30 @@
       (.connectTimeout http-connect-timeout)
       .build))
 
+(defn- ipv6-unique-local?
+  "True when ADDR is an IPv6 Unique Local Address (RFC 4193, fc00::/7) --
+  the modern private-addressing scheme Docker/Kubernetes/most private
+  cloud networks actually assign today. `Inet6Address.isSiteLocalAddress`
+  only recognizes the legacy, deprecated fec0::/10 prefix, not fc00::/7,
+  so without this explicit check a real internal fc00::/fd00::-range
+  target would sail through unblocked."
+  [^InetAddress addr]
+  (and (instance? Inet6Address addr)
+       (let [b (.getAddress addr)]
+         (= 0xfc (bit-and (aget b 0) 0xfe)))))
+
 (defn- blocked-network-address?
   "True when ADDR (a resolved `java.net.InetAddress`) is loopback /
-  link-local / site-local (RFC1918) / multicast / any-local, or the
-  well-known cloud-metadata address 169.254.169.254 -- checked explicitly
-  as defense-in-depth even though `isLinkLocalAddress` already covers the
-  169.254.0.0/16 block that address lives in."
+  link-local / site-local (RFC1918) / IPv6 unique-local (RFC4193,
+  fc00::/7) / multicast / any-local, or the well-known cloud-metadata
+  address 169.254.169.254 -- checked explicitly as defense-in-depth even
+  though `isLinkLocalAddress` already covers the 169.254.0.0/16 block
+  that address lives in."
   [^InetAddress addr]
   (or (.isLoopbackAddress addr)
       (.isLinkLocalAddress addr)
       (.isSiteLocalAddress addr)
+      (ipv6-unique-local? addr)
       (.isMulticastAddress addr)
       (.isAnyLocalAddress addr)
       (= "169.254.169.254" (.getHostAddress addr))))
@@ -243,8 +285,12 @@
   "True when URL's host is missing/unparseable, or resolves to ANY address
   `blocked-network-address?` flags -- fail CLOSED (an unresolvable host, or
   any exception while resolving, is treated as blocked, never allowed
-  through). Defense-in-depth against SSRF: URL is entirely guest-supplied,
-  so this runs BEFORE any real connection is attempted, never after."
+  through). Best-effort hardening against LITERAL/naive SSRF targets (a
+  guest hardcoding a loopback/private/metadata address), run BEFORE any
+  real connection is attempted -- NOT a defense against DNS rebinding (a
+  host resolving to a public address here, then to an internal one at
+  actual connect time); see the namespace-level comment above for why
+  that gap is not closed in this function."
   [^String url]
   (try
     (let [host (.getHost (URI/create url))]
@@ -263,11 +309,14 @@
   `kototama.contract/default-runtime-limits`).
 
   A slow/non-responding destination fails fast (`http-connect-timeout`/
-  `http-request-timeout`) instead of hanging the host thread, and a
-  destination that resolves to a loopback/private/link-local/metadata
-  address is refused (-1, the same in-band fail-closed convention every
-  other quota/overflow case here uses -- never an exception) BEFORE any
-  connection is attempted, since URL is entirely guest-controlled."
+  `http-request-timeout`) instead of hanging the host thread -- this is a
+  complete, unconditional fix for the DoS this was built to close. A
+  destination that resolves to a LITERAL loopback/private/link-local/
+  metadata address is refused (-1, the same in-band fail-closed
+  convention every other quota/overflow case here uses -- never an
+  exception) BEFORE any connection is attempted; this is best-effort SSRF
+  hardening, not a DNS-rebinding-proof one (see
+  `blocked-http-post-destination?`'s docstring)."
   [caps limits-state]
   (host-fn "http_post" (mapv valtype [:i32 :i32 :i32 :i32 :i32 :i32]) ValType/I32
            (fn [instance args]
