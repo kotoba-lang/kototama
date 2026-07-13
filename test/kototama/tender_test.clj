@@ -8,7 +8,11 @@
             [clojure.java.io :as io]
             [clojure.java.shell :as shell]
             [kototama.tender :as tender]
-            [kototama.contract :as contract]))
+            [kototama.contract :as contract])
+  (:import (com.sun.net.httpserver HttpExchange HttpHandler HttpServer)
+           (java.net InetAddress InetSocketAddress ServerSocket URI)
+           (java.net.http HttpRequest HttpRequest$BodyPublishers
+                          HttpResponse$BodyHandlers)))
 
 (defn- wat->wasm
   "Shell out to `wasm-tools parse` to assemble WAT text into real Wasm
@@ -87,6 +91,23 @@
        (drop (call $log_write (i32.const 0) (i32.const 4)))
        (drop (call $log_write (i32.const 0) (i32.const 4)))
        (i64.extend_i32_s (call $log_write (i32.const 0) (i32.const 4)))))")
+
+(def http-post-wat
+  "Imports http_post, POSTs the 4-byte literal \"body\" (offset 50) to URL
+  (baked into a data segment at offset 0, URL's own byte length as url-len
+  -- URL must be pure ASCII and contain no `\"`/`\\`, true of every URL used
+  below), writes the response at offset 200 (256-byte capacity)."
+  (fn [url]
+    (str "(module
+            (import \"kotoba\" \"http_post\" (func $http_post (param i32 i32 i32 i32 i32 i32) (result i32)))
+            (memory (export \"memory\") 1)
+            (data (i32.const 0) \"" url "\")
+            (data (i32.const 50) \"body\")
+            (func (export \"main\") (result i64)
+              (i64.extend_i32_s
+                (call $http_post (i32.const 0) (i32.const " (count url) ")
+                                 (i32.const 50) (i32.const 4)
+                                 (i32.const 200) (i32.const 256)))))")))
 
 (def llm-infer-wat
   "Imports llm_infer, sends the 5-byte literal \"hello\" as the prompt,
@@ -180,6 +201,115 @@
           caps (contract/host-caps {:grants [:clock-monotonic]})]
       (is (thrown-with-msg? clojure.lang.ExceptionInfo #"rejected by contract"
                             (tender/instantiate wasm [:sha256-hex] caps))))))
+
+;; ── http-post: connect/request timeouts + SSRF-adjacent destination
+;; filtering (security fix, ADR audit finding #1). The destination check
+;; means a real end-to-end round-trip through the guest/Chicory path can
+;; only ever hit a PUBLIC address -- any local `HttpServer`/`ServerSocket`
+;; this test process can stand up and reach from itself is necessarily
+;; loopback or a private address, which the filter now correctly refuses.
+;; So: the classification logic and the "refused before any connection"
+;; property are tested end-to-end via the real guest/Chicory path (a local
+;; spy server proves it's never even contacted); the timeout WIRING itself
+;; (both the "doesn't break a normal fast response" and the "fails fast
+;; instead of hanging on a slow peer" properties) is tested directly
+;; against `tender`'s own private `timed-http-client`/`http-request-timeout`
+;; -- the exact objects `http-post-host-fn` builds requests with -- since
+;; that part of the fix is destination-agnostic and loopback is a
+;; perfectly valid target for testing it in isolation. ─────────────────────
+
+(deftest blocked-http-post-destination?-classifies-ssrf-shaped-targets
+  (testing "loopback"
+    (is (true? (#'tender/blocked-http-post-destination? "http://127.0.0.1/x")))
+    (is (true? (#'tender/blocked-http-post-destination? "http://localhost/x")))
+    (is (true? (#'tender/blocked-http-post-destination? "http://[::1]/x"))))
+  (testing "RFC1918 private ranges"
+    (is (true? (#'tender/blocked-http-post-destination? "http://10.1.2.3/")))
+    (is (true? (#'tender/blocked-http-post-destination? "http://172.16.0.1/")))
+    (is (true? (#'tender/blocked-http-post-destination? "http://192.168.1.1/"))))
+  (testing "link-local, including the cloud-metadata address"
+    (is (true? (#'tender/blocked-http-post-destination? "http://169.254.1.1/")))
+    (is (true? (#'tender/blocked-http-post-destination? "http://169.254.169.254/latest/meta-data/"))
+        "explicit 169.254.169.254 check -- also already covered by isLinkLocalAddress"))
+  (testing "multicast"
+    (is (true? (#'tender/blocked-http-post-destination? "http://224.0.0.1/"))))
+  (testing "unparseable / hostless URLs fail CLOSED, not open"
+    (is (true? (#'tender/blocked-http-post-destination? "not-a-url")))
+    (is (true? (#'tender/blocked-http-post-destination? ""))))
+  (testing "legitimate public destinations are NOT blocked (IP literals -- no live DNS needed to classify)"
+    (is (false? (#'tender/blocked-http-post-destination? "http://1.1.1.1/")))
+    (is (false? (#'tender/blocked-http-post-destination? "http://8.8.8.8/")))))
+
+(deftest http-post-host-fn-refuses-a-loopback-destination-before-any-real-connection
+  (let [hits (atom 0)
+        server (doto (HttpServer/create (InetSocketAddress. "127.0.0.1" 0) 0)
+                 (.createContext "/" (reify HttpHandler
+                                       (handle [_ exchange]
+                                         (swap! hits inc)
+                                         (.sendResponseHeaders ^HttpExchange exchange 200 -1))))
+                 (.start))]
+    (try
+      (let [port (.getPort (.getAddress server))
+            url (str "http://127.0.0.1:" port "/")
+            wasm (wat->wasm (http-post-wat url))
+            caps (contract/host-caps {:grants [:http-post] :limits {:max-http-posts 1}})
+            started (System/currentTimeMillis)
+            n (tender/run-main wasm [:http-post] caps)
+            elapsed (- (System/currentTimeMillis) started)]
+        (is (= -1 n) "loopback destination refused, the standard fail-closed -1 convention")
+        (is (zero? @hits) "the local server never received a request -- rejected BEFORE any real HTTP call was attempted")
+        (is (< elapsed 2000) "rejection is immediate (pure classification), not gated behind a connect/request timeout"))
+      (finally (.stop server 0)))))
+
+(deftest http-request-timeout-fires-instead-of-hanging-on-a-slow-loris-peer
+  (let [accepted (atom nil)
+        server (ServerSocket. 0 1 (InetAddress/getByName "127.0.0.1"))
+        server-thread (Thread. ^Runnable (fn []
+                                           (try (reset! accepted (.accept server))
+                                                (catch Exception _ nil))))]
+    (.start server-thread)
+    (try
+      (let [port (.getLocalPort server)
+            client (#'tender/timed-http-client)
+            req (-> (HttpRequest/newBuilder (URI/create (str "http://127.0.0.1:" port "/")))
+                   (.timeout @#'tender/http-request-timeout)
+                   (.POST (HttpRequest$BodyPublishers/ofByteArray (byte-array 0)))
+                   .build)
+            started (System/currentTimeMillis)
+            outcome (try
+                      (.send client req (HttpResponse$BodyHandlers/ofByteArray))
+                      :unexpectedly-succeeded
+                      (catch Exception _ :failed-as-expected))
+            elapsed (- (System/currentTimeMillis) started)]
+        (is (= :failed-as-expected outcome)
+            "a peer that accepts the connection but never responds must not let the call succeed")
+        (is (< elapsed 8000)
+            "fails within the configured connect/request timeout instead of hanging indefinitely (no timeout was previously set at all)"))
+      (finally
+        (.close server)
+        (when-let [s @accepted] (.close ^java.net.Socket s))))))
+
+(deftest http-request-timeout-does-not-break-a-normal-fast-round-trip
+  (let [server (doto (HttpServer/create (InetSocketAddress. "127.0.0.1" 0) 0)
+                 (.createContext "/" (reify HttpHandler
+                                       (handle [_ exchange]
+                                         (let [resp (.getBytes "pong" "UTF-8")]
+                                           (.sendResponseHeaders ^HttpExchange exchange 200 (count resp))
+                                           (with-open [os (.getResponseBody ^HttpExchange exchange)]
+                                             (.write os resp))))))
+                 (.start))]
+    (try
+      (let [port (.getPort (.getAddress server))
+            client (#'tender/timed-http-client)
+            req (-> (HttpRequest/newBuilder (URI/create (str "http://127.0.0.1:" port "/")))
+                   (.timeout @#'tender/http-request-timeout)
+                   (.POST (HttpRequest$BodyPublishers/ofByteArray (byte-array 0)))
+                   .build)
+            resp (.send client req (HttpResponse$BodyHandlers/ofString))]
+        (is (= 200 (.statusCode resp)))
+        (is (= "pong" (.body resp))
+            "adding connect/request timeouts doesn't interfere with a normal fast response"))
+      (finally (.stop server 0)))))
 
 ;; ── llm-infer: DI'd via :llm-client (`{:infer-fn}`), same shape :store
 ;; already uses for log-read/log-write -- these tests inject a fake
