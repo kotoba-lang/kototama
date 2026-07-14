@@ -3,8 +3,14 @@
 `prior_shortcut.kotoba` is a narrow-slice port of
 `kototama.unspsc.life/prior-shortcut?` (`../src/kototama/unspsc/life.cljc`)
 into the minimal `.kotoba` language subset, compiled to a real WASM module
-via `kotoba wasm emit`, and hosted directly via Chicory
-(`test/wasm/prior_shortcut_test.clj`).
+via `kotoba wasm emit`, and wired up as
+`kototama.unspsc.prior-shortcut-kotoba/prior-shortcut?`
+(`../src/kototama/unspsc/prior_shortcut_kotoba.clj`) — a genuine,
+tested drop-in replacement for the original function, hosted via a real
+Chicory `Instance`. The compiled `.wasm` itself lives at
+`../resources/prior_shortcut.wasm` (loaded via `io/resource`, classpath-
+based, so it resolves regardless of the caller's working directory) —
+`.kotoba`, being source, stays here in `wasm/` alongside this README.
 
 This is ADR-2607151500's kotoba-lang-org-internal narrow-slice port
 candidate, realized. The first candidate considered
@@ -54,24 +60,36 @@ evaluation).
 cd ../../kotoba              # sibling checkout, west-managed (orgs/kotoba-lang/kotoba)
 bin/kotoba-clj wasm emit ../kototama/clj/wasm/prior_shortcut.kotoba \
   --package-lock kotoba.lock.edn \
-  --output ../kototama/clj/wasm/prior_shortcut.wasm --json
+  --output ../kototama/clj/resources/prior_shortcut.wasm --json
 ```
 
 ## Verification
 
-Every oracle case in `test/wasm/prior_shortcut_test.clj` is copied directly
+Every oracle case in
+`test/kototama/unspsc/prior_shortcut_kotoba_test.clj` is copied directly
 from `kototama.unspsc.life-test`'s own `prior-consensus-parity` test
-(`test/kototama/unspsc/life_test.clj`), translated to the flattened-scalar
-ABI above — so this test doubles as a cross-check that the `.kotoba` port
-and the in-process reference function never disagree. Hosted directly via
-a real Chicory `Instance` (no host imports needed — this module calls no
+(`test/kototama/unspsc/life_test.clj`), calling
+`kototama.unspsc.prior-shortcut-kotoba/prior-shortcut?` with the SAME
+map-shaped `consensus` argument the original function takes — so this
+test exercises the full translation (map -> flattened scalars -> WASM
+call -> boolean) end to end, not just the compiled module's own ABI in
+isolation, and doubles as a cross-check that the `.kotoba` port and the
+in-process reference function never disagree. Hosted directly via a real
+Chicory `Instance` (no host imports needed — this module calls no
 capability/heap ops, only `mem-i32-at`/arithmetic/comparison), not a
-separate interpreter.
+separate interpreter. Chicory is kept out of `clj/deps.edn`'s main
+`:deps` (test-only for now) — same isolation pattern `langchain.jvm`/
+`langchain.kotobase-persist` use for optional backends, so requiring
+`kototama.unspsc.life`/`.organism` never forces it on a consumer who
+doesn't want the WASM-backed variant. A consumer who DOES want
+`prior-shortcut-kotoba` adds Chicory to their own project.
 
 ## Follow-ups
 
-- Not wired into `kototama.unspsc.organism`'s actual call site — this pass
-  only proves the decision compiles and runs correctly as `.kotoba`/WASM,
-  mirroring how the cloud-itonami governor port kept "compile + verify"
-  and "wire the facade to call it" as separate steps.
+- **Not wired into `kototama.unspsc.organism`'s actual `validate-node`
+  call site.** `prior-shortcut-kotoba/prior-shortcut?` is available and
+  verified as a genuine drop-in replacement, but flipping
+  `organism.cljc`'s live decision gate (18,342 actors) to actually call it
+  is a real production-behavior change to a shared fleet, left for an
+  explicit owner decision rather than an autonomous substitution.
 - No fleet/production deployment — out of scope here.
