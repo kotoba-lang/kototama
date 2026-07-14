@@ -18,7 +18,7 @@
   (path A) or the etzhayyim PDS under a CACAO leash (path B)."
   {:app-aozora   {:pds "https://bsky.social"        :collection "app.bsky.feed.post"
                   :note "yoro feed (app-aozora) via member PDS"}
-   :com-etzhayyim {:pds "https://pds.etzhayyim.com" :collection "app.bsky.feed.post"
+   :com-etzhayyim {:pds "https://pds.aozora.app" :collection "app.bsky.feed.post"
                   :note "etzhayyim PDS; actor self-did:key present-only + member leash"}})
 
 (defn post-record

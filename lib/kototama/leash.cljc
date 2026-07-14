@@ -21,7 +21,48 @@
 (defn valid?
   "A leash is valid iff present, not expired (exp > now), and scoped to the
   intended capability + graph. `now` is a caller-supplied unix-seconds int
-  (no wall-clock in the lib → replay-safe)."
+  (no wall-clock in the lib → replay-safe).
+
+  SECURITY NOTE (2026-07-13 audit finding, reviewed and intentionally left
+  as-is -- see reasoning below): this is a STRUCTURAL/TEMPORAL pre-filter
+  only. It never decodes `cacao-b64` or checks any embedded signature, and
+  `exp`/`member-did` are trusted as caller-supplied plain fields rather
+  than derived from a verified CACAO payload -- so, taken in isolation, a
+  caller could pass any `member-did`/`exp` alongside an unrelated/garbage
+  `cacao-b64` placeholder and this would return true.
+
+  This is deliberately NOT the real cryptographic gate, by design, not by
+  omission:
+
+  1. Nothing reachable from this repo ever performs the actual
+     state-changing write this leash would authorize. `kototama.emit/
+     envelope` (the only downstream consumer that treats `valid?` as a
+     go/no-go gate) hard-codes `:status :dry-run` unconditionally and
+     never asserts `:published`; there is no XRPC/HTTP call anywhere in
+     this codebase that submits the resulting envelope to a PDS. The
+     namespace docstring above (\"the kotoba node verifies the member
+     signature\") and ADR-0002 (\"outward broadcast … is a governance
+     gate … layered ON TOP of this ABI — it is not a host function\") both
+     say the real signature check and the real publish action live in a
+     SEPARATE downstream system this repo does not contain.
+  2. This machinery (`lib/kototama/*.cljc`, the atproto actor/organism
+     layer distilled from the etzhayyim `ibuki` lineage) is architecturally
+     independent from `src/kototama/*` (the Chicory WASM tender that is
+     this repo's actual untrusted-guest execution boundary) -- `src/`
+     never references `leash`/`cacao` at all, so a forged leash here
+     cannot escalate into a WASM host-import grant.
+  3. `lib/*.cljc` is deliberately dependency-free/portable (bb/JVM/cljs,
+     per ADR-0002's \"License: MIT — the lib is dependency-free and
+     portable\"); `deps.edn` has no CACAO-verification dependency today.
+     Adding one here to verify a token this repo never actually acts on
+     would be dead weight, not a real fix.
+
+  If `lib/kototama/*` ever grows real publish machinery, or any consumer
+  starts treating THIS function's answer as sufficient authorization for
+  an actual state-changing write, this must be revisited (decode
+  `cacao-b64`, verify its signature, and derive `exp`/`member-did` from
+  the verified payload instead of trusting the caller-supplied plain
+  fields — the actual forgery vector today)."
   [{:keys [member-did capability graph exp cacao-b64]} now
    & [{:keys [need-capability need-graph]}]]
   (boolean (and member-did cacao-b64 (number? exp) (> exp now)

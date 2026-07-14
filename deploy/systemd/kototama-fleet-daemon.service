@@ -1,0 +1,35 @@
+[Unit]
+Description=kototama fleet recovery daemon (bounded passes per invocation)
+Documentation=https://github.com/kotoba-lang/kototama/blob/main/docs/maturity.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Install the repo and set these Environment= lines (or EnvironmentFile=).
+Environment=KOTOTAMA_HOME=/opt/kototama
+Environment=KOTOTAMA_WASM=%h/fixtures/kotoba-compiled-fact.wasm
+Environment=KOTOTAMA_FLEET_ROOT=/var/lib/kototama/fleet
+Environment=KOTOTAMA_NODE_ID=%H
+# Optional B2:
+# Environment=B2_KEY_ID=
+# Environment=B2_APP_KEY=
+# Environment=B2_BUCKET=
+
+WorkingDirectory=${KOTOTAMA_HOME}
+ExecStart=/usr/local/bin/kototama-fleet-daemon \
+  --wasm ${KOTOTAMA_WASM} \
+  --root ${KOTOTAMA_FLEET_ROOT} \
+  --interval-ms 1000 \
+  --max-passes 3 \
+  --max-ticks 2
+
+# oneshot + timer: each tick is a bounded recovery loop (never infinite).
+Nice=10
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/var/lib/kototama
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

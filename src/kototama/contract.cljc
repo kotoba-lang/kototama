@@ -36,14 +36,18 @@
      :import/name "log-read"
      :import/category :storage
      :import/effects #{:storage}}
-    {:import/id :log-append!
-     :import/name "log-append!"
+    {:import/id :log-write
+     :import/name "log-write"
      :import/category :storage
      :import/effects #{:storage :write}}
-    {:import/id :now
-     :import/name "now"
+    {:import/id :clock-monotonic
+     :import/name "clock-monotonic"
      :import/category :clock
-     :import/effects #{:clock}}]})
+     :import/effects #{:clock}}
+    {:import/id :llm-infer
+     :import/name "llm-infer"
+     :import/category :llm
+     :import/effects #{:network}}]})
 
 (def import-by-id
   (into {} (map (juxt :import/id identity) (:abi/imports import-surface))))
@@ -55,16 +59,31 @@
   {:model/name :kototama.contract/RuntimeLimits
    :model/keys {:max-imports :non-negative-int
                 :max-http-posts :non-negative-int
+                :max-llm-infers :non-negative-int
                 :max-log-read-bytes :non-negative-int
-                :max-log-append-bytes :non-negative-int
+                :max-log-write-bytes :non-negative-int
+                :max-memory-pages :non-negative-int
                 :allow-secret-imports? :boolean
                 :allow-write-imports? :boolean}})
 
 (def default-runtime-limits
   {:max-imports (count (:abi/imports import-surface))
    :max-http-posts 0
+   ;; Same "fully denied unless a caller's HostCaps explicitly raises the
+   ;; limit AND grants the import" default as :max-http-posts -- an LLM
+   ;; call is metered network egress + real API spend, not a free action.
+   :max-llm-infers 0
    :max-log-read-bytes 1048576
-   :max-log-append-bytes 65536
+   :max-log-write-bytes 65536
+   ;; 16 Wasm pages (64 KiB/page) = 1 MiB -- a guest that legitimately
+   ;; needs more grows this explicitly via HostCaps, same as every other
+   ;; limit here; this is NOT an :abi/imports-gated effect (a guest's
+   ;; linear memory ceiling applies regardless of which host imports it's
+   ;; granted), so it is deliberately NOT checked by
+   ;; validate-import-surface below -- a host adapter (kototama.tender,
+   ;; the browser actor-host.js) reads it directly off HostCaps' :limits
+   ;; when it instantiates.
+   :max-memory-pages 16
    :allow-secret-imports? false
    :allow-write-imports? false})
 
@@ -123,6 +142,7 @@
 (defn- limit-errors [limits requested ids]
   (let [requested-count (count requested)
         http-posts (count (filter #{:http-post} ids))
+        llm-infers (count (filter #{:llm-infer} ids))
         secret-imports (filterv #(some (:import/effects (import-by-id %)) [:secret]) ids)
         write-imports (filterv #(some (:import/effects (import-by-id %)) [:write]) ids)]
     (cond-> []
@@ -135,6 +155,11 @@
       (conj {:error :limit/max-http-posts
              :limit (:max-http-posts limits)
              :actual http-posts})
+
+      (> llm-infers (:max-llm-infers limits))
+      (conj {:error :limit/max-llm-infers
+             :limit (:max-llm-infers limits)
+             :actual llm-infers})
 
       (and (false? (:allow-secret-imports? limits))
            (seq secret-imports))

@@ -19,5 +19,49 @@ jobs:
       - uses: DeLaGuardo/setup-clojure@13.0
         with:
           cli: latest
+      - name: Install wasm-tools
+        # kototama.tender-test shells out to `wasm-tools parse` to assemble
+        # its WAT fixtures into real Wasm bytes (Chicory Parser/Instance
+        # linkage, not mocked) -- pinned version, prebuilt binary release,
+        # not `cargo install` (would need the whole Rust toolchain just for
+        # one static binary).
+        run: |
+          curl -sSL -o wasm-tools.tar.gz \
+            https://github.com/bytecodealliance/wasm-tools/releases/download/v1.252.0/wasm-tools-1.252.0-x86_64-linux.tar.gz
+          tar xzf wasm-tools.tar.gz
+          sudo mv wasm-tools-1.252.0-x86_64-linux/wasm-tools /usr/local/bin/wasm-tools
+          wasm-tools --version
       - name: Test CLJC contract
         run: clojure -M:test
+      - name: Lint CLJC contract
+        run: clojure -M:lint
+      - name: R3 fleet-gate (acceptance harness)
+        run: clojure -M:cli fleet-gate
+      - name: R3 fleet daemon dry-run (systemd wrapper path)
+        run: |
+          chmod +x deploy/bin/kototama-fleet-daemon
+          deploy/bin/kototama-fleet-daemon \
+            --wasm test/kototama/fixtures/kotoba-compiled-fact.wasm \
+            --root /tmp/kototama-fleet-ci \
+            --interval-ms 0 \
+            --max-passes 1 \
+            --max-ticks 1
+      - name: R3 packaging static check
+        run: bash deploy/validate-packaging.sh
+      - name: R3 staging-smoke (non-root)
+        run: |
+          chmod +x deploy/staging-smoke.sh
+          bash deploy/staging-smoke.sh
+
+  web:
+    name: browser WASM AOT demo gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: node web/verify.mjs
+      - run: node web/verify-kgraph.mjs
+      - run: node web/verify-actor-host.mjs
+      - run: node web/verify-host-free.mjs

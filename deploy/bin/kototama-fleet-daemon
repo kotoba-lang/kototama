@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# Thin wrapper around `clojure -M:cli fleet-daemon` for systemd/cron.
+set -euo pipefail
+
+WASM=""
+ROOT="${KOTOTAMA_FLEET_ROOT:-tmp/kototama-fleet}"
+INTERVAL_MS=1000
+MAX_PASSES=3
+MAX_TICKS=2
+HOME_DIR="${KOTOTAMA_HOME:-.}"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --wasm) WASM="$2"; shift 2 ;;
+    --root) ROOT="$2"; shift 2 ;;
+    --interval-ms) INTERVAL_MS="$2"; shift 2 ;;
+    --max-passes) MAX_PASSES="$2"; shift 2 ;;
+    --max-ticks) MAX_TICKS="$2"; shift 2 ;;
+    -h|--help)
+      echo "usage: kototama-fleet-daemon --wasm FILE [--root DIR] [--interval-ms N] [--max-passes N]"
+      exit 0
+      ;;
+    *) echo "unknown arg: $1" >&2; exit 2 ;;
+  esac
+done
+
+if [[ -z "$WASM" ]]; then
+  echo "kototama-fleet-daemon: --wasm is required" >&2
+  exit 2
+fi
+
+if ! command -v clojure >/dev/null 2>&1; then
+  echo "kototama-fleet-daemon: clojure not on PATH" >&2
+  exit 127
+fi
+
+export KOTOTAMA_FLEET_ROOT="$ROOT"
+cd "$HOME_DIR"
+
+# fleet-daemon writes under tmp/kototama-fleet by default; symlink or pass root
+# via env consumed in future — for now ensure cwd has write access.
+mkdir -p "$ROOT"
+if [[ "$ROOT" != "tmp/kototama-fleet" ]]; then
+  mkdir -p tmp
+  ln -sfn "$ROOT" tmp/kototama-fleet 2>/dev/null || true
+fi
+
+exec clojure -M:cli fleet-daemon "$WASM" \
+  --interval-ms "$INTERVAL_MS" \
+  --max-passes "$MAX_PASSES" \
+  --max-ticks "$MAX_TICKS"
