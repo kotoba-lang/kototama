@@ -9,8 +9,8 @@
  ;; under orgs/com-junkawasaki/ (../../<lib>). The langchain-clj :local/root
  ;; overrides langgraph-clj's transitive git dep so the whole stack resolves
  ;; offline against the local checkouts.
- :deps {io.github.com-junkawasaki/langgraph-clj {:local/root "../../langgraph-clj"}
-        io.github.com-junkawasaki/langchain-clj {:local/root "../../langchain-clj"}}
+ :deps {io.github.com-junkawasaki/langgraph-clj {:local/root "../../../kotoba-lang/langgraph"}
+        io.github.com-junkawasaki/langchain-clj {:local/root "../../../kotoba-lang/langchain"}}
  :aliases
  {:test {:extra-paths ["test"]
          :extra-deps {io.github.cognitect-labs/test-runner
