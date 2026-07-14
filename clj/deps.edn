@@ -13,7 +13,13 @@
  :aliases
  {:test {:extra-paths ["test"]
          :extra-deps {io.github.cognitect-labs/test-runner
-                      {:git/tag "v0.5.1" :git/sha "dfb30dd"}}
+                      {:git/tag "v0.5.1" :git/sha "dfb30dd"}
+                      ;; wasm/prior_shortcut_test.clj hosts wasm/prior_shortcut.wasm
+                      ;; (compiled from wasm/prior_shortcut.kotoba, see wasm/README.md)
+                      ;; directly via Chicory -- test-only, the .cljc actor code
+                      ;; itself has no wasm/host dependency.
+                      com.dylibso.chicory/wasm {:mvn/version "1.4.0"}
+                      com.dylibso.chicory/runtime {:mvn/version "1.4.0"}}
          :main-opts ["-m" "cognitect.test-runner"]
          :exec-fn cognitect.test-runner.api/test}
   ;; taxonomy EDN builder (bb or clojure): joins the UNSPSC registry + enrichment
