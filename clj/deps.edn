@@ -14,10 +14,14 @@
  {:test {:extra-paths ["test"]
          :extra-deps {io.github.cognitect-labs/test-runner
                       {:git/tag "v0.5.1" :git/sha "dfb30dd"}
-                      ;; wasm/prior_shortcut_test.clj hosts wasm/prior_shortcut.wasm
-                      ;; (compiled from wasm/prior_shortcut.kotoba, see wasm/README.md)
-                      ;; directly via Chicory -- test-only, the .cljc actor code
-                      ;; itself has no wasm/host dependency.
+                      ;; kototama.unspsc.prior-shortcut-kotoba (+ its test)
+                      ;; hosts resources/prior_shortcut.wasm via a real
+                      ;; Chicory Instance -- kept out of the main :deps
+                      ;; (same isolation pattern langchain.jvm/
+                      ;; langchain.kotobase-persist use for optional
+                      ;; backends) so requiring kototama.unspsc.life or
+                      ;; .organism never forces Chicory on a consumer that
+                      ;; doesn't want the WASM-backed variant.
                       com.dylibso.chicory/wasm {:mvn/version "1.4.0"}
                       com.dylibso.chicory/runtime {:mvn/version "1.4.0"}}
          :main-opts ["-m" "cognitect.test-runner"]
