@@ -8,25 +8,26 @@
         mids (set (map :import (browser/parity-matrix)))]
     (is (= ids mids))))
 
-(deftest browser-yes-includes-crypto-and-log-not-http-post
+(deftest browser-yes-includes-crypto-log-and-http-post
   (let [yes (set (browser/browser-available-ids))]
     (is (contains? yes :sha256-hex))
     (is (contains? yes :gen-keypair))
     (is (contains? yes :sign))
     (is (contains? yes :clock-monotonic))
-    ;; NOT linkable: no SAB+COOP bridge or JSPI wiring exists anywhere in
-    ;; wasm-webcomponent (confirmed by direct search, not just a stale
-    ;; assumption -- see ADR-0007's 2026-07-16 addendum). Counting this as
-    ;; a "yes" previously inflated parity-score to a false 8/9.
-    (is (not (contains? yes :http-post)) "http-post has no real browser path yet")
+    ;; Linkable as of wasm-webcomponent PR #8 (2026-07-16): a real
+    ;; SharedArrayBuffer+Atomics.wait bridge, verified end-to-end in real
+    ;; headless Chromium (test/browser/verify_http_post_browser.cljs
+    ;; there), inside a cross-origin-isolated page with the guest
+    ;; instantiated in a dedicated Worker.
+    (is (contains? yes :http-post) "http-post is real via the Worker-hosted SAB+Atomics bridge")
     (is (not (contains? yes :llm-infer)))))
 
 (deftest parity-score-ratio
   (let [s (browser/parity-score)]
     (is (= 9 (:total s)))
-    (is (= 7 (:browser-yes s)))
-    (is (= 2 (:browser-no s)))
-    (is (< 0.7 (:ratio s) 0.85))))
+    (is (= 8 (:browser-yes s)))
+    (is (= 1 (:browser-no s)))
+    (is (< 0.85 (:ratio s) 0.95))))
 
 (deftest r2-report-shape
   (let [r (browser/r2-report)]

@@ -69,13 +69,15 @@ Parity matrix: `kototama.browser` / `clojure -M:cli parity`.
 | sha256-hex / clock-monotonic | **yes** | |
 | log-read / log-write | **yes** | injectable store |
 | llm-infer | **no** in tab | Node can inject `opts.llmInfer` |
-| http-post | **no** in tab | `opts.httpPost` (Node only); a SAB+COOP bridge or JSPI could add a real browser path but neither is built yet |
+| http-post | **yes** in tab | Worker-hosted guest + `createSabHttpPostBridge` (SharedArrayBuffer+Atomics.wait); needs COOP/COEP; `opts.httpPost` inject also available on Node |
 
-**7/9** imports are browser-linkable (`llm-infer`/`http-post` remain Node-inject
-only — a 2026-07-16 audit found no SAB+COOP bridge or JSPI wiring anywhere in
-this repo; see `90-docs/adr/0007-http-post-paths-and-fleet-persist-execute.md`'s
-addendum). Without an inject backend, `http_post` is **absent** from the import
-object (clear link error — not a silent fake success).
+**8/9** imports are browser-linkable (`llm-infer` remains Node-inject only).
+`http-post` became real in a browser tab via `wasm-webcomponent` PR #8
+(2026-07-16) — see `90-docs/adr/0007-http-post-paths-and-fleet-persist-execute.md`'s
+second addendum for the two real bugs that had to be fixed to get there.
+Without a cross-origin-isolated page or an inject backend, `http_post` is
+**absent** from the import object (clear link error — not a silent fake
+success).
 
 ### Host-free guests (R2)
 
