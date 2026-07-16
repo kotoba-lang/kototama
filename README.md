@@ -115,7 +115,7 @@ Ladder and gates: [`docs/maturity.md`](docs/maturity.md).
 |---|---|
 | R0 contract / dry-run | stable |
 | R1 tender (compat: JVM/Chicory) | stable as **compat suite** — session report, host-free guests, emit lint, CLI (not the first path) |
-| **R2 browser / native WASM host** | **first product path** (advanced-partial) — AOT `.wasm` via wasm-webcomponent; 8/9 linkable; host-free web fixtures |
+| **R2 browser / native WASM host** | **first product path** (advanced-partial) — AOT `.wasm` via wasm-webcomponent; 7/9 linkable (`llm-infer` Node-only, `http-post` not yet implemented); host-free web fixtures |
 | **R3 fleet multi-tenant** | **stable** — ops-ready local/shared-store fleet (fence+daemon+CI+staging-smoke; **not Raft**) |
 
 ```bash

@@ -9,7 +9,7 @@ guest = Wasm component). Not a marketing scorecard.
 |---|---|---|---|
 | **R0** | Contract / dry-run | **stable** | `kototama.contract` HostCaps + import surface; organism membrane refuses live publish |
 | **R1** | Tender execution (JVM/Chicory) | **stable** | `kototama.tender` runs real `.wasm`; fuel + memory limits; aiueos adapter; session report; source lint; host-free + host-import fixtures from `kotoba wasm emit` |
-| **R2** | Browser-native host parity | **advanced-partial** | parity matrix; 8/9 browser-linkable; http-post via inject / SAB+COOP bridge (`http-post-bridge.js`); host-free web fixtures |
+| **R2** | Browser-native host parity | **advanced-partial** | parity matrix; 7/9 browser-linkable (`llm-infer` Node-inject only, `http-post` not yet implemented); host-free web fixtures |
 | **R3** | Fleet multi-tenant tender | **stable** | ops-ready local/shared-store fleet: fence+daemon+CI+staging-smoke (**not Raft**) |
 
 **Current declared level: R3 stable** (R1 stable; R2 advanced-partial underneath).
@@ -49,24 +49,28 @@ clojure -M:cli parity           # JVM vs browser import matrix
 | gen-keypair / sign / verify | yes | yes (noble sync) | yes |
 | sha256-hex / clock / log-* | yes | yes | yes |
 | llm-infer | yes | **no** | inject |
-| http-post | yes | inject / SAB+COOP | inject |
+| http-post | yes | **no** | inject |
 
-Score today: **8/9** browser-linkable (`llm-infer` still Node-inject only).
+Score today: **7/9** browser-linkable. `llm-infer` is wired only when a Node
+caller injects a synchronous backend (not a real browser tab). `http-post`
+is not wired at all in the browser host — `actor-host.js`'s own comment
+documents why (`fetch` is real async I/O, and a WASM host-import must
+return synchronously; the only ways around that are JSPI, not yet broadly
+shipped, or a SharedArrayBuffer+`Atomics.wait` blocking bridge, which needs
+COOP/COEP response headers this library's zero-build-step static-file
+deployment model doesn't assume). See "What we deliberately do not claim"
+below.
 
-### http-post paths (R2)
+### http-post / llm-infer in a real browser tab: not yet built
 
-| Path | Env | How |
-|---|---|---|
-| inject | Node / tests | `opts.httpPost(url, body) => Uint8Array` |
-| SAB + COOP | Browser `crossOriginIsolated` | `createSabHttpPostBridge()` + COOP/COEP headers |
-| JSPI | Chrome experimental | not default; detect via `httpPostCapabilities().jspi` |
+An earlier version of this doc claimed an `http-post-bridge.js` (SAB+COOP
+bridge) and a `test/verify-http-post.mjs` gate existed — **neither does**;
+confirmed absent from `wasm-webcomponent`'s working tree and history. No
+such bridge, and no real-browser `llm-infer` path, exists today for either
+import. Building one (get to true 9/9) is tracked as separate follow-up
+work, not claimed here.
 
-```bash
-# in wasm-webcomponent
-node test/verify-http-post.mjs
-```
-
-Host library: `actor-host.js`, `http-post-bridge.js`, `kgraph.js`.
+Host library today: `actor-host.js`, `kgraph.js`.
 
 ## R3 stable gates (shared-store fleet ops — not Raft)
 

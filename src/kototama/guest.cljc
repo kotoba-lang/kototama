@@ -92,7 +92,8 @@
    :r1  tender runs real .wasm (host-free + actor:host imports), fuel + memory
         limits, session report, source lint, checked-in emit fixtures
    :r2  browser-native host parity matrix + host-free web fixtures
-        (8/9 linkable; http-post inject|SAB-COOP; llm-infer Node-inject only)
+        (7/9 linkable; http-post has no real browser path yet (Node-inject
+        only, no SAB+COOP bridge built); llm-infer Node-inject only)
    :r3  fleet lease/budget/tick/governor/checkpoint + disk/B2 + fence-gated
         tender + daemon + systemd + CI gates (not Raft consensus)"
   {:r0 {:id :r0
@@ -106,7 +107,7 @@
    :r2 {:id :r2
         :title "Browser-native host parity"
         :status :advanced-partial
-        :note "8/9 linkable; http-post inject|SAB-COOP; see kototama.browser."}
+        :note "7/9 linkable; http-post Node-inject only (no browser bridge built); see kototama.browser."}
    :r3 {:id :r3
         :title "Fleet multi-tenant tender"
         :status :stable
