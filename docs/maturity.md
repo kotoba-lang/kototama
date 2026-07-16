@@ -9,7 +9,7 @@ guest = Wasm component). Not a marketing scorecard.
 |---|---|---|---|
 | **R0** | Contract / dry-run | **stable** | `kototama.contract` HostCaps + import surface; organism membrane refuses live publish |
 | **R1** | Tender execution (JVM/Chicory) | **stable** | `kototama.tender` runs real `.wasm`; fuel + memory limits; aiueos adapter; session report; source lint; host-free + host-import fixtures from `kotoba wasm emit` |
-| **R2** | Browser-native host parity | **advanced-partial** | parity matrix; 8/9 browser-linkable (`llm-infer` Node-inject only; `http-post` now real in a cross-origin-isolated tab via a Worker-hosted guest + SAB+Atomics bridge, `wasm-webcomponent` PR #8); host-free web fixtures |
+| **R2** | Browser-native host parity | **advanced-partial** | parity matrix; 9/9 browser-linkable (`http-post` and `llm-infer` both real in a cross-origin-isolated tab via a Worker-hosted guest + SAB+Atomics bridge, `wasm-webcomponent` PR #8 / #11); host-free web fixtures |
 | **R3** | Fleet multi-tenant tender | **stable** | ops-ready local/shared-store fleet: fence+daemon+CI+staging-smoke (**not Raft**) |
 
 **Current declared level: R3 stable** (R1 stable; R2 advanced-partial underneath).
@@ -48,23 +48,34 @@ clojure -M:cli parity           # JVM vs browser import matrix
 |---|---|---|---|
 | gen-keypair / sign / verify | yes | yes (noble sync) | yes |
 | sha256-hex / clock / log-* | yes | yes | yes |
-| llm-infer | yes | **no** | inject |
+| llm-infer | yes | **yes** (Worker-hosted, via a caller-supplied proxy URL) | inject |
 | http-post | yes | **yes** (Worker-hosted, cross-origin-isolated) | inject |
 
-Score today: **8/9** browser-linkable. `llm-infer` is wired only when a Node
-caller injects a synchronous backend (not a real browser tab) — still the
-one gap. `http-post` is real in a browser tab as of `wasm-webcomponent` PR
-#8 (2026-07-16): `http-post-bridge.js`'s `createSabHttpPostBridge`
-(SharedArrayBuffer+`Atomics.wait`, needs COOP/COEP response headers) is
-wired into `actor-host.js`'s `http_post`, and the guest itself runs inside
-a dedicated Worker (`kotoba-wasm-worker-host.js` /
+Score today: **9/9** browser-linkable. `http-post` is real in a browser tab
+as of `wasm-webcomponent` PR #8 (2026-07-16): `http-post-bridge.js`'s
+`createSabHttpPostBridge` (SharedArrayBuffer+`Atomics.wait`, needs COOP/COEP
+response headers) is wired into `actor-host.js`'s `http_post`, and the guest
+itself runs inside a dedicated Worker (`kotoba-wasm-worker-host.js` /
 `kotoba-wasm-worker-element.js`'s `<worker-http-post-demo>`) since
 `Atomics.wait` is disallowed on the main/DOM thread — see
 `examples/actor-host/worker-http-post.html` and
 `test/browser/verify_http_post_browser.cljs` (real headless Chromium, real
-HTTP round-trip, `npm run test:http-post-browser`). See "What we
-deliberately do not claim" below for what's still not claimed (`llm-infer`
-in-browser, and a URL allowlist on `http-post`).
+HTTP round-trip, `npm run test:http-post-browser`). `llm-infer` is real in a
+browser tab too as of `wasm-webcomponent` PR #11 (2026-07-16): it reuses the
+SAME bridge instance as `http-post` (`kotoba-wasm-worker-host.js` passes one
+bridge as both `httpPostBridge` and `llmInferBridge`), POSTing the raw
+prompt bytes to a caller-supplied `llmInferUrl` and reading the raw
+completion text back — deliberately NOT a direct call to a real LLM
+provider, since a browser tab can never hold a provider API key without
+shipping it to every visitor; `llmInferUrl` must point at a
+developer-controlled proxy that holds any real credential server-side. See
+`examples/actor-host/worker-llm-infer.html` and
+`test/browser/verify_llm_infer_browser.cljs`
+(`npm run test:llm-infer-browser`). An opt-in URL allowlist
+(`:allowed-url-prefixes`/`allowedUrlPrefixes`) for `http-post` also landed
+separately (`kototama` PR #32 / `wasm-webcomponent` PR #10). See "What we
+deliberately do not claim" below for what's still not claimed (JSPI as the
+default `http-post`/`llm-infer` wire).
 
 ### http-post in a real browser tab: landed 2026-07-16, after two false starts
 
@@ -89,8 +100,20 @@ git history) doesn't re-litigate either mistake:
    the actual, verified state as of that PR, not a documentation-only
    correction like the first one was.
 
-`llm-infer`'s real-browser path (get to 9/9) remains separate, not-yet-
-scheduled follow-up work.
+### llm-infer in a real browser tab: landed 2026-07-16, reusing http-post's bridge (9/9)
+
+`wasm-webcomponent` PR #11 closed the remaining gap by generalizing, not
+duplicating, PR #8's bridge: `kotoba-wasm-worker-host.js` constructs ONE
+`createSabHttpPostBridge` instance and passes it to `actorHostImports` as
+BOTH `httpPostBridge` and `llmInferBridge` — `llm_infer` POSTs the raw
+prompt bytes through it to a caller-supplied `llmInferUrl` and reads the
+raw completion text back, metered against `maxLlmInfers` the same in-band
+`-1` way `http_post` already was (a real, previously-missing per-call
+counter — only the pre-flight import-declaration count, always ≤1, was
+checked before). `llmInferUrl` is intentionally NOT a built-in call to any
+real LLM provider: a browser tab can never hold a provider API key without
+shipping it to every visitor, so the actual provider call must live behind
+a developer-controlled proxy the caller supplies the URL for.
 
 Host library today: `actor-host.js`, `http-post-bridge.js`,
 `kotoba-wasm-worker-host.js`, `kotoba-wasm-worker-element.js`, `kgraph.js`.
