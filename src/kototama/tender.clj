@@ -316,7 +316,15 @@
   convention every other quota/overflow case here uses -- never an
   exception) BEFORE any connection is attempted; this is best-effort SSRF
   hardening, not a DNS-rebinding-proof one (see
-  `blocked-http-post-destination?`'s docstring)."
+  `blocked-http-post-destination?`'s docstring).
+
+  `contract/url-allowed?` layers an OPT-IN, caller-specified positive list
+  on top (`:allowed-url-prefixes`, nil/unrestricted by default -- every
+  existing caller that never set it behaves exactly as before): a caller
+  wiring a guest that should only ever reach its own approved API
+  endpoint can restrict it further than the unconditional denylist above,
+  which only blocks internal/metadata destinations, not \"any public
+  host\"."
   [caps limits-state]
   (host-fn "http_post" (mapv valtype [:i32 :i32 :i32 :i32 :i32 :i32]) ValType/I32
            (fn [instance args]
@@ -324,7 +332,8 @@
              (if-not (within-count-limit? :http-posts :max-http-posts caps limits-state)
                -1
                (let [url (String. ^bytes (read-bytes! instance (aget args 0) (aget args 1)) "UTF-8")]
-                 (if (blocked-http-post-destination? url)
+                 (if (or (blocked-http-post-destination? url)
+                         (not (contract/url-allowed? (:limits caps) url)))
                    -1
                    (let [body (read-bytes! instance (aget args 2) (aget args 3))
                          req (-> (HttpRequest/newBuilder (URI/create url))

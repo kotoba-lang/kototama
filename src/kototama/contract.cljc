@@ -3,7 +3,8 @@
 
   This namespace defines data shapes and validation rules for actor host imports.
   Hosts may adapt these maps to Rust, JS, or JVM APIs, but the requested import
-  surface is accepted only when the contract grants and runtime limits allow it.")
+  surface is accepted only when the contract grants and runtime limits allow it."
+  (:require [clojure.string :as str]))
 
 (def actor-host-namespace "actor:host")
 (def actor-host-version 0)
@@ -63,6 +64,7 @@
                 :max-log-read-bytes :non-negative-int
                 :max-log-write-bytes :non-negative-int
                 :max-memory-pages :non-negative-int
+                :allowed-url-prefixes :vector-of-string-or-nil
                 :allow-secret-imports? :boolean
                 :allow-write-imports? :boolean}})
 
@@ -84,6 +86,15 @@
    ;; the browser actor-host.js) reads it directly off HostCaps' :limits
    ;; when it instantiates.
    :max-memory-pages 16
+   ;; nil = unrestricted (the default -- preserves prior behavior for every
+   ;; existing caller that never set this). When non-empty, http-post is
+   ;; allowed only to URLs starting with one of these prefixes. Like
+   ;; :max-memory-pages above, this is deliberately NOT checked by
+   ;; validate-import-surface (it doesn't gate whether the import is
+   ;; granted, only which URLs a granted call may reach) -- host adapters
+   ;; (kototama.tender, the browser actor-host.js) check it per-call via
+   ;; url-allowed? below.
+   :allowed-url-prefixes nil
    :allow-secret-imports? false
    :allow-write-imports? false})
 
@@ -127,6 +138,19 @@
   "Builds RuntimeLimits data by overlaying m on default-runtime-limits."
   ([] default-runtime-limits)
   ([m] (merge default-runtime-limits (or m {}))))
+
+(defn url-allowed?
+  "true iff URL is permitted under LIMITS' :allowed-url-prefixes.
+
+  nil/empty :allowed-url-prefixes means unrestricted (the default). Host
+  adapters (kototama.tender's http-post-host-fn, the browser actor-host.js
+  port) call this per http-post call, failing closed with the same in-band
+  -1 convention a quota-exhausted call already uses -- an unmatched URL is
+  an ordinary, recoverable denial, not a structural grant violation."
+  [limits url]
+  (let [prefixes (:allowed-url-prefixes limits)]
+    (or (empty? prefixes)
+        (boolean (some #(str/starts-with? url %) prefixes)))))
 
 (defn host-caps
   "Builds HostCaps data. :grants is normalized to canonical import ids."
