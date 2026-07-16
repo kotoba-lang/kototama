@@ -6,7 +6,9 @@
    vs what the JVM tender implements. Used by doctor / maturity report.
 
    Honest gaps:
-   - http-post: not bare-sync in a tab; inject and/or SAB+COOP bridge
+   - http-post: not bare-sync in a tab; a SAB+COOP bridge or JSPI could
+     make it so but neither is built yet (2026-07-16 audit) -- Node inject
+     is the only real path today
    - llm-infer: browser absent; Node can inject synchronous backend
    - kgraph-*: separate surface (kgraph.js), not actor:host"
   (:require [kototama.contract :as contract]
@@ -23,8 +25,14 @@
    :sign            {:jvm :yes :browser :yes :node :yes}
    :verify          {:jvm :yes :browser :yes :node :yes}
    :sha256-hex      {:jvm :yes :browser :yes :node :yes}
-   :http-post       {:jvm :yes :browser :coop-or-inject :node :inject
-                     :note "inject opts.httpPost; browser SAB bridge needs COOP/COEP; JSPI experimental"}
+   ;; :browser is genuinely :no, not :coop-or-inject -- a 2026-07-16 audit
+   ;; found no SAB+COOP bridge or JSPI wiring anywhere in
+   ;; wasm-webcomponent (working tree or history); `actor-host.js` itself
+   ;; deliberately omits `http_post` from its exported imports for exactly
+   ;; this reason. Counting it as browser-linkable inflated `parity-score`
+   ;; to a false "8/9" (ADR-0007 addendum, 2026-07-16).
+   :http-post       {:jvm :yes :browser :no :node :inject
+                     :note "inject opts.httpPost (Node only); SAB+COOP bridge and JSPI are unbuilt, not yet a real browser path"}
    :log-read        {:jvm :yes :browser :yes :node :yes}
    :log-write       {:jvm :yes :browser :yes :node :yes}
    :clock-monotonic {:jvm :yes :browser :yes :node :yes}
@@ -88,7 +96,12 @@
      :ratio (if (pos? n) (double (/ yes n)) 0.0)
      :available (browser-available-ids)
      :missing (browser-missing-ids)
-     :http-post-paths [:inject :sab-coop :jspi-experimental]}))
+     ;; :sab-coop / :jspi-experimental are NOT built (2026-07-16 audit, see
+     ;; ADR-0007 addendum) -- listed here as the known candidate approaches
+     ;; for closing the gap, not as existing paths. Only :inject is real.
+     :http-post-paths {:inject :implemented
+                       :sab-coop :not-yet-built
+                       :jspi-experimental :not-yet-built}}))
 
 (defn r2-report
   "Aggregate R2 snapshot for CLI doctor."
@@ -102,12 +115,11 @@
                       "web/host-free-peak-cells.wasm"
                       "web/demo.wasm"]
    :actor-host-demo "web/actor-host-demo.wasm"
-   :library "kotoba-lang/wasm-webcomponent (actor-host.js, http-post-bridge.js, kgraph.js)"
+   :library "kotoba-lang/wasm-webcomponent (actor-host.js, kgraph.js)"
    :verify ["node web/verify.mjs"
             "node web/verify-kgraph.mjs"
             "node web/verify-actor-host.mjs"
-            "node web/verify-host-free.mjs"
-            "node test/verify-http-post.mjs  ; in wasm-webcomponent"]
+            "node web/verify-host-free.mjs"]
    :notes ["Policy re-enforcement at load: actor-host.js yes; kgraph.js no"
-           "http-post: inject (Node) | SAB+COOP bridge (browser) | JSPI experimental"
+           "http-post: inject (Node) only -- no SAB+COOP bridge or JSPI wiring exists yet"
            "llm-infer injectable on Node only"]})
