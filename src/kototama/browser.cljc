@@ -6,9 +6,15 @@
    vs what the JVM tender implements. Used by doctor / maturity report.
 
    Honest gaps:
-   - http-post: not bare-sync in a tab; a SAB+COOP bridge or JSPI could
-     make it so but neither is built yet (2026-07-16 audit) -- Node inject
-     is the only real path today
+   - http-post: real in a browser tab as of wasm-webcomponent PR #8
+     (2026-07-16) -- a SharedArrayBuffer+Atomics.wait bridge
+     (http-post-bridge.js's createSabHttpPostBridge), but only inside a
+     cross-origin-isolated page (COOP/COEP headers) with the guest
+     instantiated in a dedicated Worker (Atomics.wait is disallowed on the
+     main/DOM thread) -- see kotoba-wasm-worker-host.js /
+     kotoba-wasm-worker-element.js and
+     test/browser/verify_http_post_browser.cljs there for the real,
+     verified end-to-end path
    - llm-infer: browser absent; Node can inject synchronous backend
    - kgraph-*: separate surface (kgraph.js), not actor:host"
   (:require [kototama.contract :as contract]
@@ -25,14 +31,18 @@
    :sign            {:jvm :yes :browser :yes :node :yes}
    :verify          {:jvm :yes :browser :yes :node :yes}
    :sha256-hex      {:jvm :yes :browser :yes :node :yes}
-   ;; :browser is genuinely :no, not :coop-or-inject -- a 2026-07-16 audit
-   ;; found no SAB+COOP bridge or JSPI wiring anywhere in
-   ;; wasm-webcomponent (working tree or history); `actor-host.js` itself
-   ;; deliberately omits `http_post` from its exported imports for exactly
-   ;; this reason. Counting it as browser-linkable inflated `parity-score`
-   ;; to a false "8/9" (ADR-0007 addendum, 2026-07-16).
-   :http-post       {:jvm :yes :browser :no :node :inject
-                     :note "inject opts.httpPost (Node only); SAB+COOP bridge and JSPI are unbuilt, not yet a real browser path"}
+   ;; :browser is genuinely :yes as of wasm-webcomponent PR #8 (2026-07-16):
+   ;; createSabHttpPostBridge (SharedArrayBuffer+Atomics.wait) is real and
+   ;; verified end-to-end in real headless Chromium
+   ;; (test/browser/verify_http_post_browser.cljs there) -- but only inside
+   ;; a cross-origin-isolated page (COOP/COEP headers), with the guest
+   ;; instantiated in a dedicated Worker (Atomics.wait can't run on the
+   ;; main/DOM thread). Two real bugs had to be fixed to get here (a
+   ;; TextDecoder-on-SharedArrayBuffer rejection, and a Worker-startup race)
+   ;; -- an earlier merge to that repo's main had wired this import but
+   ;; never actually completed a request.
+   :http-post       {:jvm :yes :browser :yes :node :inject
+                     :note "browser: Worker-hosted guest + SAB+Atomics bridge, requires COOP/COEP; node: opts.httpPost inject"}
    :log-read        {:jvm :yes :browser :yes :node :yes}
    :log-write       {:jvm :yes :browser :yes :node :yes}
    :clock-monotonic {:jvm :yes :browser :yes :node :yes}
@@ -96,11 +106,11 @@
      :ratio (if (pos? n) (double (/ yes n)) 0.0)
      :available (browser-available-ids)
      :missing (browser-missing-ids)
-     ;; :sab-coop / :jspi-experimental are NOT built (2026-07-16 audit, see
-     ;; ADR-0007 addendum) -- listed here as the known candidate approaches
-     ;; for closing the gap, not as existing paths. Only :inject is real.
+     ;; :sab-coop is real as of wasm-webcomponent PR #8 (2026-07-16, see
+     ;; ADR-0007's second addendum) -- :jspi-experimental remains unbuilt
+     ;; (Chrome-only, not broadly shipped).
      :http-post-paths {:inject :implemented
-                       :sab-coop :not-yet-built
+                       :sab-coop :implemented
                        :jspi-experimental :not-yet-built}}))
 
 (defn r2-report
@@ -115,11 +125,12 @@
                       "web/host-free-peak-cells.wasm"
                       "web/demo.wasm"]
    :actor-host-demo "web/actor-host-demo.wasm"
-   :library "kotoba-lang/wasm-webcomponent (actor-host.js, kgraph.js)"
+   :library "kotoba-lang/wasm-webcomponent (actor-host.js, http-post-bridge.js, kotoba-wasm-worker-host.js, kotoba-wasm-worker-element.js, kgraph.js)"
    :verify ["node web/verify.mjs"
             "node web/verify-kgraph.mjs"
             "node web/verify-actor-host.mjs"
-            "node web/verify-host-free.mjs"]
+            "node web/verify-host-free.mjs"
+            "npm run test:http-post-browser  ; in wasm-webcomponent"]
    :notes ["Policy re-enforcement at load: actor-host.js yes; kgraph.js no"
-           "http-post: inject (Node) only -- no SAB+COOP bridge or JSPI wiring exists yet"
+           "http-post: real in a cross-origin-isolated tab via a Worker-hosted SAB+Atomics bridge; inject (Node) also available"
            "llm-infer injectable on Node only"]})

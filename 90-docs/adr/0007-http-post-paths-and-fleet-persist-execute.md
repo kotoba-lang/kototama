@@ -43,3 +43,34 @@ have been corrected to 7/9 (`llm-infer` Node-inject only, `http-post` not
 implemented in-browser) in the same pass. Building the actual bridge (or
 adopting JSPI once broadly shipped) remains real, not-yet-scheduled future
 work -- tracked as a to-do, not re-claimed as done here.
+
+## Addendum (2026-07-16, later same day): the bridge now exists and works -- 8/9
+
+Independently of the addendum above, `wasm-webcomponent` `main` had
+*already* gained a different, independently-written `http-post-bridge.js`
+(`aa34a68`/`b20a69f`, merged directly, bypassing PR review, around the same
+time the previous addendum's audit ran) implementing exactly item 2 above
+(`createSabHttpPostBridge`). That bridge had a real bug -- `TextDecoder.
+decode()` was called on a `Uint8Array` view directly over the
+`SharedArrayBuffer` (`payload.subarray(...)`), which browsers reject
+outright ("The provided ArrayBufferView value must not be shared") -- so
+every real request would have failed closed; it had never actually been
+exercised end-to-end. `wasm-webcomponent` PR #8 fixed that (`.slice()`
+instead of `.subarray()`), fixed a second real bug (calling `postSync`
+immediately after constructing the bridge is a confirmed-live deadlock --
+the inner Worker hasn't started yet), added the Worker-hosted guest
+element this bridge actually requires (`kotoba-wasm-worker-host.js` /
+`kotoba-wasm-worker-element.js`, since `Atomics.wait` can't run on the
+main/DOM thread), and proved the whole path in real headless Chromium
+(`test/browser/verify_http_post_browser.cljs`, `npm run
+test:http-post-browser`) -- a real HTTP round-trip through a
+cross-origin-isolated page.
+
+`http-post` is genuinely `8/9`-real now, corrected again in
+`docs/maturity.md`/`README.md`/`src/kototama/browser.cljc`/
+`src/kototama/guest.cljc`/`test/kototama/browser_test.cljc`. Item 3
+(JSPI) and `llm-infer`'s browser path remain not built. This is the third
+state this ADR has recorded for the same claim (landed → not built →
+actually landed) -- each correction was made against directly-verified
+evidence (a real E2E run, not another grep), which is why this one should
+be trusted more than either of its predecessors.
