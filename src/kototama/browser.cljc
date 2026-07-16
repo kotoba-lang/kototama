@@ -15,7 +15,15 @@
      kotoba-wasm-worker-element.js and
      test/browser/verify_http_post_browser.cljs there for the real,
      verified end-to-end path
-   - llm-infer: browser absent; Node can inject synchronous backend
+   - llm-infer: real in a browser tab as of wasm-webcomponent PR #11
+     (2026-07-16) -- reuses the SAME Worker+SAB+Atomics bridge http-post
+     proved out (kotoba-wasm-worker-host.js passes ONE bridge instance as
+     both httpPostBridge and llmInferBridge). NOT a direct call to a real
+     LLM provider, though: a browser tab can never hold a provider API key
+     without shipping it to every visitor, so this requires a
+     developer-controlled proxy URL (llmInferUrl) that itself holds any
+     real credential server-side -- see
+     test/browser/verify_llm_infer_browser.cljs there.
    - kgraph-*: separate surface (kgraph.js), not actor:host"
   (:require [kototama.contract :as contract]
             [kototama.guest :as guest]))
@@ -46,8 +54,15 @@
    :log-read        {:jvm :yes :browser :yes :node :yes}
    :log-write       {:jvm :yes :browser :yes :node :yes}
    :clock-monotonic {:jvm :yes :browser :yes :node :yes}
-   :llm-infer       {:jvm :yes :browser :no  :node :inject
-                     :note "browser: no sync network; node: opts.llmInfer inject"}})
+   ;; :browser is genuinely :yes as of wasm-webcomponent PR #11 (2026-07-16):
+   ;; reuses the SAME Worker+SAB+Atomics bridge http-post proved out
+   ;; (kotoba-wasm-worker-host.js constructs ONE bridge, passes it as both
+   ;; httpPostBridge and llmInferBridge). Requires a caller-supplied
+   ;; llmInferUrl pointing at a developer-controlled proxy that holds any
+   ;; real LLM provider credential server-side -- never a provider endpoint
+   ;; called directly with a key embedded in browser-shipped JS/HTML.
+   :llm-infer       {:jvm :yes :browser :yes :node :inject
+                     :note "browser: Worker-hosted guest + SAME SAB+Atomics bridge as http-post, via a caller-supplied proxy URL (never a provider key embedded client-side); node: opts.llmInfer inject"}})
 
 (defn import-status
   "Status map for one import id under :jvm | :browser | :node."
@@ -111,7 +126,12 @@
      ;; (Chrome-only, not broadly shipped).
      :http-post-paths {:inject :implemented
                        :sab-coop :implemented
-                       :jspi-experimental :not-yet-built}}))
+                       :jspi-experimental :not-yet-built}
+     ;; llm-infer's browser path (PR #11) reuses :sab-coop above, not a
+     ;; distinct bridge -- tracked separately here since it additionally
+     ;; requires a caller-supplied proxy URL.
+     :llm-infer-paths {:inject :implemented
+                       :sab-coop-via-proxy :implemented}}))
 
 (defn r2-report
   "Aggregate R2 snapshot for CLI doctor."
@@ -130,7 +150,8 @@
             "node web/verify-kgraph.mjs"
             "node web/verify-actor-host.mjs"
             "node web/verify-host-free.mjs"
-            "npm run test:http-post-browser  ; in wasm-webcomponent"]
+            "npm run test:http-post-browser  ; in wasm-webcomponent"
+            "npm run test:llm-infer-browser  ; in wasm-webcomponent"]
    :notes ["Policy re-enforcement at load: actor-host.js yes; kgraph.js no"
            "http-post: real in a cross-origin-isolated tab via a Worker-hosted SAB+Atomics bridge; inject (Node) also available"
-           "llm-infer injectable on Node only"]})
+           "llm-infer: real in a cross-origin-isolated tab via the SAME bridge as http-post, through a caller-supplied proxy URL (never a provider key embedded client-side); inject (Node) also available"]})

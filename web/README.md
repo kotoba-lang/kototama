@@ -71,7 +71,9 @@ Parity matrix: `kototama.browser` / `clojure -M:cli parity`.
 | llm-infer | **no** in tab | Node can inject `opts.llmInfer` |
 | http-post | **yes** in tab | Worker-hosted guest + `createSabHttpPostBridge` (SharedArrayBuffer+Atomics.wait); needs COOP/COEP; `opts.httpPost` inject also available on Node |
 
-**8/9** imports are browser-linkable (`llm-infer` remains Node-inject only).
+**9/9** imports are browser-linkable (`http-post` and `llm-infer` both real
+via a Worker-hosted SAB+Atomics bridge in `wasm-webcomponent`; `llm-infer`
+additionally needs a caller-supplied proxy URL — see `../docs/maturity.md`).
 `http-post` became real in a browser tab via `wasm-webcomponent` PR #8
 (2026-07-16) — see `90-docs/adr/0007-http-post-paths-and-fleet-persist-execute.md`'s
 second addendum for the two real bugs that had to be fixed to get there.

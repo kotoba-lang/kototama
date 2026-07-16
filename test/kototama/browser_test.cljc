@@ -8,7 +8,7 @@
         mids (set (map :import (browser/parity-matrix)))]
     (is (= ids mids))))
 
-(deftest browser-yes-includes-crypto-log-and-http-post
+(deftest browser-yes-includes-crypto-log-http-post-and-llm-infer
   (let [yes (set (browser/browser-available-ids))]
     (is (contains? yes :sha256-hex))
     (is (contains? yes :gen-keypair))
@@ -20,14 +20,17 @@
     ;; there), inside a cross-origin-isolated page with the guest
     ;; instantiated in a dedicated Worker.
     (is (contains? yes :http-post) "http-post is real via the Worker-hosted SAB+Atomics bridge")
-    (is (not (contains? yes :llm-infer)))))
+    ;; Linkable as of wasm-webcomponent PR #11 (2026-07-16): reuses the SAME
+    ;; bridge as http-post, through a caller-supplied proxy URL (see
+    ;; test/browser/verify_llm_infer_browser.cljs there).
+    (is (contains? yes :llm-infer) "llm-infer is real via the same Worker-hosted SAB+Atomics bridge, through a caller-supplied proxy URL")))
 
 (deftest parity-score-ratio
   (let [s (browser/parity-score)]
     (is (= 9 (:total s)))
-    (is (= 8 (:browser-yes s)))
-    (is (= 1 (:browser-no s)))
-    (is (< 0.85 (:ratio s) 0.95))))
+    (is (= 9 (:browser-yes s)))
+    (is (= 0 (:browser-no s)))
+    (is (= 1.0 (:ratio s)))))
 
 (deftest r2-report-shape
   (let [r (browser/r2-report)]
