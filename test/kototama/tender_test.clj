@@ -286,6 +286,70 @@
         (is (< elapsed 2000) "rejection is immediate (pure classification), not gated behind a connect/request timeout"))
       (finally (.stop server 0)))))
 
+;; ── :allowed-url-prefixes: opt-in caller allowlist layered on top of the
+;; unconditional denylist above (contract/url-allowed?, nil/unrestricted
+;; by default) -- see http-post-host-fn's docstring. ────────────────────────
+
+(deftest url-allowed?-defaults-to-unrestricted
+  (is (true? (contract/url-allowed? {} "http://anything.example/x"))
+      "no :allowed-url-prefixes at all -- unrestricted, matches every prior caller")
+  (is (true? (contract/url-allowed? {:allowed-url-prefixes nil} "http://anything.example/x")))
+  (is (true? (contract/url-allowed? {:allowed-url-prefixes []} "http://anything.example/x"))))
+
+(deftest url-allowed?-checks-prefix-membership
+  (let [limits {:allowed-url-prefixes ["https://api.example.test/"]}]
+    (is (true? (contract/url-allowed? limits "https://api.example.test/v1/echo")))
+    (is (false? (contract/url-allowed? limits "https://not-example.test/v1/echo")))
+    (is (false? (contract/url-allowed? limits "http://api.example.test/v1/echo"))
+        "scheme is part of the prefix -- http does not match an https-only prefix")))
+
+(deftest url-allowed?-matches-any-of-multiple-prefixes
+  (let [limits {:allowed-url-prefixes ["https://a.test/" "https://b.test/"]}]
+    (is (true? (contract/url-allowed? limits "https://a.test/x")))
+    (is (true? (contract/url-allowed? limits "https://b.test/x")))
+    (is (false? (contract/url-allowed? limits "https://c.test/x")))))
+
+(deftest http-post-host-fn-refuses-a-destination-outside-the-allowlist-before-any-real-connection
+  ;; 198.51.100.0/24 (RFC 5737 TEST-NET-2) is a literal IPv4 address --
+  ;; parses without a real DNS round-trip -- that is public/routable-shaped
+  ;; (NOT loopback/private/link-local/metadata), so blocked-http-post-
+  ;; destination? lets it through; url-allowed? is the only thing that can
+  ;; reject it here, isolating what this test actually verifies.
+  (let [url "http://198.51.100.1/x"
+        wasm (wat->wasm (http-post-wat url))
+        caps (contract/host-caps {:grants [:http-post]
+                                   :limits {:max-http-posts 1
+                                            :allowed-url-prefixes ["http://192.0.2."]}})
+        started (System/currentTimeMillis)
+        n (tender/run-main wasm [:http-post] caps)
+        elapsed (- (System/currentTimeMillis) started)]
+    (is (= -1 n) "destination not matching :allowed-url-prefixes refused, the standard fail-closed -1 convention")
+    (is (< elapsed 2000) "rejection is immediate (pure classification), not a real network attempt/timeout")))
+
+(deftest http-post-host-fn-allowlist-does-not-weaken-the-unconditional-denylist
+  ;; A caller's :allowed-url-prefixes matching a loopback URL must NOT
+  ;; override blocked-http-post-destination? -- the two checks are ANDed,
+  ;; not either-or, so a permissive allowlist can never re-open the SSRF
+  ;; hole the denylist exists to close.
+  (let [hits (atom 0)
+        server (doto (HttpServer/create (InetSocketAddress. "127.0.0.1" 0) 0)
+                 (.createContext "/" (reify HttpHandler
+                                       (handle [_ exchange]
+                                         (swap! hits inc)
+                                         (.sendResponseHeaders ^HttpExchange exchange 200 -1))))
+                 (.start))]
+    (try
+      (let [port (.getPort (.getAddress server))
+            url (str "http://127.0.0.1:" port "/")
+            wasm (wat->wasm (http-post-wat url))
+            caps (contract/host-caps {:grants [:http-post]
+                                       :limits {:max-http-posts 1
+                                                :allowed-url-prefixes [url]}})
+            n (tender/run-main wasm [:http-post] caps)]
+        (is (= -1 n) "still refused despite an allowlist that explicitly matches this exact URL")
+        (is (zero? @hits) "the local server never received a request"))
+      (finally (.stop server 0)))))
+
 (deftest http-request-timeout-fires-instead-of-hanging-on-a-slow-loris-peer
   (let [accepted (atom nil)
         server (ServerSocket. 0 1 (InetAddress/getByName "127.0.0.1"))
