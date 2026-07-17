@@ -65,3 +65,19 @@ jobs:
       - run: node web/verify-kgraph.mjs
       - run: node web/verify-actor-host.mjs
       - run: node web/verify-host-free.mjs
+      - name: Verify restricted Kotoba Script host
+        run: node web/verify-kotoba-script.mjs
+      - name: Verify isolated Kotoba Script worker host
+        run: node web/verify-kotoba-script-worker.mjs
+      - name: Browser security E2E
+        run: |
+          python3 -m http.server 4173 --directory web >/tmp/kototama-http.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in 1 2 3 4 5; do
+            result=$(google-chrome --headless --disable-gpu --no-sandbox \
+              --virtual-time-budget=35000 --dump-dom \
+              http://127.0.0.1:4173/verify-kotoba-script-browser.html) && break
+            sleep 1
+          done
+          echo "$result" | grep 'PASS:42,digest-rejected,timeout-terminated'
