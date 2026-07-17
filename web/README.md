@@ -109,3 +109,10 @@ history / ADR-2607061630). That code has been extracted into
 `kotoba-lang/wasm-webcomponent` so other repos can reuse it instead of
 copying it; this directory is now a **consumer** of that library, not the
 canonical source for the hosting code.
+# Kotoba Script host
+
+`kotoba-script-host.mjs` verifies the compiler manifest and emitted source
+digest before importing restricted ESM. `kotoba-script-worker-host.mjs` runs
+the verified module in a terminating Worker boundary with bounded values,
+arguments, source size, startup time, and execution time. Capability-provider
+functions are never cloned from the page realm into the Worker.
