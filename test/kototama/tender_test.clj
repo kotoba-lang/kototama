@@ -293,8 +293,13 @@
 (deftest url-allowed?-defaults-to-unrestricted
   (is (true? (contract/url-allowed? {} "http://anything.example/x"))
       "no :allowed-url-prefixes at all -- unrestricted, matches every prior caller")
-  (is (true? (contract/url-allowed? {:allowed-url-prefixes nil} "http://anything.example/x")))
-  (is (true? (contract/url-allowed? {:allowed-url-prefixes []} "http://anything.example/x"))))
+  (is (true? (contract/url-allowed? {:allowed-url-prefixes nil} "http://anything.example/x"))
+      "explicit nil remains unrestricted (legacy default)"))
+
+(deftest url-allowed?-empty-collection-fails-closed
+  (testing "empty set/vector means the caller opted into an allowlist but listed nothing"
+    (is (false? (contract/url-allowed? {:allowed-url-prefixes []} "http://anything.example/x")))
+    (is (false? (contract/url-allowed? {:allowed-url-prefixes #{}} "http://anything.example/x")))))
 
 (deftest url-allowed?-checks-prefix-membership
   (let [limits {:allowed-url-prefixes ["https://api.example.test/"]}]

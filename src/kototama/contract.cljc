@@ -142,15 +142,26 @@
 (defn url-allowed?
   "true iff URL is permitted under LIMITS' :allowed-url-prefixes.
 
-  nil/empty :allowed-url-prefixes means unrestricted (the default). Host
-  adapters (kototama.tender's http-post-host-fn, the browser actor-host.js
-  port) call this per http-post call, failing closed with the same in-band
-  -1 convention a quota-exhausted call already uses -- an unmatched URL is
-  an ordinary, recoverable denial, not a structural grant violation."
+  Semantics (security kaizen 2026-07-17):
+  - `nil` prefixes = unrestricted (legacy default; preserves callers that
+    never set this key)
+  - empty collection `#{}` / `[]` = deny all (fail closed when the caller
+    explicitly opted into an allowlist but left it empty)
+  - non-empty = URL must equal or start with one prefix
+
+  Host adapters (kototama.tender's http-post-host-fn, the browser
+  actor-host.js port) call this per http-post call, failing closed with
+  the same in-band -1 convention a quota-exhausted call already uses --
+  an unmatched URL is an ordinary, recoverable denial, not a structural
+  grant violation."
   [limits url]
   (let [prefixes (:allowed-url-prefixes limits)]
-    (or (empty? prefixes)
-        (boolean (some #(str/starts-with? url %) prefixes)))))
+    (cond
+      (nil? prefixes) true
+      (empty? prefixes) false
+      :else (boolean (some #(and (string? %)
+                                 (or (= % url) (str/starts-with? url %)))
+                           prefixes)))))
 
 (defn host-caps
   "Builds HostCaps data. :grants is normalized to canonical import ids."
