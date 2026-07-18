@@ -1,9 +1,24 @@
 (ns kototama.tender
-  "The kototama tender — the actual Wasm EXECUTION runtime ADR-2607022400
-  named (Solo5's tender pattern: kototama = tender, the Wasm component it
-  runs = guest) and ADR-2607022900 decided is JVM/Clojure via
-  `com.dylibso.chicory` (a pure-JVM WebAssembly runtime — no native
-  toolchain, no wasmtime/wasmer process), not Rust/wasmtime.
+  "The kototama tender: the host-side ROLE that runs/mediates the
+  `actor:host` ABI for a `.kotoba` Wasm guest, named by ADR-2607022400
+  after Solo5's tender/guest split (kototama = tender, the Wasm
+  component it hosts = guest). 'Tender' names WHO plays this part
+  (validate the guest's requested import surface, wire each granted
+  host-fn, execute the guest) -- it is host-language-independent by
+  design, NOT a synonym for any one implementation language.
+
+  THIS namespace is one implementation of the tender role, not the role
+  itself: ADR-2607022900 decided THIS PARTICULAR tender is JVM/Clojure
+  via `com.dylibso.chicory` (a pure-JVM WebAssembly runtime — no native
+  toolchain, no wasmtime/wasmer process), not Rust/wasmtime. Other
+  tenders for the same role, in other host languages, already exist or
+  are expected -- see `kotoba-lang/aiueos`'s own ADR-0014
+  (`90-docs/adr/0014-self-owned-vmm-hvt-tender.md`), a JVM-FFM
+  (non-Chicory) tender for that repo's guest, which is concrete proof
+  the 'tender' name itself carries no JVM/Chicory assumption. See the
+  outer monorepo's ADR-2607183010 for the fuller writeup of this
+  role-vs-implementation distinction (it also keeps the 'tender'
+  vocabulary rather than renaming it away).
 
   `kototama.contract` is pure data validation with no execution anywhere
   in it (`validate-import-surface` decides yes/no, it does not run
