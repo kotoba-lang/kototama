@@ -7,7 +7,7 @@
   (is (= 0 (:abi/version contract/import-surface)))
   (is (= :kototama.contract/HostCaps (:model/name contract/HostCaps)))
   (is (= :kototama.contract/RuntimeLimits (:model/name contract/RuntimeLimits)))
-  (is (= #{:gen-keypair :sign :verify :sha256-hex :http-post :llm-infer
+  (is (= #{:gen-keypair :sign :verify :kagi-sign :sha256-hex :http-post :llm-infer
            :log-read :log-write :clock-monotonic}
          (set (keys contract/import-by-id))))
   (is (= :log-write (contract/import-id "log-write"))))
@@ -99,3 +99,15 @@
              :imports [:log-write]}]
            (:errors closed)))
     (is (:ok? open))))
+
+(deftest q5-production-network-kits-require-concrete-scope-and-finite-bounds
+  (let [unscoped (contract/validate-production-host-caps
+                  {:grants [:http-post]
+                   :limits {:max-http-posts 1}})
+        scoped (contract/validate-production-host-caps
+                {:grants [:http-post]
+                 :limits {:max-http-posts 1
+                          :http-url-allowlist #{"https://api.example.test/v1"}}})]
+    (is (false? (:ok? unscoped)))
+    (is (= [{:error :production/network-scope-required}] (:errors unscoped)))
+    (is (:ok? scoped))))

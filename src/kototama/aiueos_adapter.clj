@@ -49,13 +49,14 @@
   exercise a real denial) -- default trust is `:verified`, the same level
   `aiueos.decide-test`'s granted fixture uses."
   ([import-ids] (manifest-for-imports import-ids {}))
-  ([import-ids {:keys [component kind trust]
+  ([import-ids {:keys [component kind trust kagi-requests]
                 :or {component :kototama/guest kind :service trust :verified}}]
-   {:aiueos/component component
-    :aiueos/kind kind
-    :aiueos/trust trust
-    :aiueos/imports (into #{} (map kototama-import->aiueos-capability) import-ids)
-    :aiueos/exports #{}}))
+   (cond-> {:aiueos/component component
+            :aiueos/kind kind
+            :aiueos/trust trust
+            :aiueos/imports (into #{} (keep kototama-import->aiueos-capability) import-ids)
+            :aiueos/exports #{}}
+     (seq kagi-requests) (assoc :aiueos/kagi-requests (vec kagi-requests)))))
 
 (defn decide
   "The real aiueos :verify decision for MANIFEST (`aiueos.cli/command-
@@ -89,4 +90,17 @@
          granted? (= :grant (:aiueos/decision decision))]
      {:host-caps (contract/host-caps {:grants (if granted? import-ids #{})
                                       :limits limits})
-      :decision decision})))
+      :decision decision
+      :kagi-decisions (when granted? (:aiueos.broker/kagi-decisions decision))})))
+
+(defn kagi-sign-context
+  "Return HostCaps plus the exact aiueos decisions tender requires for one
+  handle-based signing reference. No secret or private key is resolved here."
+  [{:keys [component key-ref purpose policy-overlay limits]
+    :or {component :kototama/guest}}]
+  (host-caps-for-imports
+   [:kagi-sign]
+   {:component component
+    :limits limits
+    :kagi-requests [{:secret-ref key-ref :purpose purpose :operation :sign}]
+    :policy-overlay policy-overlay}))

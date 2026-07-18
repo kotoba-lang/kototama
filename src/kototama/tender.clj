@@ -60,6 +60,7 @@
   (:require [clojure.data.json :as json]
             [clojure.string :as str]
             [kototama.contract :as contract]
+            [kototama.kagi-adapter :as kagi-adapter]
             [ed25519.core :as ed])
   (:import (com.dylibso.chicory.runtime ExecutionListener HostFunction ImportFunction
                                         ImportValues Instance WasmFunctionHandle)
@@ -82,15 +83,36 @@
       (do (.write (.memory instance) (int ptr) (byte-array bs) 0 n)
           n))))
 
+(def ^:dynamic *record-host-call!* nil)
+
 (defn host-fn
   "One (module \"kotoba\") host import: FIELD, param/result ValTypes, and
   a Clojure fn [instance long-args] -> long (the single i32/i64 result)."
   [field params result f]
-  (HostFunction. "kotoba" field
-                 (FunctionType/of params [result])
-                 (reify WasmFunctionHandle
-                   (apply [_ instance args]
-                     (long-array [(f instance args)])))))
+  (let [record! *record-host-call!*
+        import-id (contract/import-id (str/replace field "_" "-"))]
+    (HostFunction. "kotoba" field
+                   (FunctionType/of params [result])
+                   (reify WasmFunctionHandle
+                     (apply [_ instance args]
+                       (let [started (System/nanoTime)]
+                         (try
+                           (let [value (f instance args)]
+                             (when record!
+                               (record! {:receipt/version 1
+                                         :receipt/import import-id
+                                         :receipt/outcome :ok
+                                         :receipt/result value
+                                         :receipt/elapsed-nanos (- (System/nanoTime) started)}))
+                             (long-array [value]))
+                           (catch Exception error
+                             (when record!
+                               (record! {:receipt/version 1
+                                         :receipt/import import-id
+                                         :receipt/outcome :denied-or-error
+                                         :receipt/error (or (ex-message error) (str error))
+                                         :receipt/elapsed-nanos (- (System/nanoTime) started)}))
+                             (throw error)))))))))
 
 (def ^:private valtype {:i32 ValType/I32 :i64 ValType/I64})
 
@@ -140,6 +162,23 @@
   (when-not (contains? (:grants caps) id)
     (denied! id :grant/missing {:granted (:grants caps)})))
 
+(def raw-secret-imports #{:gen-keypair :sign})
+
+(defn- enforce-kagi-custody!
+  [requested allow-legacy-raw-crypto?]
+  (let [raw (vec (filter raw-secret-imports requested))]
+    (when (and (seq raw) (not allow-legacy-raw-crypto?))
+      (denied! (first raw) :kagi/non-exportable-key-required
+               {:requested raw
+                :remediation "use a kagi handle-based adapter; raw guest key ABI is legacy-only"}))))
+
+(defn- enforce-kagi-signing!
+  [requested signer decisions]
+  (when (contains? (set requested) :kagi-sign)
+    (when-not (and signer (seq decisions))
+      (denied! :kagi-sign :kagi/signer-or-decision-missing
+               {:signer? (boolean signer) :decisions? (boolean (seq decisions))}))))
+
 ;; ── the 9 kototama.contract/import-surface host functions ──────────────────
 
 (defn- gen-keypair-host-fn
@@ -180,6 +219,21 @@
                    sig (read-bytes! instance (aget args 4) (aget args 5))]
                (if (ed/verify pub msg sig) 1 0)))))
 
+(defn- kagi-sign-host-fn
+  "`(ref-ptr ref-len msg-ptr msg-len out-ptr out-cap) -> bytes-written|-1`.
+  The ref is matched against an aiueos grant and signing occurs behind an
+  injected kagi handle. Private key bytes never enter guest memory."
+  [caps _limits-state signer decisions]
+  (host-fn "kagi_sign" (mapv valtype [:i32 :i32 :i32 :i32 :i32 :i32]) ValType/I32
+           (fn [instance args]
+             (ensure-granted! caps :kagi-sign)
+             (try
+               (let [ref (String. ^bytes (read-bytes! instance (aget args 0) (aget args 1)) "UTF-8")
+                     msg (read-bytes! instance (aget args 2) (aget args 3))
+                     sig (kagi-adapter/authorized-sign signer decisions ref msg)]
+                 (write-bytes! instance (aget args 4) (aget args 5) sig))
+               (catch Exception _ -1)))))
+
 (defn- sha256-hex-host-fn
   "`(ptr len out-ptr out-cap) -> bytes-written|-1`. Writes the lowercase
   hex SHA-256 digest of the input bytes. `#{:crypto}`."
@@ -192,13 +246,54 @@
                    hex (apply str (map #(format "%02x" (bit-and (int %) 0xff)) digest))]
                (write-bytes! instance (aget args 2) (aget args 3) (.getBytes hex "UTF-8"))))))
 
+(defn- http-url-allowed?
+  "SSRF least-privilege for http_post. nil allowlist = unrestricted legacy
+  compatibility and is rejected by Q5 production qualification. Empty set
+  denies all. Otherwise scheme, normalized host, and effective port must be
+  equal; the request path must equal or descend from the allowed path. This
+  deliberately rejects string-prefix confusions such as
+  `https://trusted.example.evil/`."
+  [allowlist url]
+  (cond
+    (nil? allowlist) true
+    (empty? allowlist) false
+    :else
+    (try
+      (let [requested (URI/create url)
+            effective-port (fn [^URI uri]
+                             (let [p (.getPort uri)]
+                               (if (neg? p)
+                                 (case (.getScheme uri) "https" 443 "http" 80 -1)
+                                 p)))]
+        (boolean
+         (some
+          (fn [allowed]
+            (when (string? allowed)
+              (let [scope (URI/create allowed)
+                    scope-path (or (.getPath scope) "/")
+                    request-path (or (.getPath requested) "/")
+                    path-prefix (if (str/ends-with? scope-path "/")
+                                  scope-path (str scope-path "/"))]
+                (and (nil? (.getUserInfo requested))
+                     (nil? (.getFragment requested))
+                     (= (.getScheme scope) (.getScheme requested))
+                     (= (some-> (.getHost scope) str/lower-case)
+                        (some-> (.getHost requested) str/lower-case))
+                     (= (effective-port scope) (effective-port requested))
+                     (or (= scope-path request-path)
+                         (str/starts-with? request-path path-prefix))))))
+          allowlist)))
+      (catch Exception _ false))))
+
 (defn- http-post-host-fn
   "`(url-ptr url-len body-ptr body-len out-ptr out-cap) -> bytes-written|-1`.
   Synchronous POST (guest calls block on it -- Chicory host functions have
   no async contract); writes the response body. `#{:network}`, metered
   against `:max-http-posts` (default 0 -- fully denied unless a caller's
   HostCaps explicitly raises the limit AND grants the import, matching
-  `kototama.contract/default-runtime-limits`)."
+  `kototama.contract/default-runtime-limits`). When
+  `:http-url-allowlist` is a set (possibly empty), the URL is checked
+  before any network I/O."
   [caps limits-state]
   (host-fn "http_post" (mapv valtype [:i32 :i32 :i32 :i32 :i32 :i32]) ValType/I32
            (fn [instance args]
@@ -206,13 +301,17 @@
              (if-not (within-count-limit? :http-posts :max-http-posts caps limits-state)
                -1
                (let [url (String. ^bytes (read-bytes! instance (aget args 0) (aget args 1)) "UTF-8")
-                     body (read-bytes! instance (aget args 2) (aget args 3))
-                     req (-> (HttpRequest/newBuilder (URI/create url))
-                            (.POST (HttpRequest$BodyPublishers/ofByteArray body))
-                            .build)
-                     resp (.send (HttpClient/newHttpClient) req (HttpResponse$BodyHandlers/ofByteArray))]
-                 (swap! limits-state update :http-posts inc)
-                 (write-bytes! instance (aget args 4) (aget args 5) (.body resp)))))))
+                     allowlist (get-in caps [:limits :http-url-allowlist])]
+                 (if-not (http-url-allowed? allowlist url)
+                   (denied! :http-post :http/url-not-allowed
+                            {:url url :allowlist allowlist})
+                   (let [body (read-bytes! instance (aget args 2) (aget args 3))
+                         req (-> (HttpRequest/newBuilder (URI/create url))
+                                 (.POST (HttpRequest$BodyPublishers/ofByteArray body))
+                                 .build)
+                         resp (.send (HttpClient/newHttpClient) req (HttpResponse$BodyHandlers/ofByteArray))]
+                     (swap! limits-state update :http-posts inc)
+                     (write-bytes! instance (aget args 4) (aget args 5) (.body resp)))))))))
 
 ;; ── llm-infer's injected client: real Anthropic call in production,
 ;; fake `:infer-fn` in tests (same DI shape as `store` below) ──────────────
@@ -413,25 +512,34 @@
   ([wasm-bytes requested-imports host-caps]
    (open-session wasm-bytes requested-imports host-caps {}))
   ([wasm-bytes requested-imports host-caps
-    {:keys [store llm-client fuel]
+    {:keys [store llm-client fuel allow-legacy-raw-crypto? kagi-signer kagi-decisions record!]
      :or {store (in-memory-store) llm-client (default-llm-client) fuel default-fuel-limit}}]
    (let [caps (contract/host-caps host-caps)
+         receipts (atom [])
+         record! (or record! #(swap! receipts conj %))
          validation (contract/validate-import-surface requested-imports caps)]
      (when-not (:ok? validation)
+       (record! {:receipt/version 1 :receipt/import :preflight
+                 :receipt/outcome :denied
+                 :receipt/errors (:errors validation)})
        (throw (ex-info "kototama.tender: import surface rejected by contract"
                        {:kototama.tender/rejected requested-imports
                         :kototama.tender/errors (:errors validation)})))
+     (enforce-kagi-custody! (:requested validation) allow-legacy-raw-crypto?)
+     (enforce-kagi-signing! (:requested validation) kagi-signer kagi-decisions)
      (let [limits-state (new-limits-state)
            fn-by-id {:gen-keypair #(gen-keypair-host-fn caps limits-state)
                      :sign #(sign-host-fn caps limits-state)
                      :verify #(verify-host-fn caps limits-state)
+                     :kagi-sign #(kagi-sign-host-fn caps limits-state kagi-signer kagi-decisions)
                      :sha256-hex #(sha256-hex-host-fn caps limits-state)
                      :http-post #(http-post-host-fn caps limits-state)
                      :llm-infer #(llm-infer-host-fn caps limits-state llm-client)
                      :log-read #(log-read-host-fn caps limits-state store)
                      :log-write #(log-write-host-fn caps limits-state store)
                      :clock-monotonic #(clock-monotonic-host-fn caps limits-state)}
-           host-fns (mapv (fn [id] ((get fn-by-id id))) (:requested validation))
+           host-fns (binding [*record-host-call!* record!]
+                      (mapv (fn [id] ((get fn-by-id id))) (:requested validation)))
            imports (-> (ImportValues/builder)
                       (.addFunction (into-array ImportFunction host-fns))
                       .build)
@@ -443,6 +551,7 @@
                       (.withUnsafeExecutionListener listener))
            instance (.build (if mem-limits (.withMemoryLimits builder mem-limits) builder))]
        {:instance instance
+        :receipts receipts
         :limits-state limits-state
         :fuel-used fuel-used
         :fuel-limit fuel

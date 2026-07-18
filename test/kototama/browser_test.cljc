@@ -19,10 +19,10 @@
 
 (deftest parity-score-ratio
   (let [s (browser/parity-score)]
-    (is (= 9 (:total s)))
+    (is (= 10 (:total s)))
     (is (= 8 (:browser-yes s)))
-    (is (= 1 (:browser-no s)))
-    (is (< 0.85 (:ratio s) 0.95))))
+    (is (= 2 (:browser-no s)))
+    (is (= 0.8 (:ratio s)))))
 
 (deftest r2-report-shape
   (let [r (browser/r2-report)]

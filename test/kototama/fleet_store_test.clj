@@ -184,6 +184,25 @@
         (str "expected grant under verified trust; got " (:decision r)))
     (is (= #{:log-write :clock-monotonic} (set (:grants r))))))
 
+(deftest fleet-kagi-sign-cannot-bypass-aiueos-with-an-explicit-grant
+  (let [bypass (exec/resolve-grants [:kagi-sign]
+                                    {:grants [:kagi-sign] :use-aiueos? false})
+        missing-policy (exec/resolve-grants
+                        [:kagi-sign]
+                        {:grants [:kagi-sign] :use-aiueos? true
+                         :kagi-ref "kagi://ops/key" :kagi-purpose :artifact-signing})
+        allowed (exec/resolve-grants
+                 [:kagi-sign]
+                 {:grants [:kagi-sign] :use-aiueos? true
+                  :kagi-ref "kagi://ops/key" :kagi-purpose :artifact-signing
+                  :policy-overlay {:aiueos/kagi-grants
+                                   {:kototama/guest
+                                    #{[:kagi/sign :artifact-signing]}}}})]
+    (is (not (some #{:kagi-sign} (:grants bypass))))
+    (is (not (some #{:kagi-sign} (:grants missing-policy))))
+    (is (= [:kagi-sign] (:grants allowed)))
+    (is (= :kagi/sign (get-in allowed [:kagi-decisions 0 :capability])))))
+
 (deftest fenced-resume-skips-when-held-by-other
   "Shared disk store: node-a runs fact→120; node-b skipped; node-a renews→120."
   (let [dir (str "tmp/fleet-fence-hold-" (System/currentTimeMillis))

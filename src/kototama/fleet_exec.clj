@@ -37,7 +37,7 @@
      :caps-extra extra HostCaps keys (e.g. :limits)
      :store      optional fleet-store for side-effect free (unused here)
      :fuel       override fuel (default from tick :fuel-limit)"
-  [{:keys [wasm grants caps-extra fuel] :as opts}]
+  [{:keys [wasm grants caps-extra fuel kagi-signer kagi-decisions] :as opts}]
   (let [wasm-bytes (load-wasm wasm)]
     (fn [tick]
       (let [g (or grants (:kototama.fleet/grants tick) [])
@@ -57,7 +57,10 @@
                                {:max-llm-infers 4})
                              (:limits caps-extra))}
                    (dissoc caps-extra :limits)))]
-        (tender/run-report wasm-bytes g caps {:fuel fuel'})))))
+        (tender/run-report wasm-bytes g caps
+                           (cond-> {:fuel fuel'}
+                             kagi-signer (assoc :kagi-signer kagi-signer)
+                             kagi-decisions (assoc :kagi-decisions kagi-decisions)))))))
 
 (defn run-lease!
   "Drive N ticks (or until governor stops) for lease-id.
@@ -70,10 +73,13 @@
 
    Returns {:registry :steps :last}."
   [registry lease-id {:keys [wasm store max-ticks grants caps-extra
+                             kagi-signer kagi-decisions
                              checkpoint-every execute heartbeat? renew-ttl-ms]
                       :or {max-ticks 10 checkpoint-every 1
                            heartbeat? true renew-ttl-ms 60000}}]
-  (let [exec (or execute (make-execute {:wasm wasm :grants grants :caps-extra caps-extra}))
+  (let [exec (or execute (make-execute {:wasm wasm :grants grants :caps-extra caps-extra
+                                        :kagi-signer kagi-signer
+                                        :kagi-decisions kagi-decisions}))
         steps (atom [])]
     (loop [reg registry
            n 0]
@@ -122,10 +128,27 @@
    :policy-overlay is forwarded to aiueos (e.g. {:aiueos/require-signed true}
    forces a real deny for unsigned components — same path as
    aiueos-adapter-test)."
-  [import-ids {:keys [use-aiueos? grants limits trust policy-overlay]
+  [import-ids {:keys [use-aiueos? grants limits trust policy-overlay
+                      kagi-ref kagi-purpose]
+               :as opts
                :or {use-aiueos? false trust :verified}}]
   (let [ids (vec (or grants import-ids))]
-    (if-not use-aiueos?
+    (if (some #{:kagi-sign} ids)
+      (let [ordinary (vec (remove #{:kagi-sign} ids))
+            base (resolve-grants ordinary (assoc opts :grants ordinary
+                                                 :kagi-ref nil :kagi-purpose nil))
+            context (when (and use-aiueos? (seq kagi-ref) kagi-purpose)
+                      (aiueos/kagi-sign-context
+                       {:key-ref kagi-ref :purpose kagi-purpose
+                        :trust trust :limits limits :policy-overlay policy-overlay}))
+            allowed? (= :grant (get-in context [:decision :aiueos/decision]))
+            final (cond-> (vec (:grants base)) allowed? (conj :kagi-sign))]
+        {:grants final
+         :source :aiueos-kagi
+         :decision (:decision context)
+         :kagi-decisions (:kagi-decisions context)
+         :host-caps (contract/host-caps {:grants final :limits limits})})
+      (if-not use-aiueos?
       {:grants ids :source :explicit :host-caps (contract/host-caps {:grants ids :limits limits})}
       (let [translatable (filterv aiueos-translatable-imports ids)
             rest-ids (vec (remove aiueos-translatable-imports ids))]
@@ -142,7 +165,7 @@
             {:grants final
              :source :aiueos
              :decision decision
-             :host-caps (contract/host-caps {:grants final :limits limits})}))))))
+             :host-caps (contract/host-caps {:grants final :limits limits})})))))))
 
 
 (defn- lease-wasm
@@ -193,7 +216,7 @@
    Returns full result map including :lease-id :path (final checkpoint)."
   [tenant guest wasm-path & {:keys [budget grants store max-ticks ttl-ms
                                     use-aiueos? limits trust policy-overlay
-                                    node-id fence?]
+                                    node-id fence? kagi-ref kagi-purpose kagi-signer]
                              :or {max-ticks 3 ttl-ms 300000 use-aiueos? false
                                   trust :verified fence? true}}]
   (let [store (or store (store/default-store))
@@ -203,7 +226,8 @@
                                   :grants grants
                                   :limits limits
                                   :trust trust
-                                  :policy-overlay policy-overlay})
+                                  :policy-overlay policy-overlay
+                                  :kagi-ref kagi-ref :kagi-purpose kagi-purpose})
         g (:grants resolved)
         lease0 (fleet/make-lease tenant guest
                                  :budget budget
@@ -213,7 +237,8 @@
                                  :meta {:wasm (str wasm-path)
                                         :guest (str guest)
                                         :tenant (str tenant)
-                                        :grant-source (:source resolved)})
+                                        :grant-source (:source resolved)
+                                        :kagi-ref kagi-ref :kagi-purpose kagi-purpose})
         ;; Seed registry from existing disk checkpoints (shared store multi-node)
         prior-keys (try (store/list-checkpoint-keys store) (catch Exception _ []))
         prior (load-merged-registry (take 50 prior-keys) store)
@@ -234,7 +259,9 @@
         result (run-lease! reg id {:wasm wasm-path
                                    :store store
                                    :max-ticks max-ticks
-                                   :grants g})
+                                   :grants g
+                                   :kagi-signer kagi-signer
+                                   :kagi-decisions (:kagi-decisions resolved)})
         final (store/save-checkpoint!
                (:registry result) store
                {:key (str "final-" id)

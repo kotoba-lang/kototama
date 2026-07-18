@@ -17,9 +17,10 @@
         ;; decision into a kototama.contract/host-caps value. aiueos-cljc-
         ;; contract (a short-lived split of aiueos.cli/etc. into its own
         ;; repo) has been merged back into kotoba-lang/aiueos.
-        io.github.kotoba-lang/aiueos
-        {:git/url "https://github.com/kotoba-lang/aiueos.git"
-         :git/sha "63c13fd48dc53e0f93fa40f6bfce54e62773c656"}}
+        io.github.kotoba-lang/aiueos {:local/root "../aiueos"}
+        ;; Secret/key authority is intentionally a required sibling: tender
+        ;; must not grow an independent private-key implementation.
+        io.github.kotoba-lang/kagi {:local/root "../kagi"}}
  :aliases
  {:cli  {:main-opts ["-m" "kototama.cli"]}
   :doctor {:main-opts ["-m" "kototama.cli" "doctor"]}

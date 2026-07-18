@@ -22,6 +22,8 @@
                      :note "browser: @noble/curves vendored sync Ed25519"}
    :sign            {:jvm :yes :browser :yes :node :yes}
    :verify          {:jvm :yes :browser :yes :node :yes}
+   :kagi-sign       {:jvm :yes :browser :no :node :no
+                     :note "requires a local injected kagi non-exportable handle adapter"}
    :sha256-hex      {:jvm :yes :browser :yes :node :yes}
    :http-post       {:jvm :yes :browser :coop-or-inject :node :inject
                      :note "inject opts.httpPost; browser SAB bridge needs COOP/COEP; JSPI experimental"}

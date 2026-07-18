@@ -24,6 +24,10 @@
      :import/name "verify"
      :import/category :identity
      :import/effects #{:crypto}}
+    {:import/id :kagi-sign
+     :import/name "kagi-sign"
+     :import/category :identity
+     :import/effects #{:crypto}}
     {:import/id :sha256-hex
      :import/name "sha256-hex"
      :import/category :content-addressing
@@ -63,6 +67,8 @@
                 :max-log-read-bytes :non-negative-int
                 :max-log-write-bytes :non-negative-int
                 :max-memory-pages :non-negative-int
+                :max-wall-ms :positive-int
+                :max-output-bytes :non-negative-int
                 :allow-secret-imports? :boolean
                 :allow-write-imports? :boolean}})
 
@@ -84,8 +90,20 @@
    ;; the browser actor-host.js) reads it directly off HostCaps' :limits
    ;; when it instantiates.
    :max-memory-pages 16
+   :max-wall-ms 5000
+   :max-output-bytes 1048576
    :allow-secret-imports? false
-   :allow-write-imports? false})
+   :allow-write-imports? false
+   ;; SSRF least-privilege for :http-post. nil = unrestricted (legacy
+   ;; compat when max-http-posts > 0); a set of URL prefixes (including
+   ;; empty) is enforced by kototama.tender at call time. Safe deployments
+   ;; should always pass an explicit non-empty allowlist.
+   :http-url-allowlist nil})
+
+(def production-required-limit-keys
+  #{:max-imports :max-http-posts :max-llm-infers :max-log-read-bytes
+    :max-log-write-bytes :max-memory-pages :max-wall-ms :max-output-bytes
+    :allow-secret-imports? :allow-write-imports?})
 
 (def HostCaps
   {:model/name :kototama.contract/HostCaps
@@ -220,4 +238,36 @@
         :requested known-ids
         :granted grants
         :limits limits
-        :errors errors}))))
+       :errors errors}))))
+
+(defn validate-production-host-caps
+  "Additional Q5 production qualification. Ordinary `host-caps` retains
+  legacy compatibility, but a production capability kit must carry every
+  finite bound and must never grant network egress with a nil/unrestricted
+  URL allowlist. The injected log store is the log resource scope; secret and
+  write imports retain their explicit opt-in flags."
+  [caps]
+  (let [caps (host-caps caps)
+        limits (:limits caps)
+        missing (vec (remove #(contains? limits %) production-required-limit-keys))
+        invalid (vec (keep (fn [k]
+                             (let [v (get limits k)]
+                               (when (and (not (#{:allow-secret-imports?
+                                                  :allow-write-imports?} k))
+                                          (not (and (integer? v)
+                                                    (if (= k :max-wall-ms)
+                                                      (pos? v)
+                                                      (<= 0 v)))))
+                                 k)))
+                           production-required-limit-keys))
+        network? (boolean (some #{:http-post :llm-infer} (:grants caps)))
+        allowlist (:http-url-allowlist limits)
+        errors (cond-> []
+                 (seq missing) (conj {:error :production/missing-limits
+                                      :keys missing})
+                 (seq invalid) (conj {:error :production/invalid-limits
+                                      :keys invalid})
+                 (and network? (not (and (set? allowlist) (seq allowlist)
+                                         (every? string? allowlist))))
+                 (conj {:error :production/network-scope-required}))]
+    {:ok? (empty? errors) :caps caps :errors errors}))

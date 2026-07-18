@@ -8,7 +8,8 @@
             [clojure.java.io :as io]
             [clojure.java.shell :as shell]
             [kototama.tender :as tender]
-            [kototama.contract :as contract]))
+            [kototama.contract :as contract]
+            [kototama.kagi-adapter :as kagi-adapter]))
 
 (defn- wat->wasm
   "Shell out to `wasm-tools parse` to assemble WAT text into real Wasm
@@ -44,6 +45,18 @@
   "(module
      (import \"kotoba\" \"clock_monotonic\" (func $clock_monotonic (result i64)))
      (func (export \"main\") (result i64) (call $clock_monotonic)))")
+
+(def kagi-sign-wat
+  "(module
+     (import \"kotoba\" \"kagi_sign\" (func $kagi_sign (param i32 i32 i32 i32 i32 i32) (result i32)))
+     (memory (export \"memory\") 1)
+     (data (i32.const 0) \"kagi://ops/key\")
+     (data (i32.const 32) \"hello\")
+     (func (export \"main\") (result i64)
+       (i64.extend_i32_s
+        (call $kagi_sign (i32.const 0) (i32.const 14)
+                         (i32.const 32) (i32.const 5)
+                         (i32.const 100) (i32.const 64)))))")
 
 (def multi-export-wat
   "No imports -- a guest with `main` AND `on-http` (ADR-2607082400's
@@ -131,6 +144,24 @@
         n (tender/run-main wasm [:clock-monotonic] caps)]
     (is (pos? n))))
 
+(deftest kagi-sign-links-to-authorized-non-exportable-handle
+  (let [wasm (wat->wasm kagi-sign-wat)
+        caps (contract/host-caps {:grants [:kagi-sign]})
+        seen (atom nil)
+        signer (kagi-adapter/signer
+                (fn [ref purpose msg]
+                  (reset! seen [ref purpose (String. ^bytes msg "UTF-8")])
+                  (.getBytes "sig!" "UTF-8")))
+        decision {:decision :grant :capability :kagi/sign
+                  :secret-ref "kagi://ops/key" :purpose :artifact-signing}
+        session (tender/open-session wasm [:kagi-sign] caps
+                                     {:kagi-signer signer :kagi-decisions [decision]})]
+    (is (= 4 (tender/session-call-main session)))
+    (is (= ["kagi://ops/key" :artifact-signing "hello"] @seen))
+    (is (= "sig!" (tender/read-memory-string (:instance session) 100 4)))
+    (is (thrown? clojure.lang.ExceptionInfo
+                 (tender/open-session wasm [:kagi-sign] caps {})))))
+
 (deftest call-export-invokes-any-named-export-not-just-main
   (let [wasm (wat->wasm multi-export-wat)
         caps (contract/host-caps {:grants []})
@@ -169,6 +200,14 @@
     (let [caps (contract/host-caps {:grants []})]
       (is (thrown-with-msg? clojure.lang.ExceptionInfo #"rejected by contract"
                             (tender/instantiate (byte-array 0) [:http-post] caps))))))
+
+(deftest http-url-allowlist-least-privilege
+  (testing "nil allowlist is unrestricted (legacy); empty set denies; prefix matches"
+    (let [allowed? @#'tender/http-url-allowed?]
+      (is (true? (allowed? nil "http://evil.example/")))
+      (is (false? (allowed? #{} "http://evil.example/")))
+      (is (true? (allowed? #{"http://127.0.0.1:9/"} "http://127.0.0.1:9/x")))
+      (is (false? (allowed? #{"http://127.0.0.1:9/"} "http://evil.example/"))))))
 
 (deftest a-defense-in-depth-grant-check-also-guards-each-call
   (testing "sha256-hex granted at the surface level but the per-call check still gates it"
@@ -283,7 +322,8 @@
         wasm (wat->wasm wat)
         caps (contract/host-caps {:grants [:gen-keypair :sign :verify]
                                   :limits {:allow-secret-imports? true}})
-        ok? (tender/run-main wasm [:gen-keypair :sign :verify] caps)]
+        ok? (tender/run-main wasm [:gen-keypair :sign :verify] caps
+                             {:allow-legacy-raw-crypto? true})]
     (is (= 1 ok?))))
 
 ;; ---------------------------------------------------------------------------
@@ -312,5 +352,16 @@
   (testing "(gen-keypair 2048 64), compiled by `kotoba wasm emit`, not WAT"
     (let [wasm (read-fixture "kotoba-compiled-gen-keypair.wasm")
           caps (contract/host-caps {:grants [:gen-keypair] :limits {:allow-secret-imports? true}})
-          written (tender/run-main wasm [:gen-keypair] caps)]
+          written (tender/run-main wasm [:gen-keypair] caps
+                                   {:allow-legacy-raw-crypto? true})]
       (is (= 64 written) "32-byte seed + 32-byte derived pubkey"))))
+
+(deftest raw-guest-private-key-abi-is-legacy-only
+  (let [caps (contract/host-caps {:grants [:gen-keypair]
+                                  :limits {:allow-secret-imports? true}})]
+    (try
+      (tender/open-session (byte-array 0) [:gen-keypair] caps)
+      (is false "raw guest private-key generation must fail closed")
+      (catch clojure.lang.ExceptionInfo e
+        (is (= :kagi/non-exportable-key-required
+               (:kototama.tender/reason (ex-data e))))))))
