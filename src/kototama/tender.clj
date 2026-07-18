@@ -74,6 +74,7 @@
   `:infer-fn` instead of hitting the real network."
   (:require [clojure.data.json :as json]
             [clojure.string :as str]
+            [kototama.compatibility :as compatibility]
             [kototama.contract :as contract]
             [ed25519.core :as ed])
   (:import (com.dylibso.chicory.runtime ExecutionListener HostFunction ImportFunction
@@ -566,9 +567,10 @@
   ([wasm-bytes requested-imports host-caps]
    (open-session wasm-bytes requested-imports host-caps {}))
   ([wasm-bytes requested-imports host-caps
-    {:keys [store llm-client fuel]
+    {:keys [store llm-client fuel require-kotoba-compatibility?]
      :or {store (in-memory-store) llm-client (default-llm-client) fuel default-fuel-limit}}]
-   (let [caps (contract/host-caps host-caps)
+   (let [artifact-compatibility (compatibility/validate! wasm-bytes require-kotoba-compatibility?)
+         caps (contract/host-caps host-caps)
          validation (contract/validate-import-surface requested-imports caps)]
      (when-not (:ok? validation)
        (throw (ex-info "kototama.tender: import surface rejected by contract"
@@ -601,6 +603,7 @@
         :fuel-limit fuel
         :caps caps
         :requested (:requested validation)
+        :compatibility artifact-compatibility
         :validation validation}))))
 
 (defn instantiate
