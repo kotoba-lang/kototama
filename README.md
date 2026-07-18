@@ -1,12 +1,12 @@
 # kototama
 
-**Role: the `.kotoba` WASM runtime** — tender / host that **runs** guest
-modules produced by the **kotoba language** (`kotoba wasm emit`).  
+**Role: the Kotoba/Wasm component tender and linker** — admits, links, and
+runs components produced by the **kotoba language** (`kotoba wasm emit`).
 It does **not** own the language or the AOT compiler.
 
 ```text
-kotoba   = language   (.kotoba → check → wasm emit → guest.wasm)  ← kotoba-lang/kotoba
-kototama = runtime    (host & run that .wasm)                     ← this repo
+kotoba   = component language (.kotoba → check → wasm emit)       ← kotoba-lang/kotoba
+kototama = runtime tender/linker (admit + link + run components)  ← this repo
 aiueos   = OS / broker (decides grants; tender only enforces)
 ```
 
@@ -26,10 +26,14 @@ duplication — just an undocumented spelling split, which this note closes.
 
 In the `kotoba → kototama → aiueos` stack
 ([ADR-2607022400](https://github.com/com-junkawasaki/root/blob/main/90-docs/adr/2607022400-kototama-unikernel-tender-runtime-vocabulary.md)),
-kototama is the **Wasm tender runtime**: it hosts the Wasm guests that
-**kotoba** (the language) compiles (`.kotoba` → `kotoba wasm emit` → AOT `.wasm`),
-under capability grants that `aiueos` decides. Solo5's *tender* pattern —
-kototama hosts, the component is guest. **Do not reimplement the compiler here.**
+kototama is the **Wasm component tender/linker**: it admits and instantiates
+the components that **kotoba** compiles (`.kotoba` → `kotoba wasm emit` → AOT
+`.wasm`), links declared imports/exports, and binds only capabilities granted
+by `aiueos`. Host and guest are relative runtime roles, not source extensions:
+a Kotoba-written HTTP or database provider may host a higher-level import
+while remaining a guest of scoped socket/TLS/secret capabilities. Kototama
+does not let same-language providers bypass those imports. **Do not
+reimplement the compiler here.**
 
 **Compile guests with [`kotoba-lang/kotoba`](https://github.com/kotoba-lang/kotoba).**
 
@@ -45,7 +49,7 @@ kotoba wasm AOT  >  clojurewasm  >  ClojureScript  >  nbb
 | Path | Status | Notes |
 |---|---|---|
 | **`.kotoba` → AOT `.wasm` on native WebAssembly** | **first** | browser/Node via [`wasm-webcomponent`](https://github.com/kotoba-lang/wasm-webcomponent) (extracted from this repo's `web/`) |
-| **clojurewasm** | next when FFI allows | host-import surface still limited (upstream Phase-16); revisit for host-import guests |
+| **clojurewasm** | next when FFI allows | component-import surface still limited (upstream Phase-16); revisit for imported-capability components |
 | **ClojureScript host wire** | when native WASM + CLJS host imports | e.g. portable `kotoba.kami-host` |
 | **`kototama.tender` (JVM/Chicory)** | **demoted compat / CI** | landed historically (ADR-2607022900 / 2607062330); keep for bit-exact fixtures, not the design premise |
 
@@ -86,11 +90,11 @@ Language-repo `kotoba wasm run` is the same class of **compat bootstrap**.
 ## Quick start (runtime)
 
 ```bash
-# Guest must already be AOT-compiled by the language (kotoba):
+# Component must already be AOT-compiled by the language (kotoba):
 #   kotoba wasm emit cell.kotoba --package-lock L -o cell.wasm
 
 clojure -M:cli run path/to/guest.wasm --grant …     # execute (tender / CLI)
-clojure -M:cli lint path/to/guest.kotoba            # emit-pitfall lint only (no compile)
+clojure -M:cli lint path/to/component.kotoba        # emit-pitfall lint only (no compile)
 clojure -M:cli inspect path/to/guest.wasm
 clojure -M:doctor
 node web/verify-host-free.mjs                       # first path: native WebAssembly engine
@@ -126,12 +130,12 @@ bash deploy/validate-packaging.sh                    # systemd oneshot+timer sta
 bash deploy/staging-smoke.sh                         # non-root staging substitute
 clojure -M:cli fleet-demo                            # R3 pure loop demo
 clojure -M:cli fleet-run path/to/guest.wasm          # tender execute + disk checkpoint
-clojure -M:cli lint  path/to/guest.kotoba            # lint only — compile with kotoba
+clojure -M:cli lint  path/to/component.kotoba        # lint only — compile with kotoba
 clojure -M:cli run     path/to/guest.wasm            # RUNTIME: run AOT guest
 node web/verify-host-free.mjs                        # R2 host-free under browser Wasm
 ```
 
-Host-free pure guests are first-class on **native WASM** (browser/Node via
+Zero-import pure components are first-class on **native WASM** (browser/Node via
 wasm-webcomponent / `web/`) and still verified on the demoted JVM tender
 (`fact(5)=120`, peak-cells `@4096→240`).
 
