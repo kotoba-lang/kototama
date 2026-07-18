@@ -55,7 +55,13 @@ kotoba wasm AOT  >  clojurewasm  >  ClojureScript  >  nbb
 to a Chicory `HostFunction` with pre-flight + per-call grant checks,
 `RuntimeLimits`, memory limits, and fuel. Useful as a verification harness
 against real Wasm bytes — **not** what "use kototama" means for new work.
-Language-repo `kotoba wasm run` is the same class of **compat bootstrap**.
+Language-repo `kotoba wasm run` (`kotoba.wasm-exec` in `kotoba-lang/kotoba`)
+is the same class of **compat bootstrap**, but a deliberately separate
+implementation, not shared code: it exists so that repo's own emit path
+can prove its own output runs, in its own test suite, without a cross-repo
+test dependency on kototama. See com-junkawasaki/root ADR-2607182200 for
+the full cross-repo dependency graph and why these two JVM/Chicory paths
+are not considered duplicated work to consolidate.
 
 ## Contract Surface
 
