@@ -6,6 +6,7 @@
   timeout is checked against HostCaps before native I/O."
   (:require [clojure.string :as str]
             [kotoba.security.abac :as abac]
+            [kotoba.security.crypto-policy :as crypto]
             [kotoba.security.information-flow :as flow]
             [kototama.contract :as contract]
             [kototama.tender :as tender])
@@ -90,6 +91,9 @@
   [context]
   (flow/evaluate-egress context))
 
+(defn crypto-decision [policy envelope]
+  (crypto/check-production-envelope policy envelope))
+
 (defn- endpoint-allowed? [allowlist host port]
   (and (set? allowlist)
        (contains? allowlist (exact-endpoint host port))))
@@ -139,6 +143,7 @@
   ([host-caps] (native-provider host-caps {}))
   ([host-caps {:keys [ssl-socket-factory ssl-socket-factory-fn
                       abac-policy abac-attributes information-flow-context
+                      crypto-required? crypto-policy crypto-envelope
                       require-client-certificate?
                       resolve-addresses trace-read! trace-write!]
                :or {ssl-socket-factory (SSLSocketFactory/getDefault)
@@ -157,11 +162,17 @@
         last-abac-decision (atom nil)
         last-information-flow-decision (atom nil)
         last-tls-decision (atom nil)
+        crypto-decision (when (or crypto-required? crypto-envelope)
+                          (crypto-decision crypto-policy crypto-envelope))
         connect
         (tender/host-fn
          "transport_connect" [ValType/I32 ValType/I32 ValType/I32] ValType/I64
          (fn [instance args]
            (granted! caps :transport-connect)
+           (when (and crypto-required? (not (:valid? crypto-decision)))
+             (throw (ex-info "hybrid PQC policy denies transport"
+                             {:type :kototama/crypto-denied
+                              :crypto crypto-decision})))
            (let [raw-host (read-utf8 instance (aget args 0) (aget args 1))
                  host (canonical-host raw-host)
                  port (long (aget args 2))
@@ -370,5 +381,6 @@
      :state {:handles handles :usage usage
              :last-abac-decision last-abac-decision
              :last-information-flow-decision last-information-flow-decision
-             :last-tls-decision last-tls-decision}
+             :last-tls-decision last-tls-decision
+             :crypto-decision crypto-decision}
      :close! close-all!})))

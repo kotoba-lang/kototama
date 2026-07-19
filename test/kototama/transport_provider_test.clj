@@ -38,3 +38,16 @@
                  (assoc context :declassification-grant grant))]
     (is (false? (:information-flow/allowed? denied)))
     (is (true? (:information-flow/allowed? allowed)))))
+
+(deftest production-transport-rejects-hybrid-label-without-pq-component
+  (let [policy {:kotoba.security/crypto-policy-version 1
+                :mode :hybrid-required :hybrid-epoch-floor 1}
+        envelope {:envelope/provider {:provider/id :kagi
+                                      :provider/fips-validated false}
+                  :envelope/kem? true :envelope/hybrid? true
+                  :envelope/epoch 2
+                  :envelope/algorithms [:x25519 :ml-kem-768]}]
+    (is (:valid? (transport/crypto-decision policy envelope)))
+    (is (false? (:valid?
+                 (transport/crypto-decision
+                  policy (assoc envelope :envelope/algorithms [:x25519])))))))
