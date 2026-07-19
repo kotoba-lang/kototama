@@ -7,6 +7,7 @@
   (:require [clojure.string :as str]
             [kotoba.security.abac :as abac]
             [kotoba.security.crypto-policy :as crypto]
+            [kotoba.security.hardware :as hardware]
             [kotoba.security.information-flow :as flow]
             [kototama.contract :as contract]
             [kototama.tender :as tender])
@@ -94,6 +95,18 @@
 (defn crypto-decision [policy envelope]
   (crypto/check-production-envelope policy envelope))
 
+(defn hardware-signing-decision [required? evidence]
+  (assoc (hardware/evaluate-signing evidence)
+         :hardware-signing/required? (boolean required?)))
+
+(defn enforce-hardware-signing! [required? evidence]
+  (let [decision (hardware-signing-decision required? evidence)]
+    (when (and required? (not (:hardware-signing/qualified? decision)))
+      (throw (ex-info "hardware signing policy denies transport"
+                      {:type :kototama/hardware-signing-denied
+                       :hardware-signing decision})))
+    decision))
+
 (defn- endpoint-allowed? [allowlist host port]
   (and (set? allowlist)
        (contains? allowlist (exact-endpoint host port))))
@@ -144,6 +157,7 @@
   ([host-caps {:keys [ssl-socket-factory ssl-socket-factory-fn
                       abac-policy abac-attributes information-flow-context
                       crypto-required? crypto-policy crypto-envelope
+                      hardware-signing-required? hardware-signing-evidence
                       require-client-certificate?
                       resolve-addresses trace-read! trace-write!]
                :or {ssl-socket-factory (SSLSocketFactory/getDefault)
@@ -164,11 +178,17 @@
         last-tls-decision (atom nil)
         crypto-decision (when (or crypto-required? crypto-envelope)
                           (crypto-decision crypto-policy crypto-envelope))
+        hardware-signing-decision*
+        (when (or hardware-signing-required? hardware-signing-evidence)
+          (hardware-signing-decision hardware-signing-required?
+                                     hardware-signing-evidence))
         connect
         (tender/host-fn
          "transport_connect" [ValType/I32 ValType/I32 ValType/I32] ValType/I64
          (fn [instance args]
            (granted! caps :transport-connect)
+           (enforce-hardware-signing! hardware-signing-required?
+                                      hardware-signing-evidence)
            (when (and crypto-required? (not (:valid? crypto-decision)))
              (throw (ex-info "hybrid PQC policy denies transport"
                              {:type :kototama/crypto-denied
@@ -382,5 +402,6 @@
              :last-abac-decision last-abac-decision
              :last-information-flow-decision last-information-flow-decision
              :last-tls-decision last-tls-decision
-             :crypto-decision crypto-decision}
+             :crypto-decision crypto-decision
+             :hardware-signing-decision hardware-signing-decision*}
      :close! close-all!})))
