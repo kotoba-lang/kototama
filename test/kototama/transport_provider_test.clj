@@ -50,4 +50,22 @@
     (is (:valid? (transport/crypto-decision policy envelope)))
     (is (false? (:valid?
                  (transport/crypto-decision
-                  policy (assoc envelope :envelope/algorithms [:x25519])))))))
+                 policy (assoc envelope :envelope/algorithms [:x25519])))))))
+
+(deftest production-transport-requires-hardware-backed-client-signing
+  (let [evidence {:provider-id :apple-secure-enclave
+                  :hardware-backed? true :provider-origin-verified? true
+                  :private-exported? false :sign-verified? true
+                  :unavailable-failed-closed? true}]
+    (is (:hardware-signing/qualified?
+         (transport/enforce-hardware-signing! true evidence)))
+    (doseq [bad [(assoc evidence :private-exported? true)
+                 (assoc evidence :provider-origin-verified? false)
+                 (assoc evidence :unavailable-failed-closed? false)]]
+      (is (thrown-with-msg?
+           clojure.lang.ExceptionInfo #"hardware signing policy denies"
+           (transport/enforce-hardware-signing! true bad))))
+    (is (false? (:hardware-signing/qualified?
+                 (transport/enforce-hardware-signing!
+                  false (assoc evidence :private-exported? true))))
+        "development profile may observe failure but production required mode denies")))
