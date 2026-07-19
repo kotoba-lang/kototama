@@ -6,6 +6,7 @@
   timeout is checked against HostCaps before native I/O."
   (:require [clojure.string :as str]
             [kotoba.security.abac :as abac]
+            [kotoba.security.approval :as approval]
             [kotoba.security.crypto-policy :as crypto]
             [kotoba.security.hardware :as hardware]
             [kotoba.security.information-flow :as flow]
@@ -107,6 +108,25 @@
                        :hardware-signing decision})))
     decision))
 
+(defn approval-decision
+  [approvals context endpoint endpoint-digest-fn]
+  (approval/evaluate
+   approvals
+   (assoc context
+          :request-digest
+          (when (ifn? endpoint-digest-fn)
+            (endpoint-digest-fn endpoint)))))
+
+(defn enforce-approval!
+  [required? approvals context endpoint endpoint-digest-fn]
+  (let [decision (approval-decision approvals context endpoint
+                                    endpoint-digest-fn)]
+    (when (and required? (not (:approval/allowed? decision)))
+      (throw (ex-info "approval quorum denies transport"
+                      {:type :kototama/approval-denied
+                       :endpoint endpoint :approval decision})))
+    decision))
+
 (defn- endpoint-allowed? [allowlist host port]
   (and (set? allowlist)
        (contains? allowlist (exact-endpoint host port))))
@@ -158,6 +178,8 @@
                       abac-policy abac-attributes information-flow-context
                       crypto-required? crypto-policy crypto-envelope
                       hardware-signing-required? hardware-signing-evidence
+                      approval-required? approvals-fn approval-context
+                      endpoint-digest-fn
                       require-client-certificate?
                       resolve-addresses trace-read! trace-write!]
                :or {ssl-socket-factory (SSLSocketFactory/getDefault)
@@ -176,6 +198,7 @@
         last-abac-decision (atom nil)
         last-information-flow-decision (atom nil)
         last-tls-decision (atom nil)
+        last-approval-decision (atom nil)
         crypto-decision (when (or crypto-required? crypto-envelope)
                           (crypto-decision crypto-policy crypto-envelope))
         hardware-signing-decision*
@@ -196,8 +219,17 @@
            (let [raw-host (read-utf8 instance (aget args 0) (aget args 1))
                  host (canonical-host raw-host)
                  port (long (aget args 2))
+                 endpoint (when host (exact-endpoint host port))
+                 approvals (when (and endpoint (ifn? approvals-fn))
+                             (approvals-fn endpoint))
+                 approval-decision*
+                 (when (and endpoint (or approval-required? approvals-fn))
+                   (enforce-approval! approval-required? approvals
+                                      approval-context endpoint
+                                      endpoint-digest-fn))
                  decision (when host
                             (transport-decision abac-policy abac-attributes host port))]
+             (reset! last-approval-decision approval-decision*)
              (reset! last-abac-decision decision)
              (if (and host (<= 1 port 65535)
                       (:abac/allowed? decision)
@@ -402,6 +434,7 @@
              :last-abac-decision last-abac-decision
              :last-information-flow-decision last-information-flow-decision
              :last-tls-decision last-tls-decision
+             :last-approval-decision last-approval-decision
              :crypto-decision crypto-decision
              :hardware-signing-decision hardware-signing-decision*}
      :close! close-all!})))
