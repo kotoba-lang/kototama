@@ -69,3 +69,43 @@
                  (transport/enforce-hardware-signing!
                   false (assoc evidence :private-exported? true))))
         "development profile may observe failure but production required mode denies")))
+
+(def approval-digest "sha256:db.internal:5432")
+
+(defn signed-approval [approver role]
+  {:approval/version 1 :approval/approver approver :approval/role role
+   :approval/request-digest approval-digest
+   :approval/not-before-ms 1000 :approval/expires-at-ms 2000
+   :approval/signature [:valid approver approval-digest]})
+
+(def approval-context
+  {:initiator :workload/payment :required-roles #{:security :database-owner}
+   :min-approvals 2 :now-ms 1500
+   :verify-signature-fn
+   (fn [body signature]
+     (= signature [:valid (:approval/approver body)
+                   (:approval/request-digest body)]))})
+
+(deftest sensitive-transport-requires-independent-bound-approval
+  (let [approvals [(signed-approval :alice :security)
+                   (signed-approval :bob :database-owner)]
+        digest-fn (fn [endpoint] (str "sha256:" endpoint))]
+    (is (:approval/allowed?
+         (transport/enforce-approval! true approvals approval-context
+                                      "db.internal:5432" digest-fn)))
+    (doseq [bad [[(first approvals)]
+                 [(first approvals) (assoc (second approvals)
+                                           :approval/approver :alice)]
+                 [(first approvals) (assoc (second approvals)
+                                           :approval/request-digest
+                                           "sha256:other")]
+                 [(first approvals) (assoc (second approvals)
+                                           :approval/signature [:forged])]]]
+      (is (thrown-with-msg?
+           clojure.lang.ExceptionInfo #"approval quorum denies transport"
+           (transport/enforce-approval! true bad approval-context
+                                        "db.internal:5432" digest-fn))))
+    (is (thrown-with-msg?
+         clojure.lang.ExceptionInfo #"approval quorum denies transport"
+         (transport/enforce-approval! true approvals approval-context
+                                      "other.internal:5432" digest-fn)))))
