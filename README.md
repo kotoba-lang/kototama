@@ -61,6 +61,35 @@ to a Chicory `HostFunction` with pre-flight + per-call grant checks,
 against real Wasm bytes — **not** what "use kototama" means for new work.
 Language-repo `kotoba wasm run` is the same class of **compat bootstrap**.
 
+`src/kototama/transport_provider.clj` is the opt-in JVM prototype for the
+bounded socket/TLS ABI. It exposes opaque affine handles only, requires exact
+`host:port` allowlisting, enables TLS hostname verification, and meters
+connections plus cumulative read/write bytes. Callers construct it explicitly
+and pass its HostFunctions to `open-session`; ambient networking stays absent.
+
+`src/kototama/linker.clj` links separate Wasm instances without sharing linear
+memory. It grows an isolated provider scratch page, rewrites pointer arguments,
+copies declared input/output buffers, rejects missing/duplicate/type-invalid
+bindings, and keeps consumer high-level grants separate from provider
+transport grants. The checked E2E path is real `.kotoba` consumer → real
+`.kotoba` HTTP provider → native verified TLS.
+
+The HTTP provider emits a bounded HTTP/1.1 GET, parses a 100–599 status code,
+requires CRLF-CRLF header termination, and never follows redirects implicitly.
+Native reads and TLS handshakes use the finite `:max-transport-read-ms` limit;
+slow peers fail closed and release their handles.
+
+Browser `http-get` is a separate explicitly injected high-level path. Node can
+instead link the compiled `.kotoba` HTTP provider across independent memories
+to its bounded worker/SAB TLS transport. Both are denied unless the matching
+grants and finite quotas are supplied; the browser adapter additionally checks
+host, port, and path before invoking its fetch worker bridge.
+
+The database sibling now supplies a generic bounded u32-big-endian frame
+exchange. A separately compiled Kotoba DB consumer/provider pair is tested over
+the same native verified TLS path; product-specific database authentication
+and transaction protocols remain separate follow-ups.
+
 ## Contract Surface
 
 - `src/kototama/contract.cljc` defines the `actor:host` import surface,
@@ -119,12 +148,13 @@ Ladder and gates: [`docs/maturity.md`](docs/maturity.md).
 |---|---|
 | R0 contract / dry-run | stable |
 | R1 tender (compat: JVM/Chicory) | stable as **compat suite** — session report, host-free guests, emit lint, CLI (not the first path) |
-| **R2 browser / native WASM host** | **first product path** (advanced-partial) — AOT `.wasm` via wasm-webcomponent; 8/9 linkable; host-free web fixtures |
+| **R2 browser / native WASM host** | **first product path** (advanced-partial) — AOT `.wasm` via wasm-webcomponent; 10/59 linkable; full declared surface tracked; host-free web fixtures |
 | **R3 fleet multi-tenant** | **stable** — ops-ready local/shared-store fleet (fence+daemon+CI+staging-smoke; **not Raft**) |
 
 ```bash
 clojure -M:doctor                                    # R0–R3 snapshot
 clojure -M:cli parity                                # R2 import matrix
+bash scripts/verify-postgresql-matrix.sh             # PostgreSQL 14/15/17, JDK 21+
 clojure -M:cli fleet-gate                            # R3 acceptance harness (CI)
 bash deploy/validate-packaging.sh                    # systemd oneshot+timer static gate
 bash deploy/staging-smoke.sh                         # non-root staging substitute

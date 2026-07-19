@@ -5,6 +5,8 @@ on:
   push:
     branches:
       - main
+  schedule:
+    - cron: "17 3 * * 0"
 
 jobs:
   cljc-contract:
@@ -65,3 +67,57 @@ jobs:
       - run: node web/verify-kgraph.mjs
       - run: node web/verify-actor-host.mjs
       - run: node web/verify-host-free.mjs
+
+  postgresql-interop:
+    name: PostgreSQL ${{ matrix.postgresql }} / JDK 21 / Linux
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        postgresql: [14, 15, 17]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: DeLaGuardo/setup-clojure@13.0
+        with:
+          cli: latest
+      - name: Install PostgreSQL ${{ matrix.postgresql }} binaries
+        env:
+          PG_MAJOR: ${{ matrix.postgresql }}
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+            | sudo gpg --dearmor -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.gpg
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.gpg] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends "postgresql-${PG_MAJOR}"
+          echo "/usr/lib/postgresql/${PG_MAJOR}/bin" >> "$GITHUB_PATH"
+      - name: Released PostgreSQL interoperability
+        run: clojure -M:postgresql-interop
+
+  postgresql-pool-soak:
+    name: PostgreSQL weekly 3000-operation pool soak
+    if: github.event_name == 'schedule'
+    runs-on: macos-14
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: DeLaGuardo/setup-clojure@13.0
+        with:
+          cli: latest
+      - name: Install released PostgreSQL 17
+        run: brew install postgresql@17
+      - name: Bounded contention soak
+        env:
+          KOTOTAMA_POOL_SOAK_OPS: "1000"
+        run: |
+          export PATH="/opt/homebrew/opt/postgresql@17/bin:$PATH"
+          clojure -M:postgresql-interop

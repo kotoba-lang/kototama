@@ -67,6 +67,8 @@
            (com.dylibso.chicory.wasm Parser)
            (com.dylibso.chicory.wasm.types FunctionType MemoryLimits ValType)
            (java.security MessageDigest SecureRandom)
+           (javax.crypto Mac SecretKeyFactory)
+           (javax.crypto.spec PBEKeySpec SecretKeySpec)
            (java.net URI)
            (java.net.http HttpClient HttpRequest HttpRequest$BodyPublishers HttpResponse$BodyHandlers)))
 
@@ -140,7 +142,9 @@
 ;; well-behaved guest can see it and back off instead of the whole `main`
 ;; call crashing on a Java exception it never gets a chance to handle. ──
 
-(defn- new-limits-state [] (atom {:http-posts 0 :llm-infers 0 :log-read-bytes 0 :log-write-bytes 0}))
+(defn- new-limits-state []
+  (atom {:http-posts 0 :llm-infers 0 :scram-proofs 0
+         :random-bytes 0 :log-read-bytes 0 :log-write-bytes 0}))
 
 (defn- within-count-limit? [state-key limit-key caps limits-state]
   (< (get @limits-state state-key) (get (:limits caps) limit-key)))
@@ -245,6 +249,81 @@
                    digest (.digest (MessageDigest/getInstance "SHA-256") bs)
                    hex (apply str (map #(format "%02x" (bit-and (int %) 0xff)) digest))]
                (write-bytes! instance (aget args 2) (aget args 3) (.getBytes hex "UTF-8"))))))
+
+(defn- hmac-sha256 [key data]
+  (let [mac (Mac/getInstance "HmacSHA256")]
+    (.init mac (SecretKeySpec. ^bytes key "HmacSHA256"))
+    (.doFinal mac ^bytes data)))
+
+(defn- scram-sha256-host-fn
+  "Purpose-bound credential operation. The named password stays in the host;
+  the guest supplies PostgreSQL's salt, iteration count and SCRAM auth message,
+  and receives client-proof || server-signature (64 bytes)."
+  [caps limits-state credentials]
+  (host-fn "scram_sha256" (mapv valtype [:i32 :i32 :i32 :i32 :i32 :i32 :i32 :i32 :i32]) ValType/I32
+           (fn [instance args]
+             (ensure-granted! caps :scram-sha256)
+             (if-not (within-count-limit? :scram-proofs :max-scram-proofs caps limits-state)
+               -1
+               (try
+                 (let [ref-len (aget args 1)
+                       salt-len (aget args 3)
+                       iterations (aget args 4)
+                       auth-len (aget args 6)
+                       ref (when (and (pos? ref-len) (<= ref-len 255))
+                             (String. ^bytes (read-bytes! instance (aget args 0) ref-len) "UTF-8"))
+                       allowlist (get-in caps [:limits :scram-credential-allowlist])
+                       credential-map (cond
+                                        (fn? credentials) (credentials)
+                                        (instance? clojure.lang.IDeref credentials)
+                                        @credentials
+                                        :else credentials)
+                       secret (get credential-map ref)]
+                   (if-not (and ref secret (contains? allowlist ref)
+                                (pos? salt-len) (<= salt-len 1024)
+                                (<= 4096 iterations 1000000)
+                                (pos? auth-len) (<= auth-len 8192)
+                                (>= (aget args 8) 64))
+                     -1
+                     (let [password (char-array secret)
+                           salt (read-bytes! instance (aget args 2) salt-len)
+                           auth-message (read-bytes! instance (aget args 5) auth-len)
+                           spec (PBEKeySpec. password salt (int iterations) 256)]
+                       (try
+                         (let [salted (.getEncoded (.generateSecret
+                                                   (SecretKeyFactory/getInstance "PBKDF2WithHmacSHA256")
+                                                   spec))
+                               client-key (hmac-sha256 salted (.getBytes "Client Key" "UTF-8"))
+                               stored-key (.digest (MessageDigest/getInstance "SHA-256") client-key)
+                               client-signature (hmac-sha256 stored-key auth-message)
+                               proof (byte-array 32)
+                               _ (dotimes [i 32]
+                                   (aset-byte proof i
+                                              (unchecked-byte
+                                               (bit-xor (bit-and 255 (aget client-key i))
+                                                        (bit-and 255 (aget client-signature i))))))
+                               server-key (hmac-sha256 salted (.getBytes "Server Key" "UTF-8"))
+                               server-signature (hmac-sha256 server-key auth-message)
+                               result (byte-array (concat proof server-signature))]
+                           (swap! limits-state update :scram-proofs inc)
+                           (write-bytes! instance (aget args 7) (aget args 8) result))
+                         (finally
+                           (.clearPassword spec)
+                           (java.util.Arrays/fill password (char 0)))))))
+                 (catch Exception _ -1))))))
+
+(defn- random-bytes-host-fn [caps limits-state secure-random]
+  (host-fn "random_bytes" [ValType/I32 ValType/I32] ValType/I32
+           (fn [instance args]
+             (ensure-granted! caps :random-bytes)
+             (let [out-cap (aget args 1)]
+               (if (or (<= out-cap 0) (> out-cap 4096)
+                       (not (try-add-bytes! :random-bytes :max-random-bytes
+                                            caps limits-state out-cap)))
+                 -1
+                 (let [bytes (byte-array out-cap)]
+                   (.nextBytes ^SecureRandom secure-random bytes)
+                   (write-bytes! instance (aget args 0) out-cap bytes)))))))
 
 (defn- http-url-allowed?
   "SSRF least-privilege for http_post. nil allowlist = unrestricted legacy
@@ -508,12 +587,16 @@
    HostFunction re-checks grants at call time. Memory growth capped to
    HostCaps `:max-memory-pages`. Maturity R1 (ADR-2607101200).
 
-   opts: :store, :llm-client, :fuel (see previous instantiate docstring)."
+   opts: :store, :llm-client, :fuel, and :provider-host-functions. The latter
+   is an explicit map of import id to Chicory HostFunction for bounded
+   component-provider ABIs; absent providers fail before instantiation."
   ([wasm-bytes requested-imports host-caps]
    (open-session wasm-bytes requested-imports host-caps {}))
   ([wasm-bytes requested-imports host-caps
-    {:keys [store llm-client fuel allow-legacy-raw-crypto? kagi-signer kagi-decisions record!]
-     :or {store (in-memory-store) llm-client (default-llm-client) fuel default-fuel-limit}}]
+    {:keys [store llm-client scram-credentials secure-random fuel allow-legacy-raw-crypto? kagi-signer kagi-decisions
+            provider-host-functions record!]
+     :or {store (in-memory-store) llm-client (default-llm-client)
+          secure-random (SecureRandom.) fuel default-fuel-limit}}]
    (let [caps (contract/host-caps host-caps)
          receipts (atom [])
          record! (or record! #(swap! receipts conj %))
@@ -533,11 +616,27 @@
                      :verify #(verify-host-fn caps limits-state)
                      :kagi-sign #(kagi-sign-host-fn caps limits-state kagi-signer kagi-decisions)
                      :sha256-hex #(sha256-hex-host-fn caps limits-state)
+                     :scram-sha256 #(scram-sha256-host-fn caps limits-state scram-credentials)
+                     :random-bytes #(random-bytes-host-fn caps limits-state secure-random)
                      :http-post #(http-post-host-fn caps limits-state)
                      :llm-infer #(llm-infer-host-fn caps limits-state llm-client)
                      :log-read #(log-read-host-fn caps limits-state store)
                      :log-write #(log-write-host-fn caps limits-state store)
                      :clock-monotonic #(clock-monotonic-host-fn caps limits-state)}
+           fn-by-id (merge fn-by-id
+                           (into {} (map (fn [[id host-fn]] [id (constantly host-fn)]))
+                                 provider-host-functions))
+           missing-providers (vec (remove fn-by-id (:requested validation)))
+           _ (when (seq missing-providers)
+               (record! {:receipt/version 1
+                         :receipt/import :provider-link
+                         :receipt/outcome :denied
+                         :receipt/errors [{:error :runtime/provider-unavailable
+                                           :imports missing-providers}]})
+               (throw (ex-info "kototama.tender: provider binding unavailable"
+                               {:kototama.tender/errors
+                                [{:error :runtime/provider-unavailable
+                                  :imports missing-providers}]})))
            host-fns (binding [*record-host-call!* record!]
                       (mapv (fn [id] ((get fn-by-id id))) (:requested validation)))
            imports (-> (ImportValues/builder)

@@ -9,7 +9,7 @@ guest = Wasm component). Not a marketing scorecard.
 |---|---|---|---|
 | **R0** | Contract / dry-run | **stable** | `kototama.contract` HostCaps + import surface; organism membrane refuses live publish |
 | **R1** | Tender execution (JVM/Chicory) | **stable** | `kototama.tender` runs real `.wasm`; fuel + memory limits; aiueos adapter; session report; source lint; host-free + host-import fixtures from `kotoba wasm emit` |
-| **R2** | Browser-native host parity | **advanced-partial** | parity matrix; 8/9 browser-linkable; http-post via inject / SAB+COOP bridge (`http-post-bridge.js`); host-free web fixtures |
+| **R2** | Browser-native host parity | **advanced-partial** | parity matrix; 10/59 browser-linkable; JVM component linker + bounded transport/TLS + HTTP/PostgreSQL component E2E; browser/Node high-level HTTP GET via explicit sync bridge |
 | **R3** | Fleet multi-tenant tender | **stable** | ops-ready local/shared-store fleet: fence+daemon+CI+staging-smoke (**not Raft**) |
 
 **Current declared level: R3 stable** (R1 stable; R2 advanced-partial underneath).
@@ -50,8 +50,31 @@ clojure -M:cli parity           # JVM vs browser import matrix
 | sha256-hex / clock / log-* | yes | yes | yes |
 | llm-infer | yes | **no** | inject |
 | http-post | yes | inject / SAB+COOP | inject |
+| http-get component | component-link | inject | inject |
+| transport-connect / tls-open / transport-read / transport-write / transport-close | **opt-in prototype** | **no** | **no** |
+| tls-server-end-point | **opt-in RFC 5929 prototype** | **no** | **no** |
+| random-bytes | yes | yes | yes |
+| scram-sha256 | **purpose-bound prototype** | **no** | **no** |
+| pg-open-scram / pg-open-scram-random / pg-close-scram | **component-link prototype** | **no** | **no** |
+| pg-query-state | **component-link T/E/I prototype** | **no** | **no** |
+| pg-prepare / pg-execute-params2 / pg-close-statement | **named prepared-statement prototype** | **no** | **no** |
+| pg-prepare-typed / pg-execute-params | **bounded typed variable-parameter prototype** | **no** | **no** |
+| pg-bind-portal / pg-fetch-portal / pg-close-portal | **bounded named cursor prototype** | **no** | **no** |
+| pg-copy-out / pg-copy-in | **bounded COPY stream prototype** | **no** | **no** |
+| pg-execute-batch | **bounded single-Sync extended pipeline prototype** | **no** | **no** |
+| pg-session-reset | **pool-return ROLLBACK + DISCARD ALL prototype** | **no** | **no** |
+| pg-pool-open/acquire/query/release/stats/health/drain/close | **parallel provider; fixed stats; health eviction; host-bounded graceful drain** | **no** | **no** |
+| PostgreSQL credential/trust rotation | **fresh generation per new connection** | **no** | **no** |
+| PostgreSQL opaque cancellation | **one-shot native/component prototype** | **no** | **no** |
 
-Score today: **8/9** browser-linkable (`llm-infer` still Node-inject only).
+Score today: **10/59** browser-linkable. `llm-infer` remains Node-inject only;
+the bounded transport/TLS imports have an opt-in JVM provider and remain an
+intentional native boundary in the browser profile. All 59 imports are
+classified: the ten browser-product-required imports are 10/10 implemented,
+ten are native/secret-custody boundaries, 38 provider-component imports are
+deferred, and one (`llm-infer`) is deferred host injection. The 10/59 global
+ratio is retained as transparency, not used to demand unsafe raw-socket or
+secret-custody parity from a browser tab.
 
 ### http-post paths (R2)
 
