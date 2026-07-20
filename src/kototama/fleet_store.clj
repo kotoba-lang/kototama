@@ -13,6 +13,7 @@
             [clojure.java.io :as io]
             [clojure.string :as str]
             [clojure.data.json :as json]
+            [kotoba.security.effect :as effect]
             [kototama.fleet :as fleet])
   (:import (java.net URI URLEncoder)
            (java.net.http HttpClient HttpRequest HttpRequest$BodyPublishers
@@ -103,23 +104,43 @@
         (Base64/getEncoder)
         (.getBytes (str id ":" key) StandardCharsets/UTF_8))))
 
+(defn b2-authorization-decision
+  "Fail closed before credentials can reach the fixed B2 authorization host."
+  [{:keys [key-id app-key]}]
+  (let [violations (cond-> []
+                     (str/blank? key-id) (conj :key-id-required)
+                     (str/blank? app-key) (conj :application-key-required))]
+    {:b2-authorization/allowed? (empty? violations)
+     :b2-authorization/violations violations
+     :b2-authorization/endpoint
+     "https://api.backblazeb2.com/b2api/v2/b2_authorize_account"}))
+
 (defn- b2-authorize!
   "b2_authorize_account → {:api-url :auth-token :download-url :account-id}"
-  [{:keys [key-id app-key]}]
-  (let [req (-> (HttpRequest/newBuilder
-                 (URI/create "https://api.backblazeb2.com/b2api/v2/b2_authorize_account"))
-                (.header "Authorization" (basic-auth key-id app-key))
-                (.GET)
-                .build)
-        resp (.send (http-client) req (HttpResponse$BodyHandlers/ofString))]
-    (when-not (<= 200 (.statusCode resp) 299)
-      (throw (ex-info "b2_authorize_account failed"
-                      {:status (.statusCode resp) :body (.body resp)})))
-    (let [body (json/read-str (.body resp) :key-fn keyword)]
-      {:api-url (:apiUrl body)
-       :auth-token (:authorizationToken body)
-       :download-url (:downloadUrl body)
-       :account-id (:accountId body)})))
+  [{:keys [key-id app-key] :as credentials}]
+  (effect/guard!
+   {:evaluate b2-authorization-decision
+    :request credentials
+    :approved? :b2-authorization/allowed?
+    :action :b2/authorize-account
+    :resource "api.backblazeb2.com"
+    :digest nil
+    :effect
+    (fn [_decision]
+      (let [req (-> (HttpRequest/newBuilder
+                     (URI/create "https://api.backblazeb2.com/b2api/v2/b2_authorize_account"))
+                    (.header "Authorization" (basic-auth key-id app-key))
+                    (.GET)
+                    .build)
+            resp (.send (http-client) req (HttpResponse$BodyHandlers/ofString))]
+        (when-not (<= 200 (.statusCode resp) 299)
+          (throw (ex-info "b2_authorize_account failed"
+                          {:status (.statusCode resp) :body (.body resp)})))
+        (let [body (json/read-str (.body resp) :key-fn keyword)]
+          {:api-url (:apiUrl body)
+           :auth-token (:authorizationToken body)
+           :download-url (:downloadUrl body)
+           :account-id (:accountId body)})))}))
 
 (defn- b2-bucket-id!
   [auth bucket-name]
