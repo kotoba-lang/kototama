@@ -1,6 +1,9 @@
-{:adoption/version 2 :consumer/id :kototama
- :security/git-sha "49fc4ce359752e9fe6e547e9071b5b9b40da937a"
- :required-control-namespaces [kotoba.security.abac kotoba.security.approval kotoba.security.crypto-policy kotoba.security.hardware kotoba.security.information-flow]
+{:adoption/version 3 :consumer/id :kototama
+ :security/git-sha "c83183f7b66afda6a095e690ff617075a39cc0eb"
+ :required-control-namespaces [kotoba.security.abac kotoba.security.approval kotoba.security.crypto-policy kotoba.security.effect kotoba.security.hardware kotoba.security.information-flow]
  :security-sensitive-entrypoints
- {kototama.transport-provider [kotoba.security.abac kotoba.security.approval kotoba.security.crypto-policy kotoba.security.hardware kotoba.security.information-flow]}
+ {kototama.transport-provider [kotoba.security.abac kotoba.security.approval kotoba.security.crypto-policy kotoba.security.hardware kotoba.security.information-flow]
+  kototama.fleet-store [kotoba.security.effect]}
+ :sensitive-operations
+ {kototama.fleet-store/b2-authorize! [kotoba.security.effect]}
  :exceptions []}
