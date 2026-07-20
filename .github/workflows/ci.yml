@@ -31,6 +31,8 @@ jobs:
           tar xzf wasm-tools.tar.gz
           sudo mv wasm-tools-1.252.0-x86_64-linux/wasm-tools /usr/local/bin/wasm-tools
           wasm-tools --version
+      - name: Verify shared security adoption
+        run: clojure -M -m kotoba.security.adoption
       - name: Test CLJC contract
         run: clojure -M:test
       - name: Lint CLJC contract
