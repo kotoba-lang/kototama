@@ -1,0 +1,16 @@
+{:kototama.component-platform/format :v1
+ :target :wasm-component-kotoba-v1
+ :wasi {:default "0.3.0" :legacy ["0.2.11"]}
+ :admission-keys [:target :wasi-version :profile :imports :exports
+                  :grants :provider-bindings :ambient-wasi :budgets]
+ :profiles {:sync {:wit-function :func :async-values false}
+            :async {:wit-function :async-func :async-values [:future :stream]
+                    :required-budgets [:deadline-ms :max-items :max-bytes]
+                    :cancellation :required}}
+ :authority {:imports :declared-and-granted-only
+             :provider-bindings :exact
+             :ambient-wasi false
+             :undeclared-imports :reject}
+ :roles {:language :effect-and-type-semantics
+         :compiler :wit-and-component-artifact
+         :kototama :admission-linking-composition-and-runtime}}

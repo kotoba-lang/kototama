@@ -31,6 +31,11 @@ kototama is the **Wasm tender runtime**: it hosts the Wasm guests that
 under capability grants that `aiueos` decides. Solo5's *tender* pattern —
 kototama hosts, the component is guest. **Do not reimplement the compiler here.**
 
+The current portable contract is WIT plus the WebAssembly Component Model on
+WASI 0.3. Kototama verifies and composes compiler-produced component worlds;
+sync functions remain sync, while async functions/futures/streams require
+explicit cancellation and bounded lifetime/item/byte budgets. See ADR 0009.
+
 **Compile guests with [`kotoba-lang/kotoba`](https://github.com/kotoba-lang/kotoba).**
 
 ### Runtime priority (ADR-2607100100 / ADR-2607102200 addendum 3)
