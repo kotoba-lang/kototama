@@ -62,7 +62,21 @@
    ;; real LLM provider credential server-side -- never a provider endpoint
    ;; called directly with a key embedded in browser-shipped JS/HTML.
    :llm-infer       {:jvm :yes :browser :yes :node :inject
-                     :note "browser: Worker-hosted guest + SAME SAB+Atomics bridge as http-post, via a caller-supplied proxy URL (never a provider key embedded client-side); node: opts.llmInfer inject"}})
+                     :note "browser: Worker-hosted guest + SAME SAB+Atomics bridge as http-post, via a caller-supplied proxy URL (never a provider key embedded client-side); node: opts.llmInfer inject"}
+   ;; ADR-2607230943 second wave: JVM-only so far (kototama.tender), an
+   ;; honest gap -- no wasm-webcomponent actor-host.js port exists yet for
+   ;; any of these 4 (a future SAB+Atomics bridge could reuse http-post's
+   ;; pattern for :http-fetch; cbor-encode/json-encode/json-extract-field
+   ;; are pure computation and don't need one at all, just a JS port of
+   ;; the same flat-pairs parsing + encode/scan logic).
+   :http-fetch          {:jvm :yes :browser :no :node :no
+                         :note "JVM only so far; reuses kotoba-core-contracts' pre-existing http/fetch (id 205) shape"}
+   :cbor-encode         {:jvm :yes :browser :no :node :no
+                         :note "JVM only so far; pure computation, no network/DOM dependency to port"}
+   :json-encode         {:jvm :yes :browser :no :node :no
+                         :note "JVM only so far; pure computation, no network/DOM dependency to port"}
+   :json-extract-field  {:jvm :yes :browser :no :node :no
+                         :note "JVM only so far; pure computation, no network/DOM dependency to port"}})
 
 (defn import-status
   "Status map for one import id under :jvm | :browser | :node."

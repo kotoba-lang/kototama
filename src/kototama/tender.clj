@@ -71,7 +71,23 @@
   or-nil)}`, same DI shape `log-read-host-fn`/`log-write-host-fn` already
   use for `store`) instead of calling `HttpClient` inline. `default-llm-
   client` is the production implementation; tests inject a fake
-  `:infer-fn` instead of hitting the real network."
+  `:infer-fn` instead of hitting the real network.
+
+  Second wave (com-junkawasaki/root ADR-2607230943, field names
+  http_fetch, cbor_encode, json_encode, json_extract_field): GET-only
+  HTTP fetch + CBOR/JSON wire-format encoding for a future news-
+  collecting fleet actor (kawaraban/cloud-itonami) that needs to build
+  CACAO token bytes and XRPC request/response bodies from within a
+  `.kotoba` guest. `http-fetch-host-fn` reuses `http-post-host-fn`'s own
+  `blocked-http-post-destination?`/`contract/url-allowed?`/timeout
+  hardening verbatim (same SSRF/DoS threat model -- a guest-controlled
+  URL, synchronous call blocking the host thread). `cbor-encode-host-fn`
+  ports cloud-itonami's proven `cacao.clj` cbor-head/cbor-val encoder
+  (itself traced to kawaraban.cacao/tashikame.cacao/kotoba.cacao -- 52
+  real published records against pds.aozora.app as of ADR-2607110200).
+  `cbor-encode-host-fn`/`json-encode-host-fn`/`json-extract-field-host-
+  fn` are pure computation (`#{}` effects, no RuntimeLimits count) --
+  see `parse-flat-pairs`'s docstring for the guest-facing wire format."
   (:require [clojure.data.json :as json]
             [clojure.string :as str]
             [kototama.compatibility :as compatibility]
@@ -81,6 +97,7 @@
                                         ImportValues Instance WasmFunctionHandle)
            (com.dylibso.chicory.wasm Parser)
            (com.dylibso.chicory.wasm.types FunctionType MemoryLimits ValType)
+           (java.io ByteArrayOutputStream)
            (java.security MessageDigest SecureRandom)
            (java.net InetAddress Inet6Address URI)
            (java.net.http HttpClient HttpRequest HttpRequest$BodyPublishers HttpResponse$BodyHandlers)
@@ -135,7 +152,7 @@
 ;; well-behaved guest can see it and back off instead of the whole `main`
 ;; call crashing on a Java exception it never gets a chance to handle. ──
 
-(defn- new-limits-state [] (atom {:http-posts 0 :llm-infers 0 :log-read-bytes 0 :log-write-bytes 0}))
+(defn- new-limits-state [] (atom {:http-posts 0 :http-fetches 0 :llm-infers 0 :log-read-bytes 0 :log-write-bytes 0}))
 
 (defn- within-count-limit? [state-key limit-key caps limits-state]
   (< (get @limits-state state-key) (get (:limits caps) limit-key)))
@@ -306,7 +323,13 @@
   real connection is attempted -- NOT a defense against DNS rebinding (a
   host resolving to a public address here, then to an internal one at
   actual connect time); see the namespace-level comment above for why
-  that gap is not closed in this function."
+  that gap is not closed in this function.
+
+  Despite the `-post-` in its name (kept for history/test-name stability
+  -- `tender_test.clj` already references it by this exact symbol), this
+  check is destination-classification only, agnostic of HTTP method:
+  `http-fetch-host-fn` (GET) below shares it verbatim with
+  `http-post-host-fn`, same as `contract/url-allowed?`."
   [^String url]
   (try
     (let [host (.getHost (URI/create url))]
@@ -359,6 +382,226 @@
                          resp (.send (timed-http-client) req (HttpResponse$BodyHandlers/ofByteArray))]
                      (swap! limits-state update :http-posts inc)
                      (write-bytes! instance (aget args 4) (aget args 5) (.body resp)))))))))
+
+(defn- http-fetch-host-fn
+  "`(url-ptr url-len out-ptr out-cap) -> bytes-written|-1`. Synchronous
+  GET (guest calls block on it, same as `http-post-host-fn`); writes the
+  response body. `#{:network}`, metered against `:max-http-fetches`
+  (default 0 -- fully denied unless a caller's HostCaps explicitly
+  raises the limit AND grants the import, same convention
+  `:max-http-posts` uses).
+
+  Deliberately reuses `kotoba-core-contracts`' PRE-EXISTING \"http/fetch\"
+  capability (id 205) rather than registering a new one: `kotoba wasm
+  emit`'s own kernel-capability vocabulary already contracts this exact
+  (url-ptr url-len out-ptr out-cap) -> bytes-written|-1 GET shape
+  (`kotoba.wasm-exec/real-host-functions`' `http-fetch`) -- kototama
+  becomes a SECOND host implementing the SAME shared ABI entry, not a
+  differently-shaped sibling a guest would have to pick between.
+
+  Same SSRF/DoS hardening as `http-post-host-fn`, applied verbatim: the
+  unconditional `blocked-http-post-destination?` denylist (loopback/
+  private/link-local/metadata, best-effort against literal targets, not
+  DNS-rebinding-proof) ANDed with the opt-in `contract/url-allowed?`
+  positive list, both checked BEFORE any connection is attempted, and
+  the same `http-connect-timeout`/`http-request-timeout` so a slow/non-
+  responding peer fails fast instead of hanging the host thread."
+  [caps limits-state]
+  (host-fn "http_fetch" (mapv valtype [:i32 :i32 :i32 :i32]) ValType/I32
+           (fn [instance args]
+             (ensure-granted! caps :http-fetch)
+             (if-not (within-count-limit? :http-fetches :max-http-fetches caps limits-state)
+               -1
+               (let [url (String. ^bytes (read-bytes! instance (aget args 0) (aget args 1)) "UTF-8")]
+                 (if (or (blocked-http-post-destination? url)
+                         (not (contract/url-allowed? (:limits caps) url)))
+                   -1
+                   (let [req (-> (HttpRequest/newBuilder (URI/create url))
+                                (.timeout http-request-timeout)
+                                .GET
+                                .build)
+                         resp (.send (timed-http-client) req (HttpResponse$BodyHandlers/ofByteArray))]
+                     (swap! limits-state update :http-fetches inc)
+                     (write-bytes! instance (aget args 2) (aget args 3) (.body resp)))))))))
+
+;; ── CBOR/JSON wire-format encoding (com-junkawasaki/root ADR-2607230943)
+;; -- pure computation, no network/secret/write effect. A `.kotoba` guest
+;; can only build byte buffers by string concatenation (no map/vector
+;; literals), so `parse-flat-pairs` defines ONE simple, guest-buildable
+;; wire format (key<TAB>value, one pair per LF-separated line, guest's
+;; own order preserved) that both `cbor-encode-host-fn` and
+;; `json-encode-host-fn` share, rather than each inventing its own. This
+;; is deliberately NOT a general encoder: only flat string->string maps
+;; are representable, matching the narrow use case (CACAO token bytes,
+;; XRPC request bodies) this wave was built for. ──────────────────────────
+
+(defn- parse-flat-pairs
+  "Parses kototama's guest-facing flat wire format: one `key<TAB>value`
+  pair per LF-separated line, in the guest's own order (preserved, not
+  resorted -- CBOR/JSON map key order has no semantic meaning, but
+  preserving it keeps encode output deterministic and easy to test).
+  Blank lines are skipped; a non-blank line with no TAB is fail-soft
+  dropped (contributes no pair) rather than aborting the whole encode --
+  a malformed line is a guest bug, not a reason to trap the host call."
+  [^String s]
+  (->> (str/split-lines s)
+       (remove str/blank?)
+       (keep (fn [line]
+               (when-let [i (str/index-of line "\t")]
+                 [(subs line 0 i) (subs line (inc i))])))
+       vec))
+
+;; ── minimal CBOR (definite-length; 1:1 port of cloud-itonami's proven
+;; cacao.clj cbor-head/cbor-val, itself traced to kawaraban.cacao/
+;; tashikame.cacao/kotoba.cacao -- 52 real published records against
+;; pds.aozora.app as of ADR-2607110200). `cbor-val` stays general
+;; (map/string/sequential, matching the reference) even though
+;; `cbor-encode-host-fn` below only ever feeds it a flat string->string
+;; map -- a future JVM-side caller with real nested Clojure data can
+;; still call it directly. ──────────────────────────────────────────────
+
+(defn- cbor-head [^ByteArrayOutputStream o major n]
+  (cond (< n 24)    (.write o (int (+ (bit-shift-left major 5) n)))
+        (< n 256)   (do (.write o (int (+ (bit-shift-left major 5) 24))) (.write o (int n)))
+        (< n 65536) (do (.write o (int (+ (bit-shift-left major 5) 25)))
+                        (.write o (int (bit-and (unsigned-bit-shift-right n 8) 0xff)))
+                        (.write o (int (bit-and n 0xff))))
+        :else (throw (ex-info "cbor len too big" {:n n}))))
+
+(defn- cbor-val [^ByteArrayOutputStream o v]
+  (cond
+    (string? v)     (let [b (.getBytes ^String v "UTF-8")] (cbor-head o 3 (alength b)) (.write o b 0 (alength b)))
+    (map? v)        (do (cbor-head o 5 (count v)) (doseq [[k vv] v] (cbor-val o (name k)) (cbor-val o vv)))
+    (sequential? v) (do (cbor-head o 4 (count v)) (doseq [x v] (cbor-val o x)))
+    :else           (cbor-val o (str v))))
+
+(defn- cbor-pairs-bytes
+  "CBOR-encodes PAIRS (a vector of `[key value]` string pairs, as
+  `parse-flat-pairs` returns) as ONE definite-length CBOR map (major
+  type 5, count = (count pairs)) directly from the pairs vector -- not
+  via an intermediate Clojure map, so guest-specified order is preserved
+  exactly (a Clojure hash-map would not guarantee that)."
+  ^bytes [pairs]
+  (let [o (ByteArrayOutputStream.)]
+    (cbor-head o 5 (count pairs))
+    (doseq [[k v] pairs] (cbor-val o k) (cbor-val o v))
+    (.toByteArray o)))
+
+(defn- cbor-encode-host-fn
+  "`(pairs-ptr pairs-len out-ptr out-cap) -> bytes-written|-1`. Parses
+  PAIRS via `parse-flat-pairs` and writes the definite-length CBOR map
+  `cbor-pairs-bytes` produces. `#{}` -- pure computation, not gated by
+  any RuntimeLimits count (same as `sha256-hex-host-fn`)."
+  [caps _limits-state]
+  (host-fn "cbor_encode" (mapv valtype [:i32 :i32 :i32 :i32]) ValType/I32
+           (fn [instance args]
+             (ensure-granted! caps :cbor-encode)
+             (let [pairs (parse-flat-pairs (String. ^bytes (read-bytes! instance (aget args 0) (aget args 1)) "UTF-8"))]
+               (write-bytes! instance (aget args 2) (aget args 3) (cbor-pairs-bytes pairs))))))
+
+;; ── minimal JSON object encode + bounded string-field scan. Neither is
+;; a general JSON codec (see each fn's own docstring for the narrow
+;; scope) -- `clojure.data.json` (already a dep, used by `anthropic-
+;; infer` below) is deliberately NOT reused for the ENCODE direction:
+;; it doesn't preserve `parse-flat-pairs`' guest-specified key order
+;; past 8 entries (`PersistentArrayMap` converts to a hash-map beyond
+;; that), which would make the CBOR/JSON encode outputs diverge for no
+;; guest-visible reason. ──────────────────────────────────────────────────
+
+(defn- json-escape
+  "Escapes S for embedding as a JSON string body (between the quotes):
+  `\"`/`\\`/newline/return/tab get their standard short escapes, every
+  other C0 control character gets `\\uXXXX`, everything else passes
+  through as-is (this repo's guest strings are UTF-8; JSON strings are
+  UTF-16-code-unit text but every valid UTF-8 byte sequence Java decodes
+  to `String` round-trips through `.getBytes \"UTF-8\"` unescaped)."
+  ^String [^String s]
+  (let [sb (StringBuilder.)]
+    (doseq [c s]
+      (case c
+        \" (.append sb "\\\"")
+        \\ (.append sb "\\\\")
+        \newline (.append sb "\\n")
+        \return (.append sb "\\r")
+        \tab (.append sb "\\t")
+        (if (< (int c) 0x20)
+          (.append sb (format "\\u%04x" (int c)))
+          (.append sb c))))
+    (.toString sb)))
+
+(defn- json-pairs-bytes
+  "JSON-encodes PAIRS (a vector of `[key value]` string pairs, as
+  `parse-flat-pairs` returns) as one flat JSON object of string keys to
+  string values, e.g. an XRPC request body -- NOT a general JSON codec
+  (no numbers/booleans/null/nesting; every value is a JSON string)."
+  ^bytes [pairs]
+  (let [body (str/join "," (map (fn [[k v]] (str "\"" (json-escape k) "\":\"" (json-escape v) "\"")) pairs))]
+    (.getBytes (str "{" body "}") "UTF-8")))
+
+(defn- json-encode-host-fn
+  "`(pairs-ptr pairs-len out-ptr out-cap) -> bytes-written|-1`. Same
+  flat pairs wire format as `cbor-encode-host-fn`; writes the JSON
+  object `json-pairs-bytes` produces. `#{}` -- pure computation, not
+  gated by any RuntimeLimits count."
+  [caps _limits-state]
+  (host-fn "json_encode" (mapv valtype [:i32 :i32 :i32 :i32]) ValType/I32
+           (fn [instance args]
+             (ensure-granted! caps :json-encode)
+             (let [pairs (parse-flat-pairs (String. ^bytes (read-bytes! instance (aget args 0) (aget args 1)) "UTF-8"))]
+               (write-bytes! instance (aget args 2) (aget args 3) (json-pairs-bytes pairs))))))
+
+(defn- json-string-field-value
+  "Bounded string scan (deliberately NOT a JSON parser) for a
+  `\"FIELD\":\"...\"` occurrence in JSON-TEXT: finds the literal
+  `\"FIELD\"` key, the next `:`, skips ASCII whitespace, requires an
+  opening `\"`, then reads the string value up to the next un-escaped
+  `\"` (un-escaping `\\\"`/`\\\\`/`\\n`/`\\r`/`\\t`, passing any other
+  `\\X` escape through as literal `X`). Returns the extracted value, or
+  nil when FIELD isn't present as a string-valued key (missing key,
+  non-string value, or malformed/truncated JSON). Scope is intentionally
+  narrow: kototama.tender never parses arbitrary JSON -- this exists
+  only to pull one known field (e.g. `accessJwt`/`uri`/`cid`) out of an
+  XRPC response body."
+  [^String json-text ^String field]
+  (let [needle (str "\"" field "\"")
+        key-idx (str/index-of json-text needle)]
+    (when key-idx
+      (let [colon-idx (str/index-of json-text ":" (+ key-idx (count needle)))]
+        (when colon-idx
+          (let [n (count json-text)
+                value-start (loop [i (inc colon-idx)]
+                              (cond
+                                (>= i n) nil
+                                (Character/isWhitespace (.charAt json-text i)) (recur (inc i))
+                                (= \" (.charAt json-text i)) (inc i)
+                                :else nil))]
+            (when value-start
+              (loop [i value-start sb (StringBuilder.)]
+                (cond
+                  (>= i n) nil
+                  (= \\ (.charAt json-text i))
+                  (when (< (inc i) n)
+                    (let [esc (.charAt json-text (inc i))
+                          unescaped (case esc \" \" \\ \\ \n \newline \r \return \t \tab esc)]
+                      (recur (+ i 2) (.append sb unescaped))))
+                  (= \" (.charAt json-text i)) (.toString sb)
+                  :else (recur (inc i) (.append sb (.charAt json-text i))))))))))))
+
+(defn- json-extract-field-host-fn
+  "`(json-ptr json-len field-ptr field-len out-ptr out-cap) ->
+  bytes-written|-1`. See `json-string-field-value`'s docstring for the
+  exact bounded scan performed -- NOT a general JSON parser. `#{}` --
+  pure computation, not gated by any RuntimeLimits count."
+  [caps _limits-state]
+  (host-fn "json_extract_field" (mapv valtype [:i32 :i32 :i32 :i32 :i32 :i32]) ValType/I32
+           (fn [instance args]
+             (ensure-granted! caps :json-extract-field)
+             (let [json-text (String. ^bytes (read-bytes! instance (aget args 0) (aget args 1)) "UTF-8")
+                   field (String. ^bytes (read-bytes! instance (aget args 2) (aget args 3)) "UTF-8")
+                   value (json-string-field-value json-text field)]
+               (if (nil? value)
+                 -1
+                 (write-bytes! instance (aget args 4) (aget args 5) (.getBytes ^String value "UTF-8")))))))
 
 ;; ── llm-infer's injected client: real Anthropic call in production,
 ;; fake `:infer-fn` in tests (same DI shape as `store` below) ──────────────
@@ -585,7 +828,11 @@
                      :llm-infer #(llm-infer-host-fn caps limits-state llm-client)
                      :log-read #(log-read-host-fn caps limits-state store)
                      :log-write #(log-write-host-fn caps limits-state store)
-                     :clock-monotonic #(clock-monotonic-host-fn caps limits-state)}
+                     :clock-monotonic #(clock-monotonic-host-fn caps limits-state)
+                     :http-fetch #(http-fetch-host-fn caps limits-state)
+                     :cbor-encode #(cbor-encode-host-fn caps limits-state)
+                     :json-encode #(json-encode-host-fn caps limits-state)
+                     :json-extract-field #(json-extract-field-host-fn caps limits-state)}
            host-fns (mapv (fn [id] ((get fn-by-id id))) (:requested validation))
            imports (-> (ImportValues/builder)
                       (.addFunction (into-array ImportFunction host-fns))

@@ -59,7 +59,11 @@
   (doseq [name ["kotoba-compiled-fact.kotoba"
                 "kotoba-compiled-peak-cells.kotoba"
                 "kotoba-compiled-sha256-hex.kotoba"
-                "kotoba-compiled-gen-keypair.kotoba"]]
+                "kotoba-compiled-gen-keypair.kotoba"
+                "kotoba-compiled-http-fetch.kotoba"
+                "kotoba-compiled-cbor-encode.kotoba"
+                "kotoba-compiled-json-encode.kotoba"
+                "kotoba-compiled-json-extract-field.kotoba"]]
     (let [src (slurp (io/resource (str "kototama/fixtures/" name)))
           r (guest/lint-kotoba-source src)]
       (is (true? (:ok? r)) (str name " " (pr-str r))))))

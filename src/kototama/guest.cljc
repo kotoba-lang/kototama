@@ -25,7 +25,14 @@
    :log-read "log_read"
    :log-write "log_write"
    :clock-monotonic "clock_monotonic"
-   :llm-infer "llm_infer"})
+   :llm-infer "llm_infer"
+   ;; Second wave (com-junkawasaki/root ADR-2607230943). :http-fetch's
+   ;; field matches kotoba-core-contracts' pre-existing "http/fetch"
+   ;; (id 205) entry verbatim -- see contract.cljc's :http-fetch comment.
+   :http-fetch "http_fetch"
+   :cbor-encode "cbor_encode"
+   :json-encode "json_encode"
+   :json-extract-field "json_extract_field"})
 
 (defn wasm-field-name
   "Canonical Wasm import field for a contract import id, or nil."
@@ -92,10 +99,13 @@
    :r1  tender runs real .wasm (host-free + actor:host imports), fuel + memory
         limits, session report, source lint, checked-in emit fixtures
    :r2  browser-native host parity matrix + host-free web fixtures
-        (9/9 linkable; http-post real in a cross-origin-isolated tab via a
+        (9/13 linkable; http-post real in a cross-origin-isolated tab via a
         Worker-hosted SAB+Atomics bridge (wasm-webcomponent PR #8);
         llm-infer now real too via the SAME bridge, through a
-        caller-supplied proxy URL (wasm-webcomponent PR #11))
+        caller-supplied proxy URL (wasm-webcomponent PR #11); the
+        ADR-2607230943 second wave -- http-fetch/cbor-encode/json-encode/
+        json-extract-field -- is JVM-only so far, an honest gap, not yet
+        ported to wasm-webcomponent's actor-host.js)
    :r3  fleet lease/budget/tick/governor/checkpoint + disk/B2 + fence-gated
         tender + daemon + systemd + CI gates (not Raft consensus)"
   {:r0 {:id :r0
@@ -109,7 +119,7 @@
    :r2 {:id :r2
         :title "Browser-native host parity"
         :status :advanced-partial
-        :note "9/9 linkable; http-post and llm-infer both real via Worker-hosted SAB+Atomics bridge (needs COOP/COEP; llm-infer additionally needs a caller-supplied proxy URL); see kototama.browser."}
+        :note "9/13 linkable; http-post and llm-infer both real via Worker-hosted SAB+Atomics bridge (needs COOP/COEP; llm-infer additionally needs a caller-supplied proxy URL); the ADR-2607230943 second wave (http-fetch/cbor-encode/json-encode/json-extract-field) is JVM-only so far; see kototama.browser."}
    :r3 {:id :r3
         :title "Fleet multi-tenant tender"
         :status :stable
