@@ -471,7 +471,7 @@
       (let [port (.getLocalPort server)
             client (#'tender/timed-http-client)
             req (-> (HttpRequest/newBuilder (URI/create (str "http://127.0.0.1:" port "/")))
-                   (.timeout @#'tender/http-request-timeout)
+                   (.timeout (java.time.Duration/ofMillis @#'tender/default-http-timeout-ms))
                    (.POST (HttpRequest$BodyPublishers/ofByteArray (byte-array 0)))
                    .build)
             started (System/currentTimeMillis)
@@ -501,7 +501,7 @@
       (let [port (.getPort (.getAddress server))
             client (#'tender/timed-http-client)
             req (-> (HttpRequest/newBuilder (URI/create (str "http://127.0.0.1:" port "/")))
-                   (.timeout @#'tender/http-request-timeout)
+                   (.timeout (java.time.Duration/ofMillis @#'tender/default-http-timeout-ms))
                    (.POST (HttpRequest$BodyPublishers/ofByteArray (byte-array 0)))
                    .build)
             resp (.send client req (HttpResponse$BodyHandlers/ofString))]
