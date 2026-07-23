@@ -28,13 +28,14 @@
 (deftest parity-score-ratio
   (let [s (browser/parity-score)]
     ;; ADR-2607230943's 4 new imports (http-fetch/cbor-encode/json-encode/
-    ;; json-extract-field) are JVM-only so far -- an honest gap, not yet
-    ;; ported to wasm-webcomponent's actor-host.js -- so total grows to 13
-    ;; while browser-yes stays at the pre-existing 9.
-    (is (= 13 (:total s)))
+    ;; json-extract-field) plus this wave's http-post-headers are JVM-only
+    ;; so far -- an honest gap, not yet ported to wasm-webcomponent's
+    ;; actor-host.js -- so total grows to 14 while browser-yes stays at the
+    ;; pre-existing 9.
+    (is (= 14 (:total s)))
     (is (= 9 (:browser-yes s)))
-    (is (= 4 (:browser-no s)))
-    (is (= (/ 9.0 13) (:ratio s)))))
+    (is (= 5 (:browser-no s)))
+    (is (= (/ 9.0 14) (:ratio s)))))
 
 (deftest r2-report-shape
   (let [r (browser/r2-report)]

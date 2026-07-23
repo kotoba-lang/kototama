@@ -9,7 +9,7 @@ guest = Wasm component). Not a marketing scorecard.
 |---|---|---|---|
 | **R0** | Contract / dry-run | **stable** | `kototama.contract` HostCaps + import surface; organism membrane refuses live publish |
 | **R1** | Tender execution (JVM/Chicory) | **stable** | `kototama.tender` runs real `.wasm`; fuel + memory limits; aiueos adapter; session report; source lint; host-free + host-import fixtures from `kotoba wasm emit` |
-| **R2** | Browser-native host parity | **advanced-partial** | parity matrix; 9/13 browser-linkable (`http-post` and `llm-infer` both real in a cross-origin-isolated tab via a Worker-hosted guest + SAB+Atomics bridge, `wasm-webcomponent` PR #8 / #11; ADR-2607230943's second wave -- `http-fetch`/`cbor-encode`/`json-encode`/`json-extract-field` -- is JVM-only so far, an honest gap); host-free web fixtures |
+| **R2** | Browser-native host parity | **advanced-partial** | parity matrix; 9/14 browser-linkable (`http-post` and `llm-infer` both real in a cross-origin-isolated tab via a Worker-hosted guest + SAB+Atomics bridge, `wasm-webcomponent` PR #8 / #11; ADR-2607230943's second wave -- `http-fetch`/`cbor-encode`/`json-encode`/`json-extract-field` -- and this wave's third wave -- `http-post-headers` -- are JVM-only so far, an honest gap); host-free web fixtures |
 | **R3** | Fleet multi-tenant tender | **stable** | ops-ready local/shared-store fleet: fence+daemon+CI+staging-smoke (**not Raft**) |
 
 **Current declared level: R3 stable** (R1 stable; R2 advanced-partial underneath).
@@ -35,6 +35,9 @@ clojure -M:cli run test/kototama/fixtures/kotoba-compiled-peak-cells.wasm
 | `kotoba-compiled-cbor-encode.wasm` | `cbor_encode` | 5-byte CBOR map(1) `{"a":"b"}` |
 | `kotoba-compiled-json-encode.wasm` | `json_encode` | `{"a":"b"}` |
 | `kotoba-compiled-json-extract-field.wasm` | `json_extract_field` | `"v"` extracted from `{"k":"v"}` |
+| `kotoba-compiled-cbor-encode-nested.wasm` | `cbor_encode` | 25-byte CBOR map(1) `{"s":{"t":"eip4361","s":"sigvalue"}}` (dotted-path nesting) |
+| `kotoba-compiled-json-encode-nested.wasm` | `json_encode` | `{"s":{"t":"eip4361","s":"sigvalue"},"p":{"resources":["a","b"]}}` |
+| `kotoba-compiled-http-post-headers.wasm` | `http_post_headers` | `-1` (loopback URL refused by the SSRF denylist -- same non-live-network proof as `kotoba-compiled-http-fetch.wasm`) |
 
 ## R2 acceptance gates
 
@@ -55,9 +58,11 @@ clojure -M:cli parity           # JVM vs browser import matrix
 | llm-infer | yes | **yes** (Worker-hosted, via a caller-supplied proxy URL) | inject |
 | http-post | yes | **yes** (Worker-hosted, cross-origin-isolated) | inject |
 | http-fetch / cbor-encode / json-encode / json-extract-field (ADR-2607230943) | yes | **no** (honest gap -- no wasm-webcomponent port yet) | no |
+| http-post-headers (com-junkawasaki/root, third wave) | yes | **no** (honest gap -- no wasm-webcomponent port yet) | no |
 
-Score today: **9/13** browser-linkable (was 9/9 before ADR-2607230943's
-second wave added 4 JVM-only imports; see that section below). `http-post`
+Score today: **9/14** browser-linkable (was 9/9 before ADR-2607230943's
+second wave added 4 JVM-only imports, then 9/13, then this wave's
+http-post-headers added a 5th; see the sections below). `http-post`
 is real in a browser tab
 as of `wasm-webcomponent` PR #8 (2026-07-16): `http-post-bridge.js`'s
 `createSabHttpPostBridge` (SharedArrayBuffer+`Atomics.wait`, needs COOP/COEP
@@ -145,6 +150,51 @@ network/secret/write effect at all, so a browser/Node port (should one
 ever be built) would need no SAB+Atomics bridge the way `http-post`/
 `llm-infer` did -- just a JS port of the same flat key\<TAB\>value-pairs
 parsing + encode/scan logic.
+
+### Third wave: http-post-headers + cbor/json dotted-path nesting (2026-07-23, 9/14)
+
+`com-junkawasaki/root` (this ADR) closes the two follow-ups the second
+wave's own ADR-2607230943 explicitly flagged and `com-etzhayyim-kawaraban`
+`wasm/README.md`'s Phase B independently re-confirmed against a real port
+attempt (findings 4 and 5):
+
+1. **`http-post-headers`** -- a SEPARATE host-import from `http-post`
+   (`http_post_headers`, `(url-ptr url-len body-ptr body-len headers-ptr
+   headers-len out-ptr out-cap) -> bytes-written|-1`), reusing `http-post`'s
+   own `http/post` capability id 223, SSRF/DoS hardening
+   (`blocked-http-post-destination?`/`contract/url-allowed?`/connect+request
+   timeouts), and `:max-http-posts` RuntimeLimits budget verbatim -- a Wasm
+   import's arity is part of the compiled guest's own import section, so
+   `http-post` itself could not simply grow a headers parameter without
+   breaking every already-compiled guest that imports it. HEADERS reuses the
+   SAME flat `key<TAB>value`, LF-separated wire format `cbor-encode`/
+   `json-encode` already use (`parse-flat-pairs`) -- a header block is
+   inherently flat, so it never needed the nesting extension below. This
+   closes `com-etzhayyim-kawaraban` `wasm/README.md` finding 5 (no way to
+   send `Authorization: Bearer <jwt>`, blocking a `com.atproto.repo.
+   createRecord` port).
+2. **cbor-encode/json-encode dotted-path nesting** -- NO new capability id
+   or host-import needed (unlike (1) above): a key segment MAY now be
+   dot-separated (`"s.t"`, `"resources.0"`, `"p.resources.0"`) to address one
+   level of OBJECT/ARRAY nesting -- a numeric segment selects an array
+   position, any other segment selects an object field. A key with no dot is
+   byte-for-byte unchanged from the pre-extension flat behavior (a strict
+   superset, not a replacement -- see `kototama.tender`'s `build-nested-tree`/
+   `tree-node->cbor`/`tree-node->json` docstrings). Verified byte-exact
+   against the REAL `cloud_itonami.media.cacao/->wire` CBOR envelope and
+   `cloud_itonami.media.aozora/create-record!`'s real
+   `com.atproto.repo.createRecord` JSON body (cheshire-generated, matching
+   production's own JSON writer) for fixed inputs -- closes finding 4 (no
+   nested-map support, blocking a byte-faithful CACAO token).
+
+Both are JVM-only so far (no `wasm-webcomponent actor-host.js` port), so the
+score moves from 9/13 to **9/14** -- an honest new gap, not a regression.
+`http-post-headers`'s eventual browser port could reuse `http-post`'s own
+Worker+SAB+Atomics bridge (just widen the message payload with a headers
+field); the nesting extension needs no bridge at all (pure computation,
+same as `cbor-encode`/`json-encode` already are) -- just a JS port of
+`build-nested-tree`'s tree-building logic alongside the existing flat-pairs
+parsing.
 
 ## R3 stable gates (shared-store fleet ops — not Raft)
 

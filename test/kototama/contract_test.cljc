@@ -9,7 +9,8 @@
   (is (= :kototama.contract/RuntimeLimits (:model/name contract/RuntimeLimits)))
   (is (= #{:gen-keypair :sign :verify :sha256-hex :http-post :llm-infer
            :log-read :log-write :clock-monotonic
-           :http-fetch :cbor-encode :json-encode :json-extract-field}
+           :http-fetch :cbor-encode :json-encode :json-extract-field
+           :http-post-headers}
          (set (keys contract/import-by-id))))
   (is (= :log-write (contract/import-id "log-write"))))
 
@@ -74,6 +75,24 @@
     (is (false? (:ok? result)))
     (is (= #{:limit/max-imports :limit/max-http-posts :limit/secret-imports}
            (set (map :error (:errors result)))))))
+
+(deftest http-post-headers-shares-http-posts-budget-with-http-post
+  ;; :http-post-headers is a separate import id from :http-post (see
+  ;; contract.cljc's :http-post-headers comment), but both count toward the
+  ;; SAME :max-http-posts requested-import budget -- same network-egress
+  ;; quota, not a second one.
+  (let [both (contract/validate-import-surface
+               ["http-post" "http-post-headers"]
+               {:grants [:http-post :http-post-headers]
+                :limits {:max-imports 2 :max-http-posts 1}})
+        one (contract/validate-import-surface
+              ["http-post-headers"]
+              {:grants [:http-post-headers]
+               :limits {:max-imports 1 :max-http-posts 1}})]
+    (is (false? (:ok? both)))
+    (is (= [{:error :limit/max-http-posts :limit 1 :actual 2}]
+           (:errors both)))
+    (is (:ok? one) "a single http-post-headers request alone stays within budget 1")))
 
 (deftest limits-reject-excess-llm-infers
   (let [result (contract/validate-import-surface

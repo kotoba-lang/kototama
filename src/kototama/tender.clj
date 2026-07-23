@@ -87,7 +87,22 @@
   real published records against pds.aozora.app as of ADR-2607110200).
   `cbor-encode-host-fn`/`json-encode-host-fn`/`json-extract-field-host-
   fn` are pure computation (`#{}` effects, no RuntimeLimits count) --
-  see `parse-flat-pairs`'s docstring for the guest-facing wire format."
+  see `parse-flat-pairs`'s docstring for the guest-facing wire format.
+
+  Third wave (com-junkawasaki/root, this ADR -- the second wave's own
+  ADR-2607230943 flagged both of these as explicit follow-ups, closed
+  here): `http_post_headers` (a SEPARATE host-import from `http_post`,
+  reusing `http-post-host-fn`'s SSRF/DoS hardening and `:max-http-posts`
+  budget -- a Wasm import's arity is part of the compiled guest's own
+  import section, so `http_post` itself cannot grow a headers parameter
+  without breaking every already-compiled guest that imports it) closes
+  finding 5 of `com-etzhayyim-kawaraban`'s wasm/README.md (no way to send
+  `Authorization: Bearer <jwt>`); `build-nested-tree`'s dotted-path
+  extension to `cbor-encode`/`json-encode`'s existing flat-pairs wire
+  format (NO new capability id or host-import needed -- only the
+  interpretation of the SAME (ptr,len) input bytes grew) closes finding 4
+  (no nested-map support), enabling a byte-faithful CACAO wire token and
+  a real `com.atproto.repo.createRecord` body from a `.kotoba` guest."
   (:require [clojure.data.json :as json]
             [clojure.string :as str]
             [kototama.compatibility :as compatibility]
@@ -100,7 +115,7 @@
            (java.io ByteArrayOutputStream)
            (java.security MessageDigest SecureRandom)
            (java.net InetAddress Inet6Address URI)
-           (java.net.http HttpClient HttpRequest HttpRequest$BodyPublishers HttpResponse$BodyHandlers)
+           (java.net.http HttpClient HttpRequest HttpRequest$Builder HttpRequest$BodyPublishers HttpResponse$BodyHandlers)
            (java.time Duration)))
 
 ;; ── memory ABI: (ptr,len) in / (out-ptr,out-cap) out, same convention
@@ -451,6 +466,84 @@
                  [(subs line 0 i) (subs line (inc i))])))
        vec))
 
+;; ── dotted-path nesting extension (com-junkawasaki/root, third wave --
+;; Phase A's ADR-2607230943 flagged this as an explicit follow-up, closed
+;; here). `parse-flat-pairs` above is UNCHANGED; this is a second parsing
+;; pass over its output. A `.kotoba` guest still only ever builds ONE
+;; flat `key<TAB>value` pairs buffer (no map/vector literals, same
+;; constraint as before) -- but a key MAY now be a dot-separated PATH
+;; ("s.t", "s.s", "resources.0", "resources.1", "p.resources.0"), which
+;; `build-nested-tree` interprets as one level of OBJECT/ARRAY nesting: a
+;; segment that is a bare non-negative integer ("0", "1", ...) selects an
+;; ARRAY position, any other segment selects an OBJECT field. A key with
+;; NO dot is a single-segment path, i.e. byte-for-byte the pre-extension
+;; flat behavior -- this is a strict SUPERSET of the old wire format, not
+;; a replacement, so every existing flat/dot-free caller (kawaraban/
+;; cloud-itonami's Phase B/C fixtures, every test below that predates this
+;; wave) is unaffected.
+;;
+;; The tree is built and rendered as plain vectors of `[key val]` pairs in
+;; first-occurrence order -- deliberately NEVER promoted through a real
+;; Clojure map for an object level, so output byte order is fully
+;; guest-controlled, not subject to `clojure.lang.PersistentArrayMap`'s
+;; undocumented-to-a-`.kotoba`-author promotion to a hash-map (and its
+;; then JVM-hashing-defined, non-insertion-order iteration) past some
+;; entry count. `tree-node->cbor`/`tree-node->json` below render this tree
+;; directly, calling back into `cbor-val`/`json-escape` only for leaf
+;; strings.
+
+(defn- numeric-key? [^String s] (boolean (re-matches #"\d+" s)))
+
+(defn- array-entries?
+  "True iff ENTRIES (a vector of `[key val]` pairs) has EXACTLY the keys
+  \"0\" .. (str (dec (count entries))), in any occurrence order -- i.e. a
+  guest-declared ARRAY (\"resources.0\"/\"resources.1\", contiguous from
+  0), not an object whose field names merely happen to be digit strings."
+  [entries]
+  (let [ks (mapv first entries)]
+    (and (seq ks)
+         (every? numeric-key? ks)
+         (= (set (map #(Integer/parseInt ^String %) ks))
+            (set (range (count ks)))))))
+
+(defn- object-entries-assoc
+  "Sets `[SEG VALUE]` into ENTRIES (a vector of `[key val]` pairs in
+  first-occurrence order): replaces an existing SEG's value in place
+  (same position -- repeating a key is last-write-wins, never a
+  duplicate-key output), or appends a new pair at the end."
+  [entries seg value]
+  (let [idx (first (keep-indexed (fn [i [k _]] (when (= k seg) i)) entries))]
+    (if idx
+      (assoc entries idx [seg value])
+      (conj entries [seg value]))))
+
+(defn- assoc-path!
+  "Inserts VALUE at PATH (a non-empty vector of dot-separated key
+  segments, e.g. `[\"p\" \"resources\" \"0\"]`) into ENTRIES (a vector of
+  `[key subtree-or-leaf]` pairs), creating intermediate object-shaped
+  subtrees (themselves vectors of pairs) as needed. A leaf (PATH
+  exhausted) sets VALUE directly -- always a plain string, since
+  `parse-flat-pairs`' values are never anything else."
+  [entries [seg & more] value]
+  (if (seq more)
+    (let [idx (first (keep-indexed (fn [i [k _]] (when (= k seg) i)) entries))
+          existing (when idx (second (nth entries idx)))
+          child (if (vector? existing) existing [])]
+      (object-entries-assoc entries seg (assoc-path! child more value)))
+    (object-entries-assoc entries seg value)))
+
+(defn- build-nested-tree
+  "Builds an ordered tree from PAIRS (`parse-flat-pairs`' output): each
+  `[dotted-key value]` pair is inserted via `assoc-path!` after splitting
+  the key on `.` (`\"s.t\"` -> `[\"s\" \"t\"]`). A key with no dot is a
+  single-segment path -- unchanged from the pre-extension flat behavior.
+  Returns a vector of `[key subtree-or-leaf]` pairs (the top-level
+  object)."
+  [pairs]
+  (reduce (fn [entries [k v]] (assoc-path! entries (str/split k #"\.") v))
+          []
+          pairs))
+
 ;; ── minimal CBOR (definite-length; 1:1 port of cloud-itonami's proven
 ;; cacao.clj cbor-head/cbor-val, itself traced to kawaraban.cacao/
 ;; tashikame.cacao/kotoba.cacao -- 52 real published records against
@@ -475,16 +568,43 @@
     (sequential? v) (do (cbor-head o 4 (count v)) (doseq [x v] (cbor-val o x)))
     :else           (cbor-val o (str v))))
 
+(defn- tree-node->cbor
+  "Writes one `build-nested-tree` NODE into O: a plain string leaf via
+  `cbor-val`; an ARRAY-shaped node (`array-entries?`) as a definite-
+  length CBOR array (major type 4) in ascending numeric-key order; any
+  other node as a definite-length CBOR map (major type 5) in the guest's
+  own first-occurrence key order. TOP-LEVEL? forces map rendering even
+  when every (dot-free, hence never guest-intended-as-index) key happens
+  to look numeric -- `cbor-encode`'s ABI has always been \"a map of
+  pairs\", never an array, so the outermost call must never reinterpret a
+  flat set of pairs as an array just because of what its keys look like;
+  this is what makes the nesting extension a strict superset of the
+  pre-extension flat-only behavior (see `cbor-pairs-bytes`'s docstring)."
+  [^ByteArrayOutputStream o node top-level?]
+  (cond
+    (string? node) (cbor-val o node)
+    (and (not top-level?) (array-entries? node))
+    (let [items (->> node (sort-by (comp #(Integer/parseInt ^String %) first)) (mapv second))]
+      (cbor-head o 4 (count items))
+      (doseq [item items] (tree-node->cbor o item false)))
+    :else
+    (do (cbor-head o 5 (count node))
+        (doseq [[k v] node] (cbor-val o k) (tree-node->cbor o v false)))))
+
 (defn- cbor-pairs-bytes
   "CBOR-encodes PAIRS (a vector of `[key value]` string pairs, as
-  `parse-flat-pairs` returns) as ONE definite-length CBOR map (major
-  type 5, count = (count pairs)) directly from the pairs vector -- not
-  via an intermediate Clojure map, so guest-specified order is preserved
-  exactly (a Clojure hash-map would not guarantee that)."
+  `parse-flat-pairs` returns) via `build-nested-tree` + `tree-node->cbor`.
+  Byte-for-byte identical to this function's pre-nesting-extension output
+  for any PAIRS with no dotted keys: `build-nested-tree` then creates no
+  subtree (every value stays a plain string leaf) and `tree-node->cbor`'s
+  TOP-LEVEL? flag forces the SAME definite-length CBOR map (major type 5,
+  count = (count pairs)) this function has always produced, in the
+  guest's own pair order -- not via an intermediate Clojure map, so
+  guest-specified order is preserved exactly (a Clojure hash-map would
+  not guarantee that past its array-map->hash-map promotion threshold)."
   ^bytes [pairs]
   (let [o (ByteArrayOutputStream.)]
-    (cbor-head o 5 (count pairs))
-    (doseq [[k v] pairs] (cbor-val o k) (cbor-val o v))
+    (tree-node->cbor o (build-nested-tree pairs) true)
     (.toByteArray o)))
 
 (defn- cbor-encode-host-fn
@@ -529,14 +649,31 @@
           (.append sb c))))
     (.toString sb)))
 
+(defn- tree-node->json
+  "Same tree-shaped rendering `tree-node->cbor` performs, for JSON: a
+  string leaf (`json-escape`d and quoted), an ARRAY-shaped node as a JSON
+  array in ascending numeric-key order, any other node (or the forced
+  TOP-LEVEL? case) as a JSON object in the guest's own first-occurrence
+  key order. See `tree-node->cbor`'s docstring for why TOP-LEVEL? forces
+  object rendering."
+  ^String [node top-level?]
+  (cond
+    (string? node) (str "\"" (json-escape node) "\"")
+    (and (not top-level?) (array-entries? node))
+    (let [items (->> node (sort-by (comp #(Integer/parseInt ^String %) first)) (mapv second))]
+      (str "[" (str/join "," (map #(tree-node->json % false) items)) "]"))
+    :else
+    (str "{" (str/join "," (map (fn [[k v]] (str "\"" (json-escape k) "\":" (tree-node->json v false))) node)) "}")))
+
 (defn- json-pairs-bytes
   "JSON-encodes PAIRS (a vector of `[key value]` string pairs, as
-  `parse-flat-pairs` returns) as one flat JSON object of string keys to
-  string values, e.g. an XRPC request body -- NOT a general JSON codec
-  (no numbers/booleans/null/nesting; every value is a JSON string)."
+  `parse-flat-pairs` returns) via `build-nested-tree` + `tree-node->json`,
+  e.g. an XRPC request body -- NOT a general JSON codec (no numbers/
+  booleans/null; every leaf is a JSON string). Byte-for-byte identical to
+  this function's pre-nesting-extension output for any PAIRS with no
+  dotted keys (same reasoning as `cbor-pairs-bytes`'s docstring)."
   ^bytes [pairs]
-  (let [body (str/join "," (map (fn [[k v]] (str "\"" (json-escape k) "\":\"" (json-escape v) "\"")) pairs))]
-    (.getBytes (str "{" body "}") "UTF-8")))
+  (.getBytes (tree-node->json (build-nested-tree pairs) true) "UTF-8"))
 
 (defn- json-encode-host-fn
   "`(pairs-ptr pairs-len out-ptr out-cap) -> bytes-written|-1`. Same
@@ -602,6 +739,70 @@
                (if (nil? value)
                  -1
                  (write-bytes! instance (aget args 4) (aget args 5) (.getBytes ^String value "UTF-8")))))))
+
+;; ── http-post-headers (com-junkawasaki/root, third wave -- Phase A's
+;; ADR-2607230943 flagged this as an explicit follow-up, closed here).
+;; Placed here (after the CBOR/JSON section, not up next to
+;; `http-post-host-fn`/`http-fetch-host-fn` above) because it reuses
+;; `parse-flat-pairs`, defined earlier in that section -- it is otherwise
+;; an HTTP capability, not a codec one. ─────────────────────────────────
+
+(defn- post-request-with-headers
+  "Builds (does NOT send) an `HttpRequest`: POST to URL with BODY bytes,
+  `http-request-timeout` applied, and every `[name value]` pair in
+  HEADERS (as `parse-flat-pairs` returns) added via `.header` in order.
+  Split out from `http-post-headers-host-fn` so a test can exercise the
+  actual header-application code path directly against a real local
+  server (the SSRF denylist makes every reachable local server loopback,
+  so `http-post-headers-host-fn` itself can only be tested for REFUSAL --
+  see the http-post/http-fetch WAT test sections' own header comment for
+  this same structural reason)."
+  ^HttpRequest [^String url ^bytes body headers]
+  (-> (reduce (fn [^HttpRequest$Builder b [k v]] (.header b ^String k ^String v))
+              (-> (HttpRequest/newBuilder (URI/create url))
+                  (.timeout http-request-timeout))
+              headers)
+      (.POST (HttpRequest$BodyPublishers/ofByteArray body))
+      .build))
+
+(defn- http-post-headers-host-fn
+  "`(url-ptr url-len body-ptr body-len headers-ptr headers-len out-ptr
+  out-cap) -> bytes-written|-1`. Same synchronous POST semantics,
+  SSRF/DoS hardening (`blocked-http-post-destination?`/
+  `contract/url-allowed?`/connect+request timeouts), and `:max-http-posts`
+  metering as `http-post-host-fn` -- this is the SAME operation with one
+  added guest-supplied input (custom request headers, e.g.
+  `Authorization: Bearer <token>` for `com.atproto.repo.createRecord`,
+  which `http-post` alone cannot express), so it is gated by its OWN
+  `:http-post-headers` import id (a caller must grant it explicitly,
+  same as any other import) but shares `:http-post`'s `:max-http-posts`
+  RuntimeLimits counter -- one network-egress budget, not two (see
+  `kototama.contract`'s `:http-post-headers` comment).
+
+  HEADERS uses the SAME flat `key<TAB>value`, LF-separated pairs wire
+  format `cbor-encode`/`json-encode` already use (`parse-flat-pairs`,
+  reused as-is here -- a header block is inherently flat, so it never
+  needed the dotted-path nesting extension those two capabilities
+  gained). Header order is preserved (some servers care); a malformed
+  line (no TAB) is fail-soft dropped, same as every other `parse-flat-
+  pairs` caller."
+  [caps limits-state]
+  (host-fn "http_post_headers" (mapv valtype [:i32 :i32 :i32 :i32 :i32 :i32 :i32 :i32]) ValType/I32
+           (fn [instance args]
+             (ensure-granted! caps :http-post-headers)
+             (if-not (within-count-limit? :http-posts :max-http-posts caps limits-state)
+               -1
+               (let [url (String. ^bytes (read-bytes! instance (aget args 0) (aget args 1)) "UTF-8")]
+                 (if (or (blocked-http-post-destination? url)
+                         (not (contract/url-allowed? (:limits caps) url)))
+                   -1
+                   (let [body (read-bytes! instance (aget args 2) (aget args 3))
+                         header-text (String. ^bytes (read-bytes! instance (aget args 4) (aget args 5)) "UTF-8")
+                         headers (parse-flat-pairs header-text)
+                         req (post-request-with-headers url body headers)
+                         resp (.send (timed-http-client) req (HttpResponse$BodyHandlers/ofByteArray))]
+                     (swap! limits-state update :http-posts inc)
+                     (write-bytes! instance (aget args 6) (aget args 7) (.body resp)))))))))
 
 ;; ── llm-infer's injected client: real Anthropic call in production,
 ;; fake `:infer-fn` in tests (same DI shape as `store` below) ──────────────
@@ -832,7 +1033,8 @@
                      :http-fetch #(http-fetch-host-fn caps limits-state)
                      :cbor-encode #(cbor-encode-host-fn caps limits-state)
                      :json-encode #(json-encode-host-fn caps limits-state)
-                     :json-extract-field #(json-extract-field-host-fn caps limits-state)}
+                     :json-extract-field #(json-extract-field-host-fn caps limits-state)
+                     :http-post-headers #(http-post-headers-host-fn caps limits-state)}
            host-fns (mapv (fn [id] ((get fn-by-id id))) (:requested validation))
            imports (-> (ImportValues/builder)
                       (.addFunction (into-array ImportFunction host-fns))
