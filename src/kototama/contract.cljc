@@ -48,7 +48,33 @@
     {:import/id :llm-infer
      :import/name "llm-infer"
      :import/category :llm
-     :import/effects #{:network}}]})
+     :import/effects #{:network}}
+    ;; Second wave (com-junkawasaki/root ADR-2607230943): CBOR/JSON
+    ;; wire-format encoding + GET-only HTTP fetch, for a future
+    ;; news-collecting fleet actor (kawaraban/cloud-itonami) that builds
+    ;; CACAO token bytes and XRPC request/response bodies from within a
+    ;; `.kotoba` guest. `:http-fetch` reuses kotoba-core-contracts'
+    ;; pre-existing "http/fetch" capability id 205 (`kotoba wasm emit`'s
+    ;; own kernel-capability vocabulary already registers it with the
+    ;; exact shape kototama needs) rather than a new one -- same "reuse,
+    ;; don't duplicate" choice `:log-write`/`:clock-monotonic` above
+    ;; already made.
+    {:import/id :http-fetch
+     :import/name "http-fetch"
+     :import/category :network
+     :import/effects #{:network}}
+    {:import/id :cbor-encode
+     :import/name "cbor-encode"
+     :import/category :codec
+     :import/effects #{}}
+    {:import/id :json-encode
+     :import/name "json-encode"
+     :import/category :codec
+     :import/effects #{}}
+    {:import/id :json-extract-field
+     :import/name "json-extract-field"
+     :import/category :codec
+     :import/effects #{}}]})
 
 (def import-by-id
   (into {} (map (juxt :import/id identity) (:abi/imports import-surface))))
@@ -60,6 +86,7 @@
   {:model/name :kototama.contract/RuntimeLimits
    :model/keys {:max-imports :non-negative-int
                 :max-http-posts :non-negative-int
+                :max-http-fetches :non-negative-int
                 :max-llm-infers :non-negative-int
                 :max-log-read-bytes :non-negative-int
                 :max-log-write-bytes :non-negative-int
@@ -71,6 +98,10 @@
 (def default-runtime-limits
   {:max-imports (count (:abi/imports import-surface))
    :max-http-posts 0
+   ;; Same "fully denied unless a caller's HostCaps explicitly raises the
+   ;; limit AND grants the import" default as :max-http-posts -- GET is
+   ;; still metered guest-triggered network egress, not a free action.
+   :max-http-fetches 0
    ;; Same "fully denied unless a caller's HostCaps explicitly raises the
    ;; limit AND grants the import" default as :max-http-posts -- an LLM
    ;; call is metered network egress + real API spend, not a free action.
@@ -177,6 +208,7 @@
 (defn- limit-errors [limits requested ids]
   (let [requested-count (count requested)
         http-posts (count (filter #{:http-post} ids))
+        http-fetches (count (filter #{:http-fetch} ids))
         llm-infers (count (filter #{:llm-infer} ids))
         secret-imports (filterv #(some (:import/effects (import-by-id %)) [:secret]) ids)
         write-imports (filterv #(some (:import/effects (import-by-id %)) [:write]) ids)]
@@ -190,6 +222,11 @@
       (conj {:error :limit/max-http-posts
              :limit (:max-http-posts limits)
              :actual http-posts})
+
+      (> http-fetches (:max-http-fetches limits))
+      (conj {:error :limit/max-http-fetches
+             :limit (:max-http-fetches limits)
+             :actual http-fetches})
 
       (> llm-infers (:max-llm-infers limits))
       (conj {:error :limit/max-llm-infers

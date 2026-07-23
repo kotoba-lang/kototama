@@ -7,6 +7,7 @@
   (:require [clojure.test :refer [deftest is testing]]
             [clojure.java.io :as io]
             [clojure.java.shell :as shell]
+            [clojure.string :as str]
             [kototama.tender :as tender]
             [kototama.contract :as contract])
   (:import (com.sun.net.httpserver HttpExchange HttpHandler HttpServer)
@@ -130,6 +131,87 @@
      (func (export \"main\") (result i64)
        (drop (call $llm_infer (i32.const 0) (i32.const 5) (i32.const 100) (i32.const 64)))
        (i64.extend_i32_s (call $llm_infer (i32.const 0) (i32.const 5) (i32.const 100) (i32.const 64)))))")
+
+;; ── ADR-2607230943 second wave: http-fetch (GET) shares http-post-wat's
+;; shape (URL baked into a data segment, ASCII/no-"/\\ only); cbor-encode/
+;; json-encode/json-extract-field need a WAT string ESCAPE helper since
+;; their guest-facing wire format embeds literal TAB/LF byte separators,
+;; which the WAT text grammar can only express via `\t`/`\n` escapes --
+;; `wat-escape` produces THOSE TWO SOURCE CHARACTERS (backslash + letter),
+;; not an actual tab/newline byte, so `wasm-tools parse` decodes them back
+;; to the single real byte kototama's own `parse-flat-pairs` expects. ────
+
+(def http-fetch-wat
+  "Imports http_fetch, GETs URL (baked into a data segment at offset 0,
+  URL's own byte length as url-len -- same ASCII/no-\"/\\\\ constraint
+  http-post-wat's URL has), writes the response at offset 200
+  (256-byte capacity)."
+  (fn [url]
+    (str "(module
+            (import \"kotoba\" \"http_fetch\" (func $http_fetch (param i32 i32 i32 i32) (result i32)))
+            (memory (export \"memory\") 1)
+            (data (i32.const 0) \"" url "\")
+            (func (export \"main\") (result i64)
+              (i64.extend_i32_s
+                (call $http_fetch (i32.const 0) (i32.const " (count url) ")
+                                  (i32.const 200) (i32.const 256)))))")))
+
+(defn- wat-escape
+  "Escapes S (a real Java/Clojure string, possibly containing literal
+  TAB/LF/`\"`/`\\\\` bytes) into WAT string-literal SOURCE TEXT --
+  `wasm-tools parse` decodes `\\t`/`\\n`/`\\\"`/`\\\\` back to the single
+  real byte each represents, matching the grammar every other `.wat`
+  fixture's `(data ...)` string already relies on."
+  [^String s]
+  (-> s
+      (str/replace "\\" "\\\\")
+      (str/replace "\"" "\\\"")
+      (str/replace "\t" "\\t")
+      (str/replace "\n" "\\n")))
+
+(def cbor-encode-wat
+  "Imports cbor_encode, encodes RAW-PAIRS (kototama's flat key<TAB>value
+  wire format, byte length = RAW-PAIRS' own character count since test
+  data below is pure ASCII) baked at offset 0, writes CBOR bytes at
+  offset 300 (OUT-CAP capacity)."
+  (fn [raw-pairs out-cap]
+    (str "(module
+            (import \"kotoba\" \"cbor_encode\" (func $cbor_encode (param i32 i32 i32 i32) (result i32)))
+            (memory (export \"memory\") 1)
+            (data (i32.const 0) \"" (wat-escape raw-pairs) "\")
+            (func (export \"main\") (result i64)
+              (i64.extend_i32_s
+                (call $cbor_encode (i32.const 0) (i32.const " (count raw-pairs) ")
+                                   (i32.const 300) (i32.const " out-cap ")))))")))
+
+(def json-encode-wat
+  "Imports json_encode, same shape as cbor-encode-wat above."
+  (fn [raw-pairs out-cap]
+    (str "(module
+            (import \"kotoba\" \"json_encode\" (func $json_encode (param i32 i32 i32 i32) (result i32)))
+            (memory (export \"memory\") 1)
+            (data (i32.const 0) \"" (wat-escape raw-pairs) "\")
+            (func (export \"main\") (result i64)
+              (i64.extend_i32_s
+                (call $json_encode (i32.const 0) (i32.const " (count raw-pairs) ")
+                                   (i32.const 300) (i32.const " out-cap ")))))")))
+
+(def json-extract-field-wat
+  "Imports json_extract_field, scans JSON-TEXT (offset 0) for FIELD
+  (offset 100), writes the extracted string value at offset 300
+  (OUT-CAP capacity)."
+  (fn [json-text field out-cap]
+    (str "(module
+            (import \"kotoba\" \"json_extract_field\"
+              (func $json_extract_field (param i32 i32 i32 i32 i32 i32) (result i32)))
+            (memory (export \"memory\") 1)
+            (data (i32.const 0) \"" (wat-escape json-text) "\")
+            (data (i32.const 100) \"" (wat-escape field) "\")
+            (func (export \"main\") (result i64)
+              (i64.extend_i32_s
+                (call $json_extract_field (i32.const 0) (i32.const " (count json-text) ")
+                                          (i32.const 100) (i32.const " (count field) ")
+                                          (i32.const 300) (i32.const " out-cap ")))))")))
 
 (def everything (constantly true))
 
@@ -405,6 +487,169 @@
             "adding connect/request timeouts doesn't interfere with a normal fast response"))
       (finally (.stop server 0)))))
 
+;; ── http-fetch (GET, ADR-2607230943 second wave): shares http-post-host-
+;; fn's `blocked-http-post-destination?`/`contract/url-allowed?` verbatim,
+;; so every real local `HttpServer` this test process can stand up is
+;; necessarily loopback -- same "denylist proven via refusal, not via a
+;; completed round-trip" shape http-post's own tests above use, for the
+;; same structural reason (see that section's header comment). ────────────
+
+(deftest http-fetch-host-fn-refuses-a-loopback-destination-before-any-real-connection
+  (let [hits (atom 0)
+        server (doto (HttpServer/create (InetSocketAddress. "127.0.0.1" 0) 0)
+                 (.createContext "/" (reify HttpHandler
+                                       (handle [_ exchange]
+                                         (swap! hits inc)
+                                         (.sendResponseHeaders ^HttpExchange exchange 200 -1))))
+                 (.start))]
+    (try
+      (let [port (.getPort (.getAddress server))
+            url (str "http://127.0.0.1:" port "/")
+            wasm (wat->wasm (http-fetch-wat url))
+            caps (contract/host-caps {:grants [:http-fetch] :limits {:max-http-fetches 1}})
+            started (System/currentTimeMillis)
+            n (tender/run-main wasm [:http-fetch] caps)
+            elapsed (- (System/currentTimeMillis) started)]
+        (is (= -1 n) "loopback destination refused, the standard fail-closed -1 convention")
+        (is (zero? @hits) "the local server never received a request -- rejected BEFORE any real HTTP call was attempted")
+        (is (< elapsed 2000) "rejection is immediate (pure classification), not gated behind a connect/request timeout"))
+      (finally (.stop server 0)))))
+
+(deftest http-fetch-host-fn-allowlist-does-not-weaken-the-unconditional-denylist
+  (let [hits (atom 0)
+        server (doto (HttpServer/create (InetSocketAddress. "127.0.0.1" 0) 0)
+                 (.createContext "/" (reify HttpHandler
+                                       (handle [_ exchange]
+                                         (swap! hits inc)
+                                         (.sendResponseHeaders ^HttpExchange exchange 200 -1))))
+                 (.start))]
+    (try
+      (let [port (.getPort (.getAddress server))
+            url (str "http://127.0.0.1:" port "/")
+            wasm (wat->wasm (http-fetch-wat url))
+            caps (contract/host-caps {:grants [:http-fetch]
+                                       :limits {:max-http-fetches 1
+                                                :allowed-url-prefixes [url]}})
+            n (tender/run-main wasm [:http-fetch] caps)]
+        (is (= -1 n) "still refused despite an allowlist that explicitly matches this exact URL")
+        (is (zero? @hits) "the local server never received a request"))
+      (finally (.stop server 0)))))
+
+(deftest http-fetch-denied-pre-flight-when-max-http-fetches-is-zero-by-default
+  (testing "granted but :max-http-fetches stays at its default-runtime-limits 0 -- rejected before any Instance is built (validate-import-surface counts REQUESTED import declarations against this same limit, same as :max-http-posts already does for http-post -- no test in this file ever requests a given import type more than once, so the separate RUNTIME per-call counter this limit ALSO gates via within-count-limit? is only exercised by imports a guest calls multiple times per `main`, e.g. log-write-thrice-wat/llm-infer-twice-wat below, not http-post/http-fetch)"
+    (let [caps (contract/host-caps {:grants [:http-fetch]})]
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"rejected by contract"
+                            (tender/instantiate (byte-array 0) [:http-fetch] caps))))))
+
+;; ── cbor-encode / json-encode / json-extract-field (ADR-2607230943 second
+;; wave): pure computation, real byte-level round trips via Chicory,
+;; ground-truth values computed once via a direct REPL call to the same
+;; private functions these WAT fixtures exercise through the full guest/
+;; host-fn path (`#'tender/cbor-pairs-bytes` etc.), same "reach into a
+;; private var" pattern `blocked-http-post-destination?` above uses. ──────
+
+(deftest cbor-encode-host-fn-round-trips-through-real-chicory
+  (let [pairs "iss\tdid:key:zTest\naud\tpds.aozora.app"
+        wasm (wat->wasm (cbor-encode-wat pairs 256))
+        caps (contract/host-caps {:grants [:cbor-encode]})
+        instance (tender/instantiate wasm [:cbor-encode] caps)
+        written (tender/call-main instance)]
+    (is (= 38 written) "definite-length CBOR map header + 2 string-key/string-value pairs")
+    (is (= [0xA2 0x63 0x69 0x73 0x73 0x6d 0x64 0x69 0x64 0x3a 0x6b 0x65 0x79
+            0x3a 0x7a 0x54 0x65 0x73 0x74 0x63 0x61 0x75 0x64 0x6e 0x70 0x64
+            0x73 0x2e 0x61 0x6f 0x7a 0x6f 0x72 0x61 0x2e 0x61 0x70 0x70]
+           (vec (map #(bit-and (int %) 0xff) (#'tender/read-bytes! instance 300 written))))
+        "0xA2 = map(2); 0x63 \"iss\" (3 bytes); 0x6d \"did:key:zTest\" (13 bytes); 0x63 \"aud\" (3 bytes); 0x70 \"pds.aozora.app\" (16 bytes)")))
+
+(deftest cbor-encode-host-fn-out-cap-overflow-is-in-band-minus-one
+  (let [pairs "iss\tdid:key:zTest\naud\tpds.aozora.app"
+        wasm (wat->wasm (cbor-encode-wat pairs 4)) ; 38 bytes needed, 4 given
+        caps (contract/host-caps {:grants [:cbor-encode]})
+        n (tender/run-main wasm [:cbor-encode] caps)]
+    (is (= -1 n) "same write-bytes! overflow convention every other host-fn uses")))
+
+(deftest cbor-encode-host-fn-skips-a-malformed-line-fail-soft
+  (let [pairs "a\tb\nnotab\nc\td" ; middle line has no TAB
+        wasm (wat->wasm (cbor-encode-wat pairs 256))
+        caps (contract/host-caps {:grants [:cbor-encode]})
+        instance (tender/instantiate wasm [:cbor-encode] caps)
+        written (tender/call-main instance)]
+    ;; map(2): "a"->"b", "c"->"d" -- "notab" contributed no pair
+    (is (= [0xA2 0x61 0x61 0x61 0x62 0x61 0x63 0x61 0x64]
+           (vec (map #(bit-and (int %) 0xff) (#'tender/read-bytes! instance 300 written)))))))
+
+(deftest json-encode-host-fn-round-trips-through-real-chicory
+  (let [pairs "identifier\tuser.bsky.social\npassword\thunter2"
+        wasm (wat->wasm (json-encode-wat pairs 256))
+        caps (contract/host-caps {:grants [:json-encode]})
+        instance (tender/instantiate wasm [:json-encode] caps)
+        written (tender/call-main instance)]
+    (is (= "{\"identifier\":\"user.bsky.social\",\"password\":\"hunter2\"}"
+           (tender/read-memory-string instance 300 written))
+        "flat XRPC-shaped request body")))
+
+(deftest json-encode-host-fn-escapes-quotes-backslashes-and-tabs
+  ;; A literal newline in the VALUE is deliberately NOT covered here --
+  ;; `parse-flat-pairs` uses LF as the pair separator, so an embedded
+  ;; newline would split this into two (guest-level) lines, not survive
+  ;; as part of one value; see `json-escape-directly-handles-newline-and-
+  ;; control-chars` below for that escaping logic tested in isolation,
+  ;; bypassing the wire format's own LF-as-delimiter constraint.
+  (let [raw-value "has \"quote\" and \\backslash\\ and\ttab"
+        pairs (str "k\t" raw-value)
+        wasm (wat->wasm (json-encode-wat pairs 256))
+        caps (contract/host-caps {:grants [:json-encode]})
+        instance (tender/instantiate wasm [:json-encode] caps)
+        written (tender/call-main instance)]
+    (is (= "{\"k\":\"has \\\"quote\\\" and \\\\backslash\\\\ and\\ttab\"}"
+           (tender/read-memory-string instance 300 written)))))
+
+(deftest json-escape-directly-handles-newline-and-control-chars
+  ;; Bypasses parse-flat-pairs' LF-as-pair-separator wire format entirely
+  ;; -- calls the private json-escape helper directly, the same pattern
+  ;; blocked-http-post-destination? above uses.
+  (is (= "line1\\nline2" (#'tender/json-escape "line1\nline2")))
+  (is (= "cr\\rhere" (#'tender/json-escape "cr\rhere")))
+  (is (= "\\u0001\\u0002" (#'tender/json-escape (str (char 1) (char 2))))
+      "other C0 control characters get \\uXXXX, not passed through raw"))
+
+(deftest json-encode-host-fn-out-cap-overflow-is-in-band-minus-one
+  (let [pairs "a\tb"
+        wasm (wat->wasm (json-encode-wat pairs 2)) ; {"a":"b"} needs 9 bytes, 2 given
+        caps (contract/host-caps {:grants [:json-encode]})
+        n (tender/run-main wasm [:json-encode] caps)]
+    (is (= -1 n))))
+
+(deftest json-extract-field-host-fn-round-trips-through-real-chicory
+  (let [json-text "{\"accessJwt\":\"abc.def.ghi\",\"uri\":\"at://x\"}"
+        wasm (wat->wasm (json-extract-field-wat json-text "accessJwt" 64))
+        caps (contract/host-caps {:grants [:json-extract-field]})
+        instance (tender/instantiate wasm [:json-extract-field] caps)
+        written (tender/call-main instance)]
+    (is (= "abc.def.ghi" (tender/read-memory-string instance 300 written)))))
+
+(deftest json-extract-field-host-fn-tolerates-whitespace-after-the-colon
+  (let [json-text "{\"accessJwt\": \"abc\"}"
+        wasm (wat->wasm (json-extract-field-wat json-text "accessJwt" 64))
+        caps (contract/host-caps {:grants [:json-extract-field]})
+        instance (tender/instantiate wasm [:json-extract-field] caps)
+        written (tender/call-main instance)]
+    (is (= "abc" (tender/read-memory-string instance 300 written)))))
+
+(deftest json-extract-field-host-fn-missing-field-is-in-band-minus-one
+  (let [json-text "{\"foo\":\"bar\"}"
+        wasm (wat->wasm (json-extract-field-wat json-text "accessJwt" 64))
+        caps (contract/host-caps {:grants [:json-extract-field]})
+        n (tender/run-main wasm [:json-extract-field] caps)]
+    (is (= -1 n) "field absent -- not a general parser, so no attempt to synthesize a value")))
+
+(deftest json-extract-field-host-fn-non-string-value-is-in-band-minus-one
+  (let [json-text "{\"n\":123}"
+        wasm (wat->wasm (json-extract-field-wat json-text "n" 64))
+        caps (contract/host-caps {:grants [:json-extract-field]})
+        n (tender/run-main wasm [:json-extract-field] caps)]
+    (is (= -1 n) "value isn't a quoted string -- out of this bounded scan's scope, not coerced")))
+
 ;; ── llm-infer: DI'd via :llm-client (`{:infer-fn}`), same shape :store
 ;; already uses for log-read/log-write -- these tests inject a fake
 ;; :infer-fn instead of ever reaching the real Anthropic API. ───────────────
@@ -538,3 +783,66 @@
           caps (contract/host-caps {:grants [:gen-keypair] :limits {:allow-secret-imports? true}})
           written (tender/run-main wasm [:gen-keypair] caps)]
       (is (= 64 written) "32-byte seed + 32-byte derived pubkey"))))
+
+(deftest kotoba-compiled-http-fetch-guest-round-trips-through-real-chicory
+  ;; ADR-2607230943 second wave's proof that the independent `kotoba`
+  ;; compiler and kototama.tender agree on http-fetch's shape too --
+  ;; compiled straight from kotoba-core-contracts' PRE-EXISTING "http/fetch"
+  ;; (id 205) capability, no kotoba-core-contracts change needed for this
+  ;; one fixture (unlike cbor-encode/json-encode/json-extract-field, which
+  ;; are net-new to that table and so aren't exercised here). The guest's
+  ;; literal URL ("http://127.0.0.1/") is deliberately loopback -- kototama
+  ;; unconditionally refuses it (same denylist http-post's own compiled
+  ;; fixtures would hit, which is why neither has one either), so this
+  ;; proves real compiler-to-tender LINKAGE + real SSRF-guard EXECUTION,
+  ;; not a live network round trip (see tender_test.clj's http-fetch WAT
+  ;; tests above for that same guard tested directly against the host-fn).
+  (testing "(http-fetch (str-ptr url) (str-len url) (alloc 64) 64), compiled by `kotoba wasm emit`, not WAT"
+    (let [wasm (read-fixture "kotoba-compiled-http-fetch.wasm")
+          caps (contract/host-caps {:grants [:http-fetch] :limits {:max-http-fetches 1}})
+          written (tender/run-main wasm [:http-fetch] caps)]
+      (is (= -1 written) "loopback URL refused by the same denylist the WAT-based tests above verify"))))
+
+;; cbor-encode/json-encode/json-extract-field, unlike http-fetch above,
+;; ARE net-new to kotoba-core-contracts' capability_contract.edn (ids 245/
+;; 246) -- compiled with `clojure -M:dev` against a LOCAL sibling checkout
+;; of the SAME edited kotoba-core-contracts this wave's own PR carries
+;; (com-junkawasaki/root ADR-2607230943), proving the independent `kotoba`
+;; compiler resolves these new host-import call targets and kototama.tender
+;; links the resulting binary, end to end -- same E2E proof PR #23
+;; established for sha256-hex/gen-keypair.
+
+;; `alloc`'s returned pointer is `kotoba wasm emit`'s fixed heap-base for
+;; every one of these short guests (verified once via a direct
+;; `kotoba.runtime/wasm-binary` call at fixture-generation time, same
+;; value `kotoba-compiled-sha256-hex.kotoba`'s own literal `2048` offset
+;; already uses -- these 3 fixtures just reach it through `alloc` instead
+;; of a hand-picked literal, since their source strings are built with
+;; `str-ptr`/`str-len` rather than assuming offset 0 holds nothing).
+(def ^:private alloc-heap-base 2048)
+
+(deftest kotoba-compiled-cbor-encode-guest-round-trips-through-real-chicory
+  (testing "(cbor-encode (str-ptr \"a\\tb\") (str-len \"a\\tb\") (alloc 64) 64), compiled by `kotoba wasm emit`, not WAT"
+    (let [wasm (read-fixture "kotoba-compiled-cbor-encode.wasm")
+          caps (contract/host-caps {:grants [:cbor-encode]})
+          instance (tender/instantiate wasm [:cbor-encode] caps)
+          written (tender/call-main instance)]
+      (is (= 5 written) "map(1) header + 1-byte-string \"a\" + 1-byte-string \"b\"")
+      (is (= [0xA1 0x61 0x61 0x61 0x62]
+             (vec (map #(bit-and (int %) 0xff) (#'tender/read-bytes! instance alloc-heap-base written))))))))
+
+(deftest kotoba-compiled-json-encode-guest-round-trips-through-real-chicory
+  (testing "(json-encode (str-ptr \"a\\tb\") (str-len \"a\\tb\") (alloc 64) 64), compiled by `kotoba wasm emit`, not WAT"
+    (let [wasm (read-fixture "kotoba-compiled-json-encode.wasm")
+          caps (contract/host-caps {:grants [:json-encode]})
+          instance (tender/instantiate wasm [:json-encode] caps)
+          written (tender/call-main instance)]
+      (is (= "{\"a\":\"b\"}" (tender/read-memory-string instance alloc-heap-base written))))))
+
+(deftest kotoba-compiled-json-extract-field-guest-round-trips-through-real-chicory
+  (testing "(json-extract-field ... \"{\\\"k\\\":\\\"v\\\"}\" ... \"k\" ...), compiled by `kotoba wasm emit`, not WAT"
+    (let [wasm (read-fixture "kotoba-compiled-json-extract-field.wasm")
+          caps (contract/host-caps {:grants [:json-extract-field]})
+          instance (tender/instantiate wasm [:json-extract-field] caps)
+          written (tender/call-main instance)]
+      (is (= "v" (tender/read-memory-string instance alloc-heap-base written))))))

@@ -9,7 +9,7 @@ guest = Wasm component). Not a marketing scorecard.
 |---|---|---|---|
 | **R0** | Contract / dry-run | **stable** | `kototama.contract` HostCaps + import surface; organism membrane refuses live publish |
 | **R1** | Tender execution (JVM/Chicory) | **stable** | `kototama.tender` runs real `.wasm`; fuel + memory limits; aiueos adapter; session report; source lint; host-free + host-import fixtures from `kotoba wasm emit` |
-| **R2** | Browser-native host parity | **advanced-partial** | parity matrix; 9/9 browser-linkable (`http-post` and `llm-infer` both real in a cross-origin-isolated tab via a Worker-hosted guest + SAB+Atomics bridge, `wasm-webcomponent` PR #8 / #11); host-free web fixtures |
+| **R2** | Browser-native host parity | **advanced-partial** | parity matrix; 9/13 browser-linkable (`http-post` and `llm-infer` both real in a cross-origin-isolated tab via a Worker-hosted guest + SAB+Atomics bridge, `wasm-webcomponent` PR #8 / #11; ADR-2607230943's second wave -- `http-fetch`/`cbor-encode`/`json-encode`/`json-extract-field` -- is JVM-only so far, an honest gap); host-free web fixtures |
 | **R3** | Fleet multi-tenant tender | **stable** | ops-ready local/shared-store fleet: fence+daemon+CI+staging-smoke (**not Raft**) |
 
 **Current declared level: R3 stable** (R1 stable; R2 advanced-partial underneath).
@@ -31,6 +31,10 @@ clojure -M:cli run test/kototama/fixtures/kotoba-compiled-peak-cells.wasm
 | `kotoba-compiled-peak-cells.wasm` | none | `240` (Williams integer proxy @ S=4096) |
 | `kotoba-compiled-sha256-hex.wasm` | `sha256_hex` | writes empty-string digest |
 | `kotoba-compiled-gen-keypair.wasm` | `gen_keypair` | 64 bytes seed+pub |
+| `kotoba-compiled-http-fetch.wasm` | `http_fetch` | `-1` (loopback URL refused by the SSRF denylist -- proves compiler↔tender linkage, not a live round trip) |
+| `kotoba-compiled-cbor-encode.wasm` | `cbor_encode` | 5-byte CBOR map(1) `{"a":"b"}` |
+| `kotoba-compiled-json-encode.wasm` | `json_encode` | `{"a":"b"}` |
+| `kotoba-compiled-json-extract-field.wasm` | `json_extract_field` | `"v"` extracted from `{"k":"v"}` |
 
 ## R2 acceptance gates
 
@@ -50,8 +54,11 @@ clojure -M:cli parity           # JVM vs browser import matrix
 | sha256-hex / clock / log-* | yes | yes | yes |
 | llm-infer | yes | **yes** (Worker-hosted, via a caller-supplied proxy URL) | inject |
 | http-post | yes | **yes** (Worker-hosted, cross-origin-isolated) | inject |
+| http-fetch / cbor-encode / json-encode / json-extract-field (ADR-2607230943) | yes | **no** (honest gap -- no wasm-webcomponent port yet) | no |
 
-Score today: **9/9** browser-linkable. `http-post` is real in a browser tab
+Score today: **9/13** browser-linkable (was 9/9 before ADR-2607230943's
+second wave added 4 JVM-only imports; see that section below). `http-post`
+is real in a browser tab
 as of `wasm-webcomponent` PR #8 (2026-07-16): `http-post-bridge.js`'s
 `createSabHttpPostBridge` (SharedArrayBuffer+`Atomics.wait`, needs COOP/COEP
 response headers) is wired into `actor-host.js`'s `http_post`, and the guest
@@ -117,6 +124,27 @@ a developer-controlled proxy the caller supplies the URL for.
 
 Host library today: `actor-host.js`, `http-post-bridge.js`,
 `kotoba-wasm-worker-host.js`, `kotoba-wasm-worker-element.js`, `kgraph.js`.
+
+### Second wave: http-fetch/cbor-encode/json-encode/json-extract-field, JVM-only for now (2026-07-23, 9/13)
+
+`com-junkawasaki/root` ADR-2607230943 added 4 new `actor:host` imports for
+a future news-collecting fleet actor (kawaraban/cloud-itonami) that builds
+CACAO token bytes and XRPC request/response bodies from a `.kotoba` guest:
+`http-fetch` (GET, reusing `kotoba-core-contracts`' pre-existing
+`http/fetch` id 205 rather than a new one), `cbor-encode`, `json-encode`,
+and `json-extract-field` (the latter two share one `data/json` capability
+id, same "one shared id for a small family" pattern `kami/engine` and
+`graph/kotoba` already use). All 4 are implemented in `kototama.tender`
+(JVM/Chicory) only -- no `wasm-webcomponent actor-host.js` port exists
+yet, so the score moves from 9/9 to **9/13**, an honest new gap, not a
+regression in what was already real. `http-fetch` reuses `http-post`'s
+SSRF/DoS hardening (`blocked-http-post-destination?`/
+`contract/url-allowed?`/connect+request timeouts) verbatim; `cbor-encode`/
+`json-encode`/`json-extract-field` are pure computation with no
+network/secret/write effect at all, so a browser/Node port (should one
+ever be built) would need no SAB+Atomics bridge the way `http-post`/
+`llm-infer` did -- just a JS port of the same flat key\<TAB\>value-pairs
+parsing + encode/scan logic.
 
 ## R3 stable gates (shared-store fleet ops — not Raft)
 

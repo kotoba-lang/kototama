@@ -8,7 +8,8 @@
   (is (= :kototama.contract/HostCaps (:model/name contract/HostCaps)))
   (is (= :kototama.contract/RuntimeLimits (:model/name contract/RuntimeLimits)))
   (is (= #{:gen-keypair :sign :verify :sha256-hex :http-post :llm-infer
-           :log-read :log-write :clock-monotonic}
+           :log-read :log-write :clock-monotonic
+           :http-fetch :cbor-encode :json-encode :json-extract-field}
          (set (keys contract/import-by-id))))
   (is (= :log-write (contract/import-id "log-write"))))
 
