@@ -76,7 +76,14 @@
    :json-encode         {:jvm :yes :browser :no :node :no
                          :note "JVM only so far; pure computation, no network/DOM dependency to port"}
    :json-extract-field  {:jvm :yes :browser :no :node :no
-                         :note "JVM only so far; pure computation, no network/DOM dependency to port"}})
+                         :note "JVM only so far; pure computation, no network/DOM dependency to port"}
+   ;; Third wave (com-junkawasaki/root, this ADR). JVM only so far, an
+   ;; honest gap same shape as :http-fetch above -- a future SAB+Atomics
+   ;; bridge port could reuse :http-post's own bridge (just widen the
+   ;; message payload with a headers field), same as :http-fetch's note
+   ;; says.
+   :http-post-headers  {:jvm :yes :browser :no :node :no
+                        :note "JVM only so far; reuses http-post's own SSRF/DoS hardening and :max-http-posts budget, one added guest-supplied headers input"}})
 
 (defn import-status
   "Status map for one import id under :jvm | :browser | :node."

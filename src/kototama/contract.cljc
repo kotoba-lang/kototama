@@ -74,7 +74,19 @@
     {:import/id :json-extract-field
      :import/name "json-extract-field"
      :import/category :codec
-     :import/effects #{}}]})
+     :import/effects #{}}
+    ;; Third wave (com-junkawasaki/root, this ADR -- Phase A's
+    ;; ADR-2607231022 explicitly left this as a follow-up, closed here):
+    ;; a SEPARATE import id from `:http-post` (a Wasm import's arity is
+    ;; part of the compiled guest's own import section, so `:http-post`
+    ;; itself cannot grow a headers parameter without breaking every
+    ;; already-compiled guest that imports it), but the SAME `#{:network}`
+    ;; effect and category -- this is the same operation (POST) with one
+    ;; added guest-supplied input, not a new kind of effect.
+    {:import/id :http-post-headers
+     :import/name "http-post-headers"
+     :import/category :network
+     :import/effects #{:network}}]})
 
 (def import-by-id
   (into {} (map (juxt :import/id identity) (:abi/imports import-surface))))
@@ -207,7 +219,10 @@
 
 (defn- limit-errors [limits requested ids]
   (let [requested-count (count requested)
-        http-posts (count (filter #{:http-post} ids))
+        ;; :http-post-headers shares :http-post's own :max-http-posts budget
+        ;; (same operation, same network-egress quota -- see this ns'
+        ;; :http-post-headers import entry comment above).
+        http-posts (count (filter #{:http-post :http-post-headers} ids))
         http-fetches (count (filter #{:http-fetch} ids))
         llm-infers (count (filter #{:llm-infer} ids))
         secret-imports (filterv #(some (:import/effects (import-by-id %)) [:secret]) ids)

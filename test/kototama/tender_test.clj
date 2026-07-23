@@ -169,6 +169,29 @@
       (str/replace "\t" "\\t")
       (str/replace "\n" "\\n")))
 
+(def http-post-headers-wat
+  "Imports http_post_headers, POSTs BODY to URL with HEADERS (kototama's
+  flat key<TAB>value, LF-separated wire format -- same as
+  cbor-encode-wat/json-encode-wat below, `wat-escape` handles the
+  TAB/LF), writes the response at offset 500 (256-byte capacity). URL/
+  BODY/HEADERS are laid out at offsets 0/100/200 respectively (each
+  region generously sized so no fixture's literal overflows into the
+  next)."
+  (fn [url body headers]
+    (str "(module
+            (import \"kotoba\" \"http_post_headers\"
+              (func $http_post_headers (param i32 i32 i32 i32 i32 i32 i32 i32) (result i32)))
+            (memory (export \"memory\") 1)
+            (data (i32.const 0) \"" (wat-escape url) "\")
+            (data (i32.const 100) \"" (wat-escape body) "\")
+            (data (i32.const 200) \"" (wat-escape headers) "\")
+            (func (export \"main\") (result i64)
+              (i64.extend_i32_s
+                (call $http_post_headers (i32.const 0) (i32.const " (count url) ")
+                                          (i32.const 100) (i32.const " (count body) ")
+                                          (i32.const 200) (i32.const " (count headers) ")
+                                          (i32.const 500) (i32.const 256)))))")))
+
 (def cbor-encode-wat
   "Imports cbor_encode, encodes RAW-PAIRS (kototama's flat key<TAB>value
   wire format, byte length = RAW-PAIRS' own character count since test
@@ -541,6 +564,97 @@
       (is (thrown-with-msg? clojure.lang.ExceptionInfo #"rejected by contract"
                             (tender/instantiate (byte-array 0) [:http-fetch] caps))))))
 
+;; ── http-post-headers (com-junkawasaki/root, third wave): a SEPARATE
+;; host-import from http-post (see tender.clj's own comment), but shares
+;; http-post-host-fn's SSRF/DoS hardening verbatim -- so, same structural
+;; reason as http-post/http-fetch above, every local `HttpServer` this
+;; test process can stand up is necessarily loopback, and the guarded
+;; full path (http-post-headers-host-fn itself) can only be tested for
+;; REFUSAL. The header-APPLICATION logic itself (does `.header` actually
+;; get called with the right name/value pairs, in order) is tested
+;; directly against `post-request-with-headers` -- the exact fn
+;; http-post-headers-host-fn calls, split out for testability -- and a
+;; real local server, same "test the destination-agnostic part in
+;; isolation" pattern http-request-timeout-does-not-break-a-normal-fast-
+;; round-trip above uses. ──────────────────────────────────────────────
+
+(deftest http-post-headers-host-fn-refuses-a-loopback-destination-before-any-real-connection
+  (let [hits (atom 0)
+        server (doto (HttpServer/create (InetSocketAddress. "127.0.0.1" 0) 0)
+                 (.createContext "/" (reify HttpHandler
+                                       (handle [_ exchange]
+                                         (swap! hits inc)
+                                         (.sendResponseHeaders ^HttpExchange exchange 200 -1))))
+                 (.start))]
+    (try
+      (let [port (.getPort (.getAddress server))
+            url (str "http://127.0.0.1:" port "/")
+            wasm (wat->wasm (http-post-headers-wat url "body" "Authorization\tBearer tok"))
+            caps (contract/host-caps {:grants [:http-post-headers] :limits {:max-http-posts 1}})
+            started (System/currentTimeMillis)
+            n (tender/run-main wasm [:http-post-headers] caps)
+            elapsed (- (System/currentTimeMillis) started)]
+        (is (= -1 n) "loopback destination refused, the standard fail-closed -1 convention")
+        (is (zero? @hits) "the local server never received a request -- rejected BEFORE headers/body were ever sent")
+        (is (< elapsed 2000) "rejection is immediate (pure classification), not gated behind a connect/request timeout"))
+      (finally (.stop server 0)))))
+
+(deftest http-post-headers-host-fn-allowlist-does-not-weaken-the-unconditional-denylist
+  (let [hits (atom 0)
+        server (doto (HttpServer/create (InetSocketAddress. "127.0.0.1" 0) 0)
+                 (.createContext "/" (reify HttpHandler
+                                       (handle [_ exchange]
+                                         (swap! hits inc)
+                                         (.sendResponseHeaders ^HttpExchange exchange 200 -1))))
+                 (.start))]
+    (try
+      (let [port (.getPort (.getAddress server))
+            url (str "http://127.0.0.1:" port "/")
+            wasm (wat->wasm (http-post-headers-wat url "body" "Authorization\tBearer tok"))
+            caps (contract/host-caps {:grants [:http-post-headers]
+                                       :limits {:max-http-posts 1
+                                                :allowed-url-prefixes [url]}})
+            n (tender/run-main wasm [:http-post-headers] caps)]
+        (is (= -1 n) "still refused despite an allowlist that explicitly matches this exact URL")
+        (is (zero? @hits) "the local server never received a request"))
+      (finally (.stop server 0)))))
+
+(deftest http-post-headers-denied-pre-flight-when-max-http-posts-is-zero-by-default
+  (testing ":max-http-posts stays at its default-runtime-limits 0 for http-post-headers too -- rejected before any Instance is built"
+    (let [caps (contract/host-caps {:grants [:http-post-headers]})]
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"rejected by contract"
+                            (tender/instantiate (byte-array 0) [:http-post-headers] caps))))))
+
+(deftest post-request-with-headers-sends-real-headers-to-a-local-server
+  ;; The actual proof the task asked for: real headers, genuinely sent,
+  ;; verified server-side -- via the SAME `post-request-with-headers` +
+  ;; `timed-http-client` `http-post-headers-host-fn` itself calls, against
+  ;; a real local server (loopback is fine here -- this bypasses ONLY the
+  ;; destination guard, not the header-application code path under test).
+  (let [received (atom nil)
+        server (doto (HttpServer/create (InetSocketAddress. "127.0.0.1" 0) 0)
+                 (.createContext "/" (reify HttpHandler
+                                       (handle [_ exchange]
+                                         (reset! received
+                                                 {:authorization (.getFirst (.getRequestHeaders ^HttpExchange exchange) "Authorization")
+                                                  :content-type (.getFirst (.getRequestHeaders ^HttpExchange exchange) "Content-Type")
+                                                  :body (String. (.readAllBytes (.getRequestBody ^HttpExchange exchange)) "UTF-8")})
+                                         (.sendResponseHeaders ^HttpExchange exchange 200 -1))))
+                 (.start))]
+    (try
+      (let [port (.getPort (.getAddress server))
+            url (str "http://127.0.0.1:" port "/xrpc/com.atproto.repo.createRecord")
+            headers (#'tender/parse-flat-pairs "Content-Type\tapplication/json\nAuthorization\tBearer fixed-jwt-token-value")
+            req (#'tender/post-request-with-headers url (.getBytes "{\"hello\":\"world\"}" "UTF-8") headers)
+            resp (.send (#'tender/timed-http-client) req (HttpResponse$BodyHandlers/ofString))]
+        (is (= 200 (.statusCode resp)))
+        (is (= "Bearer fixed-jwt-token-value" (:authorization @received))
+            "the Authorization header createRecord genuinely needs arrived intact")
+        (is (= "application/json" (:content-type @received))
+            "a SECOND header in the same flat-pairs block also arrived -- proves multi-header, not just single-header")
+        (is (= "{\"hello\":\"world\"}" (:body @received))))
+      (finally (.stop server 0)))))
+
 ;; ── cbor-encode / json-encode / json-extract-field (ADR-2607230943 second
 ;; wave): pure computation, real byte-level round trips via Chicory,
 ;; ground-truth values computed once via a direct REPL call to the same
@@ -619,6 +733,152 @@
         caps (contract/host-caps {:grants [:json-encode]})
         n (tender/run-main wasm [:json-encode] caps)]
     (is (= -1 n))))
+
+;; ── dotted-path nesting extension (com-junkawasaki/root, third wave --
+;; Phase A's own ADR-2607230943 flagged this as an explicit follow-up,
+;; closed here). Same `cbor_encode`/`json_encode` host-imports, same ABI
+;; shape -- ONLY the interpretation of the (already-existing) flat
+;; key<TAB>value wire format grew a dotted-path convention. WAT tests
+;; below prove the REAL Chicory host-fn path (not just the Clojure logic
+;; in isolation) handles it; the byte-EXACT CACAO-envelope/createRecord-
+;; body reproduction tests further below are direct calls to the same
+;; private functions the WAT fixtures exercise (this file's own
+;; established ground-truth pattern, see the section header above
+;; cbor-encode-host-fn-round-trips-through-real-chicory), since baking a
+;; 264-byte CBOR fixture into WAT string-literal source is unwieldy and
+;; not what those two tests are proving (the compiler/Chicory LINKAGE for
+;; the dotted-path feature is already proven by the small WAT/compiled-
+;; guest tests here and below). ──────────────────────────────────────────
+
+(deftest cbor-encode-host-fn-nests-one-object-level-through-real-chicory
+  (testing "\"s.t\"/\"s.s\" -- exactly the CACAO wire's own nested \"s\" object shape"
+    (let [pairs "s.t\teip4361\ns.s\tsigvalue"
+          wasm (wat->wasm (cbor-encode-wat pairs 256))
+          caps (contract/host-caps {:grants [:cbor-encode]})
+          instance (tender/instantiate wasm [:cbor-encode] caps)
+          written (tender/call-main instance)]
+      (is (= 25 written) "map(1) \"s\"->map(2) \"t\"->\"eip4361\" \"s\"->\"sigvalue\"")
+      (is (= [0xA1 0x61 0x73 0xA2 0x61 0x74 0x67 0x65 0x69 0x70 0x34 0x33 0x36 0x31
+              0x61 0x73 0x68 0x73 0x69 0x67 0x76 0x61 0x6c 0x75 0x65]
+             (vec (map #(bit-and (int %) 0xff) (#'tender/read-bytes! instance 300 written))))
+          "0xA1 map(1) \"s\"(1 byte); 0xA2 nested map(2) \"t\"(1)\"eip4361\"(7) \"s\"(1)\"sigvalue\"(8)"))))
+
+(deftest cbor-encode-host-fn-nests-one-array-level-through-real-chicory
+  (testing "\"resources.0\"/\"resources.1\" -- exactly the CACAO wire's own \"p.resources\" array shape"
+    (let [pairs "resources.0\ta\nresources.1\tb"
+          wasm (wat->wasm (cbor-encode-wat pairs 256))
+          caps (contract/host-caps {:grants [:cbor-encode]})
+          instance (tender/instantiate wasm [:cbor-encode] caps)
+          written (tender/call-main instance)]
+      (is (= 16 written) "map(1) \"resources\"(9-byte string key)->array(2) \"a\" \"b\"")
+      (is (= [0xA1 0x69 0x72 0x65 0x73 0x6f 0x75 0x72 0x63 0x65 0x73 0x82 0x61 0x61 0x61 0x62]
+             (vec (map #(bit-and (int %) 0xff) (#'tender/read-bytes! instance 300 16))))
+          "0xA1 map(1) \"resources\"(9 bytes); 0x82 array(2); \"a\" \"b\""))))
+
+(deftest cbor-encode-host-fn-array-index-order-is-independent-of-source-order
+  (testing "resources.1 declared BEFORE resources.0 still renders index-ascending"
+    (let [pairs "resources.1\tb\nresources.0\ta"
+          wasm (wat->wasm (cbor-encode-wat pairs 256))
+          caps (contract/host-caps {:grants [:cbor-encode]})
+          instance (tender/instantiate wasm [:cbor-encode] caps)
+          written (tender/call-main instance)]
+      (is (= [0xA1 0x69 0x72 0x65 0x73 0x6f 0x75 0x72 0x63 0x65 0x73 0x82 0x61 0x61 0x61 0x62]
+             (vec (map #(bit-and (int %) 0xff) (#'tender/read-bytes! instance 300 written))))))))
+
+(deftest cbor-encode-host-fn-dot-free-keys-are-byte-identical-to-pre-nesting-behavior
+  (testing "a purely numeric-looking DOT-FREE top-level key is NOT reinterpreted as an array -- top-level is always a map"
+    (let [pairs "0\ta\n1\tb"
+          wasm (wat->wasm (cbor-encode-wat pairs 256))
+          caps (contract/host-caps {:grants [:cbor-encode]})
+          instance (tender/instantiate wasm [:cbor-encode] caps)
+          written (tender/call-main instance)]
+      (is (= [0xA2 0x61 0x30 0x61 0x61 0x61 0x31 0x61 0x62]
+             (vec (map #(bit-and (int %) 0xff) (#'tender/read-bytes! instance 300 written))))
+          "0xA2 = map(2) \"0\"->\"a\" \"1\"->\"b\" -- NOT 0x82 array(2), because these keys never had a dot"))))
+
+(deftest json-encode-host-fn-nests-object-and-array-through-real-chicory
+  (let [pairs "s.t\teip4361\ns.s\tsigvalue\np.resources.0\ta\np.resources.1\tb"
+        wasm (wat->wasm (json-encode-wat pairs 256))
+        caps (contract/host-caps {:grants [:json-encode]})
+        instance (tender/instantiate wasm [:json-encode] caps)
+        written (tender/call-main instance)]
+    (is (= "{\"s\":{\"t\":\"eip4361\",\"s\":\"sigvalue\"},\"p\":{\"resources\":[\"a\",\"b\"]}}"
+           (tender/read-memory-string instance 300 written)))))
+
+;; ── byte-exact fidelity vs the REAL JVM reference implementations
+;; (com-junkawasaki/root, this ADR): `cloud_itonami.media.cacao/->wire`
+;; (traced to kawaraban.cacao/tashikame.cacao/kotoba.cacao, 52 real
+;; published records against pds.aozora.app as of ADR-2607110200) and
+;; `cloud_itonami.media.aozora/create-record!`'s `com.atproto.repo.
+;; createRecord` request body (via `cheshire.core/generate-string`, the
+;; SAME JSON writer `cloud_itonami.media.batch` wires production with).
+;; Expected bytes below were computed ONCE, in this development session,
+;; by directly requiring `cloud-itonami.media.cacao`/`cloud-itonami.media.
+;; aozora` from a local sibling checkout and calling `->wire`/
+;; `create-record!` with the exact fixed inputs reproduced here (a mocked
+;; `:http-fn` captured the request instead of making a real network call
+;; -- see this PR's description for the verification script and its
+;; output). This ns does NOT depend on cloud-itonami (no cross-repo
+;; dependency was added) -- the expected values are hardcoded golden
+;; fixtures, same as every other byte-vector `is` above in this file. ────
+
+(deftest cbor-encode-nested-reproduces-cacao-wire-envelope-byte-exact
+  (testing "cloud_itonami.media.cacao/->wire's own {\"h\":{\"t\":...} \"p\":{...\"resources\":[...]...} \"s\":{...}} shape, for a real (non-:statement) mint-session! parameter set -- \"p\" stays at <=8 keys (iss aud iat nonce domain version resources exp), so PersistentArrayMap's insertion-order iteration applies deterministically on the JVM reference side too, no hash-map iteration-order guessing needed"
+    (let [raw-pairs (str/join "\n"
+                              ["h.t\teip4361"
+                               "p.iss\tdid:key:zTestDid123"
+                               "p.aud\thttps://pds.aozora.app"
+                               "p.iat\t2026-07-23T00:00:00Z"
+                               "p.nonce\tnonce-fixed-abc"
+                               "p.domain\taozora.app"
+                               "p.version\t1"
+                               "p.resources.0\tkotoba://op/datom:transact"
+                               "p.resources.1\tkotoba://graph/graph-42"
+                               "p.exp\t2026-07-23T01:00:00Z"
+                               "s.t\tEdDSA"
+                               "s.s\tsig-b64-fixed-value"])
+          pairs (#'tender/parse-flat-pairs raw-pairs)
+          cbor-bytes (#'tender/cbor-pairs-bytes pairs)
+          expected (byte-array
+                    (map unchecked-byte
+                         [163 97 104 161 97 116 103 101 105 112 52 51 54 49 97 112 168 99 105 115
+                          115 115 100 105 100 58 107 101 121 58 122 84 101 115 116 68 105 100 49
+                          50 51 99 97 117 100 118 104 116 116 112 115 58 47 47 112 100 115 46 97
+                          111 122 111 114 97 46 97 112 112 99 105 97 116 116 50 48 50 54 45 48 55
+                          45 50 51 84 48 48 58 48 48 58 48 48 90 101 110 111 110 99 101 111 110
+                          111 110 99 101 45 102 105 120 101 100 45 97 98 99 102 100 111 109 97
+                          105 110 106 97 111 122 111 114 97 46 97 112 112 103 118 101 114 115
+                          105 111 110 97 49 105 114 101 115 111 117 114 99 101 115 130 120 26
+                          107 111 116 111 98 97 58 47 47 111 112 47 100 97 116 111 109 58 116
+                          114 97 110 115 97 99 116 119 107 111 116 111 98 97 58 47 47 103 114
+                          97 112 104 47 103 114 97 112 104 45 52 50 99 101 120 112 116 50 48
+                          50 54 45 48 55 45 50 51 84 48 49 58 48 48 58 48 48 90 97 115 162 97
+                          116 101 69 100 68 83 65 97 115 115 115 105 103 45 98 54 52 45 102
+                          105 120 101 100 45 118 97 108 117 101]))]
+      (is (= 264 (count cbor-bytes)))
+      (is (= (vec expected) (vec cbor-bytes))
+          "byte-exact against cloud_itonami.media.cacao/->wire's real CBOR output for this fixed payload"))))
+
+(deftest json-encode-nested-reproduces-createrecord-body-byte-exact
+  (testing "cloud_itonami.media.aozora/create-record!'s com.atproto.repo.createRecord body -- {repo,collection,rkey,record}, record itself an object with an array-of-objects field (cites), matching cloud_itonami.media.murakumo/generate-digest! + publish/digest->wire's real field set"
+    (let [raw-pairs (str/join "\n"
+                              ["repo\tdid:key:zTestDid123"
+                               "collection\tnet.itonami.media.digest"
+                               "rkey\tdigest.fixed123"
+                               "record.analysis\tThis is a test digest analysis."
+                               "record.cites.0.url\thttps://example.com/a"
+                               "record.cites.1.url\thttps://example.com/b"
+                               "record.createdAt\t2026-07-23T03:10:24.706886Z"
+                               "record.actor\tdid:key:zTestDid123"])
+          pairs (#'tender/parse-flat-pairs raw-pairs)
+          json-str (String. ^bytes (#'tender/json-pairs-bytes pairs) "UTF-8")
+          expected (str "{\"repo\":\"did:key:zTestDid123\",\"collection\":\"net.itonami.media.digest\","
+                        "\"rkey\":\"digest.fixed123\",\"record\":{\"analysis\":\"This is a test digest analysis.\","
+                        "\"cites\":[{\"url\":\"https://example.com/a\"},{\"url\":\"https://example.com/b\"}],"
+                        "\"createdAt\":\"2026-07-23T03:10:24.706886Z\",\"actor\":\"did:key:zTestDid123\"}}")]
+      (is (= 297 (count (.getBytes json-str "UTF-8"))))
+      (is (= expected json-str)
+          "byte-exact against cloud_itonami.media.aozora/create-record!'s real cheshire-generated JSON body for this fixed record"))))
 
 (deftest json-extract-field-host-fn-round-trips-through-real-chicory
   (let [json-text "{\"accessJwt\":\"abc.def.ghi\",\"uri\":\"at://x\"}"
@@ -846,3 +1106,42 @@
           instance (tender/instantiate wasm [:json-extract-field] caps)
           written (tender/call-main instance)]
       (is (= "v" (tender/read-memory-string instance alloc-heap-base written))))))
+
+;; ── com-junkawasaki/root, third wave: cbor-encode/json-encode nesting +
+;; http-post-headers, compiled by REAL `kotoba wasm emit` (not hand-written
+;; WAT) against a local sibling checkout of THIS wave's own edited
+;; kotoba-core-contracts, same "net-new to capability_contract.edn, so
+;; compile against a local sibling checkout" proof shape PR #49 established
+;; for cbor-encode/json-encode/json-extract-field's own first compiled
+;; fixtures (http-post-headers reuses http-post's http/post capability id
+;; 223, already resolvable through any kotoba-core-contracts pin -- but the
+;; NEW `http_post_headers` host-import name itself is net-new, so this
+;; fixture needed the same local-sibling-checkout compile as the other two
+;; anyway). ──────────────────────────────────────────────────────────────
+
+(deftest kotoba-compiled-cbor-encode-nested-guest-round-trips-through-real-chicory
+  (testing "(cbor-encode (str-ptr \"s.t\\teip4361\\ns.s\\tsigvalue\") ...), compiled by `kotoba wasm emit`, not WAT -- same nested {\"s\":{\"t\":...,\"s\":...}} shape the hand-written WAT test above proves, this time through the real compiler"
+    (let [wasm (read-fixture "kotoba-compiled-cbor-encode-nested.wasm")
+          caps (contract/host-caps {:grants [:cbor-encode]})
+          instance (tender/instantiate wasm [:cbor-encode] caps)
+          written (tender/call-main instance)]
+      (is (= 25 written))
+      (is (= [0xA1 0x61 0x73 0xA2 0x61 0x74 0x67 0x65 0x69 0x70 0x34 0x33 0x36 0x31
+              0x61 0x73 0x68 0x73 0x69 0x67 0x76 0x61 0x6c 0x75 0x65]
+             (vec (map #(bit-and (int %) 0xff) (#'tender/read-bytes! instance alloc-heap-base written))))))))
+
+(deftest kotoba-compiled-json-encode-nested-guest-round-trips-through-real-chicory
+  (testing "(json-encode (str-ptr \"s.t\\teip4361\\ns.s\\tsigvalue\\np.resources.0\\ta\\np.resources.1\\tb\") ...), compiled by `kotoba wasm emit`, not WAT"
+    (let [wasm (read-fixture "kotoba-compiled-json-encode-nested.wasm")
+          caps (contract/host-caps {:grants [:json-encode]})
+          instance (tender/instantiate wasm [:json-encode] caps)
+          written (tender/call-main instance)]
+      (is (= "{\"s\":{\"t\":\"eip4361\",\"s\":\"sigvalue\"},\"p\":{\"resources\":[\"a\",\"b\"]}}"
+             (tender/read-memory-string instance alloc-heap-base written))))))
+
+(deftest kotoba-compiled-http-post-headers-guest-round-trips-through-real-chicory
+  (testing "(http-post-headers (str-ptr url) ... (str-ptr \"Authorization\\tBearer tok\") ...), compiled by `kotoba wasm emit`, not WAT -- loopback URL deliberately refused by the SSRF denylist (same non-live-network proof shape kotoba-compiled-http-fetch.wasm above uses), proving real compiler-to-tender LINKAGE for the net-new http_post_headers host-import"
+    (let [wasm (read-fixture "kotoba-compiled-http-post-headers.wasm")
+          caps (contract/host-caps {:grants [:http-post-headers] :limits {:max-http-posts 1}})
+          written (tender/run-main wasm [:http-post-headers] caps)]
+      (is (= -1 written) "loopback URL refused by the same denylist the WAT-based tests above verify"))))
