@@ -282,24 +282,39 @@
 ;; SNI-preserving IP-pinning implementation as a dedicated follow-up --
 ;; not a rushed addition here.
 
-(def ^:private http-connect-timeout
-  "How long to wait for the TCP/TLS handshake before giving up."
-  (Duration/ofSeconds 5))
+(def ^:private default-http-timeout-ms
+  "Byte-identical to the previous hardcoded `(Duration/ofSeconds 5)`
+  constants this replaces -- every caller that never configures
+  `:http-connect-timeout-ms`/`:http-request-timeout-ms` on its HostCaps
+  (via `caps-timeout-ms` below) behaves exactly as before."
+  5000)
 
-(def ^:private http-request-timeout
-  "How long to wait for the whole request (handshake + send + response)
-  before giving up -- guards a peer that accepts the connection but then
-  never responds (slow-loris), which `http-connect-timeout` alone does not."
-  (Duration/ofSeconds 5))
+(defn- caps-timeout-ms
+  "[com-junkawasaki/root, 2026-07-23] Reads LIMIT-KEY off CAPS' `:limits`,
+  falling back to `default-http-timeout-ms` -- added because a real
+  go-live deployment (kawaraban/cloud-itonami media actors posting to
+  the live pds.aozora.app) found the fixed 5s ceiling too aggressive for
+  that server's occasional latency (a real createRecord call that DID
+  eventually succeed, confirmed via a 30s raw HttpClient retry, still
+  timed out at the old hardcoded 5s default). Per-caller opt-in via
+  HostCaps, same shape `:allowed-url-prefixes` already established --
+  never a blanket widening of the default (which would weaken every
+  OTHER kototama consumer's fast-fail DoS guarantee for a problem
+  specific to one slow peer)."
+  [caps limit-key]
+  (or (get (:limits caps) limit-key) default-http-timeout-ms))
 
 (defn- timed-http-client
-  "A fresh `HttpClient` with `http-connect-timeout` wired in (same shape
+  "A fresh `HttpClient` with a connect timeout wired in (same shape
   `kototama.fleet-store/http-client` already establishes for the B2 native
-  API calls elsewhere in this repo, `.connectTimeout` on the builder)."
-  []
-  (-> (HttpClient/newBuilder)
-      (.connectTimeout http-connect-timeout)
-      .build))
+  API calls elsewhere in this repo, `.connectTimeout` on the builder).
+  CONNECT-TIMEOUT-MS defaults to `default-http-timeout-ms` (the previous
+  hardcoded behavior) when omitted."
+  ([] (timed-http-client default-http-timeout-ms))
+  ([connect-timeout-ms]
+   (-> (HttpClient/newBuilder)
+       (.connectTimeout (Duration/ofMillis connect-timeout-ms))
+       .build)))
 
 (defn- ipv6-unique-local?
   "True when ADDR is an IPv6 Unique Local Address (RFC 4193, fc00::/7) --
@@ -391,10 +406,11 @@
                    -1
                    (let [body (read-bytes! instance (aget args 2) (aget args 3))
                          req (-> (HttpRequest/newBuilder (URI/create url))
-                                (.timeout http-request-timeout)
+                                (.timeout (Duration/ofMillis (caps-timeout-ms caps :http-request-timeout-ms)))
                                 (.POST (HttpRequest$BodyPublishers/ofByteArray body))
                                 .build)
-                         resp (.send (timed-http-client) req (HttpResponse$BodyHandlers/ofByteArray))]
+                         resp (.send (timed-http-client (caps-timeout-ms caps :http-connect-timeout-ms))
+                                     req (HttpResponse$BodyHandlers/ofByteArray))]
                      (swap! limits-state update :http-posts inc)
                      (write-bytes! instance (aget args 4) (aget args 5) (.body resp)))))))))
 
@@ -432,10 +448,11 @@
                          (not (contract/url-allowed? (:limits caps) url)))
                    -1
                    (let [req (-> (HttpRequest/newBuilder (URI/create url))
-                                (.timeout http-request-timeout)
+                                (.timeout (Duration/ofMillis (caps-timeout-ms caps :http-request-timeout-ms)))
                                 .GET
                                 .build)
-                         resp (.send (timed-http-client) req (HttpResponse$BodyHandlers/ofByteArray))]
+                         resp (.send (timed-http-client (caps-timeout-ms caps :http-connect-timeout-ms))
+                                     req (HttpResponse$BodyHandlers/ofByteArray))]
                      (swap! limits-state update :http-fetches inc)
                      (write-bytes! instance (aget args 2) (aget args 3) (.body resp)))))))))
 
@@ -749,21 +766,24 @@
 
 (defn- post-request-with-headers
   "Builds (does NOT send) an `HttpRequest`: POST to URL with BODY bytes,
-  `http-request-timeout` applied, and every `[name value]` pair in
-  HEADERS (as `parse-flat-pairs` returns) added via `.header` in order.
-  Split out from `http-post-headers-host-fn` so a test can exercise the
-  actual header-application code path directly against a real local
-  server (the SSRF denylist makes every reachable local server loopback,
-  so `http-post-headers-host-fn` itself can only be tested for REFUSAL --
+  REQUEST-TIMEOUT-MS applied (defaults to `default-http-timeout-ms` when
+  the 3-arg arity is used, preserving every existing caller's behavior),
+  and every `[name value]` pair in HEADERS (as `parse-flat-pairs`
+  returns) added via `.header` in order. Split out from
+  `http-post-headers-host-fn` so a test can exercise the actual
+  header-application code path directly against a real local server
+  (the SSRF denylist makes every reachable local server loopback, so
+  `http-post-headers-host-fn` itself can only be tested for REFUSAL --
   see the http-post/http-fetch WAT test sections' own header comment for
   this same structural reason)."
-  ^HttpRequest [^String url ^bytes body headers]
-  (-> (reduce (fn [^HttpRequest$Builder b [k v]] (.header b ^String k ^String v))
-              (-> (HttpRequest/newBuilder (URI/create url))
-                  (.timeout http-request-timeout))
-              headers)
-      (.POST (HttpRequest$BodyPublishers/ofByteArray body))
-      .build))
+  (^HttpRequest [url body headers] (post-request-with-headers url body headers default-http-timeout-ms))
+  (^HttpRequest [^String url ^bytes body headers request-timeout-ms]
+   (-> (reduce (fn [^HttpRequest$Builder b [k v]] (.header b ^String k ^String v))
+               (-> (HttpRequest/newBuilder (URI/create url))
+                   (.timeout (Duration/ofMillis request-timeout-ms)))
+               headers)
+       (.POST (HttpRequest$BodyPublishers/ofByteArray body))
+       .build)))
 
 (defn- http-post-headers-host-fn
   "`(url-ptr url-len body-ptr body-len headers-ptr headers-len out-ptr
@@ -799,8 +819,9 @@
                    (let [body (read-bytes! instance (aget args 2) (aget args 3))
                          header-text (String. ^bytes (read-bytes! instance (aget args 4) (aget args 5)) "UTF-8")
                          headers (parse-flat-pairs header-text)
-                         req (post-request-with-headers url body headers)
-                         resp (.send (timed-http-client) req (HttpResponse$BodyHandlers/ofByteArray))]
+                         req (post-request-with-headers url body headers (caps-timeout-ms caps :http-request-timeout-ms))
+                         resp (.send (timed-http-client (caps-timeout-ms caps :http-connect-timeout-ms))
+                                     req (HttpResponse$BodyHandlers/ofByteArray))]
                      (swap! limits-state update :http-posts inc)
                      (write-bytes! instance (aget args 6) (aget args 7) (.body resp)))))))))
 
@@ -849,7 +870,7 @@
                  (.header "content-type" "application/json")
                  (.header "x-api-key" api-key)
                  (.header "anthropic-version" "2023-06-01")
-                 (.timeout http-request-timeout)
+                 (.timeout (Duration/ofMillis default-http-timeout-ms))
                  (.POST (HttpRequest$BodyPublishers/ofString body))
                  .build)
           resp (.send (timed-http-client) req (HttpResponse$BodyHandlers/ofString))]

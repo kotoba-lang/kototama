@@ -105,7 +105,9 @@
                 :max-memory-pages :non-negative-int
                 :allowed-url-prefixes :vector-of-string-or-nil
                 :allow-secret-imports? :boolean
-                :allow-write-imports? :boolean}})
+                :allow-write-imports? :boolean
+                :http-connect-timeout-ms :non-negative-int
+                :http-request-timeout-ms :non-negative-int}})
 
 (def default-runtime-limits
   {:max-imports (count (:abi/imports import-surface))
@@ -139,7 +141,22 @@
    ;; url-allowed? below.
    :allowed-url-prefixes nil
    :allow-secret-imports? false
-   :allow-write-imports? false})
+   :allow-write-imports? false
+   ;; [com-junkawasaki/root, 2026-07-23] Both default to 5000 -- BYTE-
+   ;; IDENTICAL to `kototama.tender`'s previous hardcoded `(Duration/
+   ;; ofSeconds 5)` constants, so every existing caller that never sets
+   ;; these behaves exactly as before. Added because a real go-live
+   ;; deployment (kawaraban/cloud-itonami media actors posting to the
+   ;; live pds.aozora.app) found the fixed 5s ceiling too aggressive for
+   ;; that server's occasional latency (a real createRecord call that
+   ;; DID eventually succeed, confirmed via a 30s raw HttpClient retry,
+   ;; still timed out at kototama's own 5s default) -- rather than widen
+   ;; the constant globally (risking every OTHER kototama consumer's
+   ;; fast-fail DoS guarantee for a problem specific to one slow peer),
+   ;; both are now caller-configurable per HostCaps, same opt-in pattern
+   ;; :allowed-url-prefixes above already established.
+   :http-connect-timeout-ms 5000
+   :http-request-timeout-ms 5000})
 
 (def HostCaps
   {:model/name :kototama.contract/HostCaps
