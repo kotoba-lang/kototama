@@ -1,9 +1,16 @@
 {:adoption/version 3 :consumer/id :kototama
  :security/git-sha "c83183f7b66afda6a095e690ff617075a39cc0eb"
- :required-control-namespaces [kotoba.security.abac kotoba.security.approval kotoba.security.crypto-policy kotoba.security.effect kotoba.security.hardware kotoba.security.information-flow]
+ :required-control-namespaces [kotoba.security.abac kotoba.security.approval kotoba.security.crypto-policy kotoba.security.effect kotoba.security.hardware kotoba.security.information-flow kotoba.security.hkdf kotoba.security.aead kotoba.security.x25519 kotoba.security.ed25519 kotoba.security.sha256]
  :security-sensitive-entrypoints
  {kototama.transport-provider [kotoba.security.abac kotoba.security.approval kotoba.security.crypto-policy kotoba.security.hardware kotoba.security.information-flow]
-  kototama.fleet-store [kotoba.security.effect]}
+  kototama.fleet-store [kotoba.security.effect]
+  kototama.signal-crypto [kotoba.security.hkdf kotoba.security.aead]
+  kototama.signal-protocol [kotoba.security.hkdf kotoba.security.x25519 kotoba.security.ed25519]
+  kototama.signal-request [kotoba.security.ed25519 kotoba.security.sha256 kotoba.security.hkdf]}
  :sensitive-operations
- {kototama.fleet-store/b2-authorize! [kotoba.security.effect]}
+ {kototama.fleet-store/b2-authorize! [kotoba.security.effect]
+  kototama.signal-crypto/encrypt-aead [kotoba.security.aead]
+  kototama.signal-crypto/decrypt-aead [kotoba.security.aead]
+  kototama.signal-protocol/encrypt-message [kotoba.security.hkdf]
+  kototama.signal-protocol/decrypt-message [kotoba.security.hkdf]}
  :exceptions []}
