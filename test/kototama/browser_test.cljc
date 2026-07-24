@@ -25,6 +25,30 @@
     ;; test/browser/verify_llm_infer_browser.cljs there).
     (is (contains? yes :llm-infer) "llm-infer is real via the same Worker-hosted SAB+Atomics bridge, through a caller-supplied proxy URL")))
 
+(deftest every-import-declares-explicit-parity-and-gaps-carry-notes
+  ;; ADR-0009 Decision 1 (docs/0009-stack-topology-parity-gate-capability-
+  ;; schema.md): a change adding an actor:host import must declare that
+  ;; import's runtime parity in host-impl in the SAME change -- either a
+  ;; real browser wiring or an explicit :no with a :note (the recorded
+  ;; waiver). matrix-covers-full-import-surface alone cannot catch an
+  ;; undeclared import, because parity-matrix backfills a nil-status row
+  ;; for any contract id missing from host-impl.
+  (let [ids (map :import/id (:abi/imports contract/import-surface))
+        allowed #{:yes :no :inject :coop-or-inject}]
+    (doseq [id ids]
+      (let [row (get browser/host-impl id)]
+        (testing (str id " has an explicit host-impl row with allowed statuses")
+          (is (map? row))
+          (is (contains? allowed (:jvm row)))
+          (is (contains? allowed (:browser row)))
+          (is (contains? allowed (:node row))))
+        (testing (str id " documents its browser gap when not linkable")
+          (when (= :no (:browser row))
+            (is (string? (:note row))
+                "an unported import must carry a :note recording the gap")))))
+    (testing "host-impl has no orphan rows outside the contract surface"
+      (is (= (set ids) (set (keys browser/host-impl)))))))
+
 (deftest parity-score-ratio
   (let [s (browser/parity-score)]
     ;; ADR-2607230943's 4 new imports (http-fetch/cbor-encode/json-encode/
