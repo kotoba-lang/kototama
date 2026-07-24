@@ -11,6 +11,10 @@ aiueos   = OS / broker (decides grants; tender only enforces)
 ```
 
 Stack vocabulary: [ADR-2607022400](https://github.com/com-junkawasaki/root/blob/main/90-docs/adr/2607022400-kototama-unikernel-tender-runtime-vocabulary.md).
+Stack topology, the deliberate `kototama → aiueos` dependency direction, the
+browser-parity gate for new `actor:host` imports, and the canonical
+capability-schema plan: [docs/0009](docs/0009-stack-topology-parity-gate-capability-schema.md)
+(root authority: `com-junkawasaki/root` ADR-2607241100).
 
 **Not to be confused with [`kotoba-lang/kotodama`](https://github.com/kotoba-lang/kotodama)**
 — both names romanize the same word (言霊/言魂, "word-spirit"; "kototama" and
