@@ -64,7 +64,12 @@
 (defn- host-ability [ability]
   ;; EDN uses a namespaced keyword for the operation while the native JSON
   ;; protocol carries its canonical WIT spelling as a string.
-  (update ability :operation name))
+  (update ability :operation
+          (fn [operation]
+            (when-not (qualified-keyword? operation)
+              (reject :invalid-ability
+                      "Component ability operation must be a qualified keyword"))
+            (str (namespace operation) "/" (name operation)))))
 
 (defn run-effectful!
   "Run an admitted effectful Component through the native Wasmtime micro-TCB.
