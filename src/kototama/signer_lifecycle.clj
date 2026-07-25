@@ -1,6 +1,7 @@
 (ns kototama.signer-lifecycle
   "Monotonic, root-authorized manifest signer lifecycle."
-  (:require [kotoba.security.ed25519 :as ed25519]))
+  (:require [kotoba.security.ed25519 :as ed25519]
+            [kotoba.security.effect :as effect]))
 
 (defn new-registry
   "Create a live signer registry. ROOT-KEY-ID identifies the offline/control
@@ -92,11 +93,19 @@
                        :kototama.signer/decision decision})))
     (let [signature (:manifest/signature manifest)
           body (dissoc manifest :manifest/signature)]
-      (when-not (and (ifn? verify-manifest)
-                     (verify-manifest
-                      (get-in decision [:signer :public-key])
-                      (pr-str body) signature))
-        (throw (ex-info "kototama.signer-lifecycle: invalid manifest signature"
-                        {:kototama.signer/code :invalid-manifest-signature
-                         :key-id key-id})))
-      {:authorized? true :key-id key-id :epoch (:epoch decision)})))
+      (effect/guard!
+       {:evaluate
+        (fn [_]
+          {:allowed?
+           (and (ifn? verify-manifest)
+                (verify-manifest
+                 (get-in decision [:signer :public-key])
+                 (pr-str body) signature))})
+        :request {:key-id key-id :epoch (:epoch decision)}
+        :approved? :allowed?
+        :action :manifest/authorize
+        :resource key-id
+        :digest nil
+        :effect
+        (fn [_]
+          {:authorized? true :key-id key-id :epoch (:epoch decision)})}))))

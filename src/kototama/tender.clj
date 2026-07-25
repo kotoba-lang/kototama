@@ -105,11 +105,11 @@
   a real `com.atproto.repo.createRecord` body from a `.kotoba` guest."
   (:require [clojure.data.json :as json]
             [clojure.string :as str]
+            [kotoba.security.effect :as effect]
             [kototama.browser :as browser]
             [kototama.compatibility :as compatibility]
             [kototama.contract :as contract]
             [kototama.network-authority :as network]
-            [kotoba.security.effect :as effect]
             [kototama.signer-lifecycle :as signer]
             [ed25519.core :as ed])
   (:import (com.dylibso.chicory.runtime ExecutionListener HostFunction ImportFunction
@@ -1202,7 +1202,16 @@
    the change without re-instantiation."
   ([session import-id] (revoke-import! session import-id :operator-revocation))
   ([session import-id reason]
-   (deactivate-import! session import-id :revoked reason)))
+   (effect/guard!
+    {:evaluate (constantly {:allowed? true})
+     :request {:import-id import-id :reason reason}
+     :approved? :allowed?
+     :action :component-import/revoke
+     :resource (contract/import-id import-id)
+     :digest nil
+     :effect
+     (fn [_]
+       (deactivate-import! session import-id :revoked reason))})))
 
 (defn drop-import!
   "Voluntarily and irreversibly drop one import from a session."

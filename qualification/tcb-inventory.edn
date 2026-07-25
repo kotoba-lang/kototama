@@ -38,7 +38,7 @@
   {:path "src/kototama/linker.clj" :role :postgresql-link-boundary
    :sha256 "6cf53a05c9a7329f220cb062464007060c83ea357ed27f9c1776dc592e905641"}
   {:path "src/kototama/network_authority.clj" :role :network-provider-authority
-   :sha256 "0bdf355e91f58b7d66e38abb54de7c69230f1da686758bddddba79b45fcfdbcf"}
+   :sha256 "d679c1615880d95f16481775490aea086978124feae413e488f352b97e6793cd"}
   {:path "src/kototama/postgresql_pool_provider.clj" :role :database-provider-boundary
    :sha256 "9147ffee055e43bf5c9fb8ed149b07a2e71e43de606c225b0f50f92e0871b965"}
   {:path "src/kototama/release_evidence.clj" :role :release-attestation-builder
@@ -50,11 +50,11 @@
   {:path "src/kototama/signal_request.clj" :role :signal-request-authority
    :sha256 "1a9116d98eb7dea05df22a45b7a83dfe1137eec1871d9f7eba6e8d8543a16db9"}
   {:path "src/kototama/signer_lifecycle.clj" :role :manifest-signer-trust
-   :sha256 "88cc57aa37aca218151681d7e871a02e90c5c0b5573ce3598ae40d8a409df051"}
+   :sha256 "f60ff89c6f2c779bc843bb02d1e90efa3e37441343a6d4e230eeed37d6b01f9d"}
   {:path "src/kototama/tcb.clj" :role :tcb-drift-verifier
    :sha256 "9c7c9a9527d6a7c553ea7b4712bbb3a069aff1958874086537c7dba75aeeee18"}
   {:path "src/kototama/tender.clj" :role :wasm-runtime-host-abi
-   :sha256 "36941f0e1262908e5596184f9b83b1cab65dea8ef38ab4dca851d30202b7b425"}
+   :sha256 "a387166b632b05c6295c1ea83f403e8fa85ce0ccac000b8bafe17dbf2758bb34"}
   {:path "src/kototama/transport_provider.clj" :role :transport-provider-boundary
    :sha256 "e660a3388c15d258d49721212da675ed0bdb503f4c8008d37687e0787784a698"}]
  :tcb/external
@@ -69,7 +69,7 @@
    :git-sha "c83183f7b66afda6a095e690ff617075a39cc0eb"
    :role :shared-security-primitives}
   {:coordinate "io.github.kotoba-lang/aiueos"
-   :git-sha "63c13fd48dc53e0f93fa40f6bfce54e62773c656"
+   :git-sha "fc70904b49df13a20b54ab00de99284b02c9a458"
    :role :policy-kernel}
   {:coordinate "io.github.kotoba-lang/abi"
    :git-sha "c389f687bbacd70623970ef908475e8dadec5876"
