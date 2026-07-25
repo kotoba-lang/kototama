@@ -17,7 +17,7 @@
         io.github.kotoba-lang/security {:git/url "https://github.com/kotoba-lang/security.git"
                                         :git/sha "c83183f7b66afda6a095e690ff617075a39cc0eb"}
         io.github.kotoba-lang/abi {:git/url "https://github.com/kotoba-lang/abi.git"
-                                   :git/sha "e63fb3086a41b5709e7f778467f8ce394dc391ee"}
+                                   :git/sha "3add3dc6aea77adaf8d1294206832048b5518c16"}
         ;; Integration tests compile the exact Component that the native
         ;; micro-TCB executes; a sibling checkout is never an implicit input.
         io.github.kotoba-lang/compiler

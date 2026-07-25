@@ -102,7 +102,7 @@
   (let [expected abi/admission-keys]
     (when-not (and (map? world) (= expected (set (keys world))))
       (reject :invalid-envelope "component admission envelope is not exact"))
-    (when-not (= abi/component-target (:target world))
+    (when-not (contains? #{abi/component-target abi/component-target-v2} (:target world))
       (reject :target-mismatch "component target is unsupported"))
     (when-not (= abi/wasi-version (:wasi-version world))
       (reject :wasi-mismatch "WASI version requires an explicit compatibility tender"))

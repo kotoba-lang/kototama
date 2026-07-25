@@ -66,6 +66,11 @@
     (is (= :invalid-runtime-binding
            (code (assoc pure :runtime-bindings (:runtime-bindings valid)))))))
 
+(deftest pure-typed-capability-v2-world-is-admitted-without-v1-imports
+  (let [pure (assoc valid :target :wasm-component-kotoba-v2 :imports #{} :grants #{}
+                    :provider-bindings {} :abilities {} :runtime-bindings {})]
+    (is (= pure (platform/validate-world! pure)))))
+
 (deftest component-bytes-are-verified-before-the-linker-receives-them
   (let [bytes (.getBytes "component" "UTF-8")
         world (assoc-in valid [:identity :component-cid] (mf/cidv1-raw bytes))

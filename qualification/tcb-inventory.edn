@@ -20,7 +20,7 @@
   {:path "src/kototama/wasmtime_component.clj" :role :native-component-engine-adapter
    :sha256 "bffb3e890299c9177e6e0a34240d396a6976afad6f0e61b1615dcc3bf4a3eeff"}
   {:path "native/wasmtime-component-host/src/main.rs" :role :native-component-engine-host
-   :sha256 "f351c4fcd8d75415a4d1fc5fe4acf73de45e40cabac791f785984c08ff9df917"}
+   :sha256 "78007d3be6ee4eed553047aa2bda964c4afcff297028d122e9ca23f90b0c5e3d"}
   {:path "src/kototama/workerd_core.clj" :role :workerd-core-engine-adapter
    :sha256 "447c6b6327285803ce71ea199845255777cd9afa99b2d866cf17ae72ad5de83e"}
   {:path "src/kototama/contract.cljc" :role :authority-schema
@@ -72,7 +72,7 @@
    :git-sha "f3a44ddb13534d4e47f5e5870183e63606cec3c2"
    :role :policy-kernel}
   {:coordinate "io.github.kotoba-lang/abi"
-   :git-sha "7a8a448f44b751fc15c4d428cd37c52db7416699"
+   :git-sha "3add3dc6aea77adaf8d1294206832048b5518c16"
    :role :component-admission-contract}
   {:coordinate "io.github.kotoba-lang/compiler"
    :git-sha "224d80c19deb1fa4ed4f7dba39ffc08574cea5e8"
