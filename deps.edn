@@ -18,6 +18,11 @@
                                         :git/sha "c83183f7b66afda6a095e690ff617075a39cc0eb"}
         io.github.kotoba-lang/abi {:git/url "https://github.com/kotoba-lang/abi.git"
                                    :git/sha "7a8a448f44b751fc15c4d428cd37c52db7416699"}
+        ;; Integration tests compile the exact Component that the native
+        ;; micro-TCB executes; a sibling checkout is never an implicit input.
+        io.github.kotoba-lang/compiler
+        {:git/url "https://github.com/kotoba-lang/compiler.git"
+         :git/sha "224d80c19deb1fa4ed4f7dba39ffc08574cea5e8"}
         ;; Component admission verifies identity CIDs structurally before
         ;; linking; a leading `b` is not evidence of content addressing.
         io.github.kotoba-lang/io-multiformats

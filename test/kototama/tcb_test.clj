@@ -21,7 +21,7 @@
     "src/kototama/tcb.clj"})
 
 (deftest checked-in-tcb-has-no-drift
-  (is (= {:valid? true :files 26 :external 8 :errors []}
+  (is (= {:valid? true :files 26 :external 9 :errors []}
          (tcb/validate))))
 
 (deftest authority-and-runtime-boundaries-cannot-disappear-silently
