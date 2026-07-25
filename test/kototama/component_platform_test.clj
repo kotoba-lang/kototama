@@ -38,3 +38,18 @@
                        :budgets {:fuel 1000000 :memory-pages 4 :cancellation true :deadline-ms 1000
                                  :max-items 32 :max-bytes 65536})]
       (is (= async (platform/validate-world! async))))))
+
+(deftest component-bytes-are-verified-before-the-linker-receives-them
+  (let [bytes (.getBytes "component" "UTF-8")
+        world (assoc-in valid [:identity :component-cid] (mf/cidv1-raw bytes))
+        linked (atom nil)]
+    (is (= :linked
+           (platform/admit-and-link! world bytes
+                                     (fn [request] (reset! linked request) :linked))))
+    (is (= bytes (:component-bytes @linked)))
+    (is (= :component-cid-mismatch
+           (try (platform/admit-and-link!
+                 (assoc-in world [:identity :component-cid] (cid "other")) bytes identity)
+                nil
+                (catch clojure.lang.ExceptionInfo e
+                  (:kototama.component/code (ex-data e))))))))
