@@ -45,6 +45,13 @@ jobs:
           tar xzf wasm-tools.tar.gz
           sudo mv wasm-tools-1.252.0-x86_64-linux/wasm-tools /usr/local/bin/wasm-tools
           wasm-tools --version
+      - name: Install pinned Wasmtime CLI for runtime conformance
+        run: |
+          curl -sSL -o wasmtime.tar.xz \
+            https://github.com/bytecodealliance/wasmtime/releases/download/v42.0.1/wasmtime-v42.0.1-x86_64-linux.tar.xz
+          tar xJf wasmtime.tar.xz
+          sudo mv wasmtime-v42.0.1-x86_64-linux/wasmtime /usr/local/bin/wasmtime
+          wasmtime --version
       - name: Verify shared security adoption
         run: clojure -M -m kotoba.security.adoption
       - name: Checkout workspace siblings for the :test alias
@@ -60,6 +67,10 @@ jobs:
                       kotoba-selfhost-contracts org-chainagnostic-cacao datom org-w3-did; do
             git clone --depth 1 "https://github.com/kotoba-lang/$repo.git" "../$repo"
           done
+          # The Component E2E targets the published compiler Component ABI,
+          # rather than whatever happens to be at compiler/main.
+          git -C ../compiler fetch --depth 1 origin e228eae
+          git -C ../compiler checkout --detach e228eae
       - name: Test CLJC contract
         env:
           KOTOTAMA_COMPONENT_HOST: ${{ github.workspace }}/native/wasmtime-component-host/target/debug/kototama-wasmtime-component-host

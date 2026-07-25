@@ -6,9 +6,9 @@
   network/database/cryptographic provider boundary."
  :tcb/files
  [{:path "src/kototama/aiueos_adapter.clj" :role :policy-authority-adapter
-   :sha256 "9c5d27fa2b7caab939948d1951d0fce951faef5deb21ca453a8a8b901f615134"}
+   :sha256 "73ac009e9883c5e9003725e11fe33ba95d94f6abd1defcdd9165270dd5626f07"}
   {:path "src/kototama/browser.cljc" :role :host-support-admission
-   :sha256 "4a2b9339078674632198fd59872bd7bb5e9ba47922a856ef1bc633061be07104"}
+   :sha256 "c7ee94f63c95c85a515074e291edbe9ccbfbef697e076dcda9687b7b517384ac"}
   {:path "src/kototama/cli.clj" :role :operator-entrypoint
    :sha256 "247f683e22b80c0a7a74cf3e963dbadf4f2e487c035e93a1bbb782da9f72782d"}
   {:path "src/kototama/compatibility.clj" :role :artifact-admission
@@ -16,15 +16,15 @@
   {:path "src/kototama/component_platform.clj" :role :component-world-admission
    :sha256 "00f0a982bff577ab1faec99d61fcc1ac0f82964dfb01da2f3143a5a82c681796"}
   {:path "src/kototama/component_provider.cljc" :role :component-provider-admission
-   :sha256 "6b6589291114b37aa1fe874b14c495a5f18444f7e7eb9f811c36bdd7cd52db34"}
+   :sha256 "e71639e8c64d4af7c90847e258bc87af85b22be09e410551e36634096e852d54"}
   {:path "src/kototama/wasmtime_component.clj" :role :native-component-engine-adapter
-   :sha256 "07018e7ce2b9e0ca1d3006a04e7c8d7c2f938410b0c4d1dd80d8f45c238ddd43"}
+   :sha256 "8f69497b8fe09c7fa84269a4ab384a931773ec790984a41bc50d24793ff3a96b"}
   {:path "native/wasmtime-component-host/src/main.rs" :role :native-component-engine-host
    :sha256 "35040d40d954b754b22f53b5a00fff29e9fc1531ca5695c4cdbaf01ecc20437f"}
   {:path "src/kototama/workerd_core.clj" :role :workerd-core-engine-adapter
    :sha256 "447c6b6327285803ce71ea199845255777cd9afa99b2d866cf17ae72ad5de83e"}
   {:path "src/kototama/contract.cljc" :role :authority-schema
-   :sha256 "c706e501b6706743846259366c4460a80abda93a89f963a81591770a8d7dbe2e"}
+   :sha256 "5e66a857349ec7aa6bcc36a710bb25cf0489e2a0999e4ff46fea7952d2f62337"}
   {:path "src/kototama/fleet.cljc" :role :lease-authority
    :sha256 "326193334a5fbf99511346ea489a95ae6bea998ac89d1c59c5df38374ca53fa2"}
   {:path "src/kototama/fleet_exec.clj" :role :production-execution-entrypoint
@@ -34,27 +34,27 @@
   {:path "src/kototama/fleet_store.clj" :role :checkpoint-persistence
    :sha256 "ee51bf93ad5cfcd36d7a585bc03167c9a7e877528b19c645230e8387d7efbe3e"}
   {:path "src/kototama/guest.cljc" :role :guest-abi-mapping
-   :sha256 "1b752375c2b0e58eb511f8ee5b46892349773357a18130d81de162b76025bc21"}
+   :sha256 "7c7a2da539b5fddbbed1f5593172d56d9ca0e6309fa7f833d8710fb0f0ed7b67"}
   {:path "src/kototama/linker.clj" :role :postgresql-link-boundary
    :sha256 "6cf53a05c9a7329f220cb062464007060c83ea357ed27f9c1776dc592e905641"}
   {:path "src/kototama/network_authority.clj" :role :network-provider-authority
-   :sha256 "c3ea4862af444146b069b0f52e1df094942269b4613508477d065da3d1e6f575"}
+   :sha256 "0bdf355e91f58b7d66e38abb54de7c69230f1da686758bddddba79b45fcfdbcf"}
   {:path "src/kototama/postgresql_pool_provider.clj" :role :database-provider-boundary
    :sha256 "9147ffee055e43bf5c9fb8ed149b07a2e71e43de606c225b0f50f92e0871b965"}
   {:path "src/kototama/release_evidence.clj" :role :release-attestation-builder
    :sha256 "5f1f0cb60ea2f1eb5d05d5d86722f8365575c5b6c8178ef015de05875d0d08c3"}
-  {:path "src/kototama/signal/signal_crypto.cljc" :role :signal-cryptography
-   :sha256 "7363be549024730967c2a471dc817ae5d01cc89934d899254add8e66d8e8b388"}
-  {:path "src/kototama/signal/signal_protocol.cljc" :role :signal-authentication
-   :sha256 "34d2229e2d7fb40df52e125e9c5f3a4ae96540c99e0c9754e8fd1d148a303731"}
-  {:path "src/kototama/signal/signal_request.cljc" :role :signal-request-authority
-   :sha256 "3a6f26195d413d1a1b634176fe2777f414985006990f11ada67d209a1f21ba2b"}
+  {:path "src/kototama/signal_crypto.clj" :role :signal-cryptography
+   :sha256 "7d28d2ade88029d68746209dea9ba9ba63fda97ed4ed4f0c8536372a6b847c14"}
+  {:path "src/kototama/signal_protocol.clj" :role :signal-authentication
+   :sha256 "5c563ef4fd004ce50fc1201c8df67658f9ee11538cdf534263795b674cbce7ac"}
+  {:path "src/kototama/signal_request.clj" :role :signal-request-authority
+   :sha256 "1a9116d98eb7dea05df22a45b7a83dfe1137eec1871d9f7eba6e8d8543a16db9"}
   {:path "src/kototama/signer_lifecycle.clj" :role :manifest-signer-trust
-   :sha256 "a30d028497674a772989a12f352992e2c15b36348e6474e7eb2d4129e8c187ff"}
+   :sha256 "88cc57aa37aca218151681d7e871a02e90c5c0b5573ce3598ae40d8a409df051"}
   {:path "src/kototama/tcb.clj" :role :tcb-drift-verifier
    :sha256 "9c7c9a9527d6a7c553ea7b4712bbb3a069aff1958874086537c7dba75aeeee18"}
   {:path "src/kototama/tender.clj" :role :wasm-runtime-host-abi
-   :sha256 "bab35e4bd9fd50a9b36692a921708bbe3a8a766a94093cdd36f25634a43fab16"}
+   :sha256 "36941f0e1262908e5596184f9b83b1cab65dea8ef38ab4dca851d30202b7b425"}
   {:path "src/kototama/transport_provider.clj" :role :transport-provider-boundary
    :sha256 "e660a3388c15d258d49721212da675ed0bdb503f4c8008d37687e0787784a698"}]
  :tcb/external
