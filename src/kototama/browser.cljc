@@ -71,12 +71,19 @@
    ;; the same flat-pairs parsing + encode/scan logic).
    :http-fetch          {:jvm :yes :browser :no :node :no
                          :note "JVM only so far; reuses kotoba-core-contracts' pre-existing http/fetch (id 205) shape"}
-   :cbor-encode         {:jvm :yes :browser :no :node :no
-                         :note "JVM only so far; pure computation, no network/DOM dependency to port"}
-   :json-encode         {:jvm :yes :browser :no :node :no
-                         :note "JVM only so far; pure computation, no network/DOM dependency to port"}
-   :json-extract-field  {:jvm :yes :browser :no :node :no
-                         :note "JVM only so far; pure computation, no network/DOM dependency to port"}
+   ;; Ported to wasm-webcomponent's actor-host.js as a byte-for-byte JS
+   ;; port of tender.clj's flat-pairs -> CBOR/JSON encoders and bounded
+   ;; JSON field scan (pure computation, no SAB/Worker bridge needed).
+   ;; Byte-parity against the JVM outputs is locked by that repo's
+   ;; test/verify-codec-host.mjs (the maturity.md R1 fixture values:
+   ;; cbor {"a":"b"} = a1 61 61 61 62, 25-byte nested cbor, the nested
+   ;; JSON object+array string, json-extract present/absent).
+   :cbor-encode         {:jvm :yes :browser :yes :node :yes
+                         :note "browser: byte-for-byte JS port in wasm-webcomponent actor-host.js (pure computation, no bridge)"}
+   :json-encode         {:jvm :yes :browser :yes :node :yes
+                         :note "browser: byte-for-byte JS port in wasm-webcomponent actor-host.js (pure computation, no bridge)"}
+   :json-extract-field  {:jvm :yes :browser :yes :node :yes
+                         :note "browser: byte-for-byte JS port in wasm-webcomponent actor-host.js (pure computation, no bridge)"}
    ;; Third wave (com-junkawasaki/root, this ADR). JVM only so far, an
    ;; honest gap same shape as :http-fetch above -- a future SAB+Atomics
    ;; bridge port could reuse :http-post's own bridge (just widen the
