@@ -71,7 +71,7 @@
    The host links no WASI interfaces and every imported WIT function is
    synchronously delegated through the previously admitted provider boundary."
   [{:keys [runtime component-bytes imports abilities budgets artifact providers
-           component-host component-host-sha256]}]
+           component-host runtime-bindings lease lease-epoch now-ms]}]
   (when-not (= :wasmtime-component runtime)
     (reject :runtime-mismatch "Wasmtime Component adapter was not selected"))
   (when-not (bytes? component-bytes)
@@ -82,8 +82,9 @@
     (reject :ability-mismatch "native Component imports and abilities must be exact"))
   (let [prepared (provider/prepare!
                   {:runtime runtime :component? true :artifact artifact
-                   :grants (set (keys imports)) :providers providers})
-        executable (host-executable! component-host component-host-sha256)
+                   :grants (set (keys imports)) :providers providers
+                   :lease lease :lease-epoch lease-epoch :now-ms now-ms})
+        executable (host-executable! component-host (:component-host-sha256 runtime-bindings))
         deadline-ms (long (or (:deadline-ms budgets) 30000))
         path (Files/createTempFile "kototama-component-" ".wasm"
                                    (make-array java.nio.file.attribute.FileAttribute 0))]
@@ -179,16 +180,19 @@
   Identity/world validation happens before Wasmtime receives bytes; capability
   imports are rejected by `run-provider-free!`, so this path cannot silently
   acquire WASI or host authority."
-  [world component-bytes]
-  (platform/admit-and-link!
-   world component-bytes
-   #(run-provider-free! (assoc % :runtime :wasmtime-component))))
+  ([world component-bytes]
+   (admit-and-run-provider-free! world nil component-bytes))
+  ([world execution-identity component-bytes]
+   (platform/admit-and-link!
+    world execution-identity component-bytes
+    #(run-provider-free! (assoc % :runtime :wasmtime-component)))))
 
 (defn admit-and-run-effectful!
-  [world component-bytes artifact providers component-host component-host-sha256]
-  (platform/admit-and-link!
-   world component-bytes
-   #(run-effectful! (assoc % :runtime :wasmtime-component
-                           :artifact artifact :providers providers
-                           :component-host component-host
-                           :component-host-sha256 component-host-sha256))))
+  ([world component-bytes artifact providers component-host]
+   (admit-and-run-effectful! world nil component-bytes artifact providers component-host))
+  ([world execution-identity component-bytes artifact providers component-host]
+   (platform/admit-and-link!
+    world execution-identity component-bytes
+    #(run-effectful! (assoc % :runtime :wasmtime-component
+                            :artifact artifact :providers providers
+                            :component-host component-host)))))

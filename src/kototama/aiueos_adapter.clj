@@ -46,8 +46,13 @@
   "Stable compiler Component WIT import -> tender import id.  This is a
   closed map: an unknown Component import is never translated to ambient
   WASI or a best-effort host binding."
-  {:aiueos.component/aiueos-clock-now :clock-monotonic
-   :aiueos.component/aiueos-log-append :log-write})
+  {:aiueos.component/aiueos-identity-sign :sign
+   :aiueos.component/aiueos-identity-verify :verify
+   :aiueos.component/aiueos-hash-sha256 :sha256-hex
+   :aiueos.component/aiueos-http-post :http-post
+   :aiueos.component/aiueos-log-read :log-read
+   :aiueos.component/aiueos-log-append :log-write
+   :aiueos.component/aiueos-clock-now :clock-monotonic})
 
 (declare host-caps-for-imports)
 
@@ -75,10 +80,19 @@
   linker. Aiueos decides; this function only translates a grant into the
   exact WIT bindings and delegates CID/world verification to component-platform.
   A denial, unknown import, or missing provider aborts before LINKER! runs."
-  [artifact world component-bytes linker! providers opts]
+  [artifact world component-bytes linker! providers
+   {:keys [lease-id lease-epoch lease-ttl-ms now-ms execution-identity] :as opts}]
   (let [declared (set (:capabilities artifact))
         abilities (:component-imports artifact)
         {:keys [host-caps decision]} (host-caps-for-component artifact opts)
+        now-ms (or now-ms #(System/currentTimeMillis))
+        issued-at (long (if (ifn? now-ms) (now-ms) now-ms))
+        lease-epoch (or lease-epoch 1)
+        lease (component-abi/issue-lease
+               {:decision decision :imports declared :abilities abilities
+                :now issued-at :epoch lease-epoch
+                :ttl-ms (or lease-ttl-ms 30000)
+                :lease-id (or lease-id (str "component-" issued-at))})
         expected (set (keep component-import->kototama-import declared))]
     (when-not (= expected (:grants host-caps))
       (throw (ex-info "aiueos did not grant every declared Component import"
@@ -102,11 +116,13 @@
      (assoc world :imports declared :grants declared
             :provider-bindings (select-keys providers declared)
             :abilities abilities)
-     component-bytes linker!)))
+     execution-identity
+     component-bytes
+     #(linker! (assoc % :lease lease :lease-epoch lease-epoch :now-ms now-ms)))))
 
 (defn admit-and-run-component-with-aiueos!
   [artifact world component-bytes providers
-   {:keys [component-host component-host-sha256] :as opts}]
+   {:keys [component-host execution-identity] :as opts}]
   (admit-component-with-aiueos!
    artifact world component-bytes
    (fn [admitted]
@@ -114,7 +130,7 @@
       (assoc admitted :runtime :wasmtime-component
              :artifact artifact :providers providers
              :component-host component-host
-             :component-host-sha256 component-host-sha256)))
+             :execution-identity execution-identity)))
    providers opts))
 
 (def ^:private aiueos-cli-contract

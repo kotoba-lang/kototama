@@ -46,6 +46,47 @@
                    (every? cid? (:definition-cids identity)))
       (reject :invalid-identity "definition identities must be a bounded non-empty CID set"))))
 
+(defn- world-wit-cid
+  "Rebuild the closed ABI WIT text from the admitted import set.  The WIT
+  world is part of execution identity, rather than metadata a launcher can
+  silently substitute after policy evaluation."
+  [world]
+  (let [name->id (into {} (map (fn [[id name]] [name id]) abi/capability-import-names))
+        ids (mapv #(get name->id (name %)) (:imports world))]
+    (when (some nil? ids)
+      (reject :unknown-wit-import
+              "execution identity can only bind closed ABI WIT imports"))
+    (mf/cidv1-raw
+     (.getBytes ^String
+                (case (:target world)
+                  :wasm-component-kotoba-v1 (abi/world-wit ids)
+                  :wasm-component-kotoba-v2 (abi/world-wit-v2 ids))
+                "UTF-8"))))
+
+(defn validate-execution-identity!
+  "Validate the portable execution receipt at the host boundary. The ABI
+  schema rejects unknown fields; this tender additionally decodes every CID
+  before an engine can observe the component or provider bindings."
+  [identity]
+  (when-not (abi/valid-execution-identity? identity)
+    (reject :invalid-execution-identity "execution identity is not an exact ABI v1 descriptor"))
+  (doseq [field [:code-closure-cid :artifact-cid :compiler-contract
+                 :package-lock-cid :policy-cid :policy-decision-cid :db-basis
+                 :runtime-identity :input-cid :outcome-cid]
+          :let [value (get identity field)]]
+    (when-not (cid? value)
+      (reject :invalid-execution-identity "execution identity contains an invalid CID")))
+  (doseq [field [:component-cid :wit-world-cid :plan-cid]
+          :let [value (get identity field)]
+          :when (some? value)]
+    (when-not (cid? value)
+      (reject :invalid-execution-identity "execution identity contains an invalid optional CID")))
+  (doseq [field [:grant-cids :approval-cids :host-receipt-cids]
+          value (get identity field)]
+    (when-not (cid? value)
+      (reject :invalid-execution-identity "execution identity contains an invalid receipt CID")))
+  identity)
+
 (defn- validate-abilities! [imports abilities]
   (when-not (and (map? abilities)
                  (= imports (set (keys abilities))))
@@ -54,13 +95,31 @@
     (when-not (and (keyword? import) (abi/valid-ability? ability))
       (reject :invalid-ability "component ability is not a complete bounded descriptor"))))
 
+(defn- validate-runtime-bindings! [imports bindings]
+  ;; The Component admission itself—not an arbitrary launcher argument—pins
+  ;; the micro-TCB that will satisfy effectful imports.  Pure Components bind
+  ;; nothing.  This keeps executable substitution outside the guest's and
+  ;; provider's authority.
+  (let [host-sha256 (:component-host-sha256 bindings)]
+    (when-not (map? bindings)
+      (reject :invalid-runtime-binding "runtime bindings must be a map"))
+    (if (seq imports)
+      (when-not (and (= #{:component-host-sha256} (set (keys bindings)))
+                     (string? host-sha256)
+                     (re-matches #"[0-9a-f]{64}" host-sha256))
+        (reject :invalid-runtime-binding
+                "effectful Components require an admission-bound native host SHA-256"))
+      (when-not (empty? bindings)
+        (reject :invalid-runtime-binding
+                "provider-free Components must not carry runtime authority")))))
+
 (defn validate-world!
   "Validate a decoded component admission envelope before engine instantiation."
   [world]
   (let [expected abi/admission-keys]
     (when-not (and (map? world) (= expected (set (keys world))))
       (reject :invalid-envelope "component admission envelope is not exact"))
-    (when-not (= abi/component-target (:target world))
+    (when-not (contains? #{abi/component-target abi/component-target-v2} (:target world))
       (reject :target-mismatch "component target is unsupported"))
     (when-not (= abi/wasi-version (:wasi-version world))
       (reject :wasi-mismatch "WASI version requires an explicit compatibility tender"))
@@ -76,6 +135,7 @@
     (when-not (every? (:grants world) (:imports world))
       (reject :capability-denied "component import is not granted"))
     (validate-abilities! (:imports world) (:abilities world))
+    (validate-runtime-bindings! (:imports world) (:runtime-bindings world))
     (when-not (false? (:ambient-wasi world))
       (reject :ambient-authority "ambient WASI is forbidden"))
     (let [budgets (:budgets world)]
@@ -93,16 +153,30 @@
   "The sole Component execution hand-off.  The native engine/linker is passed
   in by the micro-TCB, but it receives bytes and provider bindings only after
   this gate has verified identity, world, grants, and resource bounds."
-  [world component-bytes linker!]
-  (let [world (validate-world! world)
-        declared (get-in world [:identity :component-cid])
-        actual (mf/cidv1-raw component-bytes)]
-    (when-not (= declared actual)
-      (reject :component-cid-mismatch "component bytes do not match admission identity"))
-    (when-not (ifn? linker!)
-      (reject :invalid-linker "native Component linker is required"))
-    (linker! {:component-bytes component-bytes
-              :imports (:provider-bindings world)
-              :abilities (:abilities world)
-              :budgets (:budgets world)
-              :identity (:identity world)})))
+  ([world component-bytes linker!]
+   (admit-and-link! world nil component-bytes linker!))
+  ([world execution-identity component-bytes linker!]
+   (let [world (validate-world! world)
+         execution-identity (when execution-identity
+                              (validate-execution-identity! execution-identity))
+         declared (get-in world [:identity :component-cid])
+         actual (mf/cidv1-raw component-bytes)]
+     (when-not (= declared actual)
+       (reject :component-cid-mismatch "component bytes do not match admission identity"))
+    (when (and execution-identity
+                (not= declared (:component-cid execution-identity)))
+      (reject :execution-component-mismatch
+               "execution identity does not bind the admitted component"))
+     (when (and execution-identity
+                (not= (world-wit-cid world) (:wit-world-cid execution-identity)))
+       (reject :execution-wit-world-mismatch
+               "execution identity does not bind the admitted closed WIT world"))
+     (when-not (ifn? linker!)
+       (reject :invalid-linker "native Component linker is required"))
+     (linker! {:component-bytes component-bytes
+               :imports (:provider-bindings world)
+               :abilities (:abilities world)
+               :runtime-bindings (:runtime-bindings world)
+               :budgets (:budgets world)
+               :identity (:identity world)
+               :execution-identity execution-identity}))))
