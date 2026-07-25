@@ -22,12 +22,9 @@
   3. Service verifies ed25519 signature with epoch-key as public key
   4. Service validates timestamp (not > now + clock-skew-tolerance)
   5. Service checks nonce against bloom filter (replay prevention)"
-  #?(:clj (:require [kotoba.security.ed25519 :as ed25519]
+    (:require [kotoba.security.ed25519 :as ed25519]
                     [kotoba.security.sha256 :as sha256]
-                    [kotoba.security.hkdf :as hkdf])
-     :cljs (:require [kotoba.security.ed25519 :as ed25519]
-                    [kotoba.security.sha256 :as sha256]
-                    [kotoba.security.hkdf :as hkdf])))
+                    [kotoba.security.hkdf :as hkdf]))
 
 ;; Request structure: canonical format for verification
 (defrecord SignalRequest

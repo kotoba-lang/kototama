@@ -8,12 +8,9 @@
 
   Based on Open Whisper Systems' Signal Protocol specification.
   Dependency: kotoba-lang/security (HKDF, X25519, ed25519)"
-  #?(:clj (:require [kotoba.security.hkdf :as hkdf]
+    (:require [kotoba.security.hkdf :as hkdf]
                     [kotoba.security.x25519 :as x25519]
-                    [kotoba.security.ed25519 :as ed25519])
-     :cljs (:require [kotoba.security.hkdf :as hkdf]
-                    [kotoba.security.x25519 :as x25519]
-                    [kotoba.security.ed25519 :as ed25519])))
+                    [kotoba.security.ed25519 :as ed25519]))
 
 ;; Constants (matching Signal Protocol specification)
 (def KDF-SALT-LEN 32)
@@ -51,7 +48,7 @@
   (let [;; Counter as 4-byte big-endian (deterministic input)
         counter-bytes (-> message-count
                           (bit-and 0xFFFFFFFF)
-                          (unchecked-as-int))
+                          (unchecked-int))
         counter-be (byte-array 4)
         _ (do
             (aset-byte counter-be 0 (unchecked-byte (unsigned-bit-shift-right counter-bytes 24)))

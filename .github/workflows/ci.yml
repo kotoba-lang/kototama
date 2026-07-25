@@ -33,6 +33,19 @@ jobs:
           wasm-tools --version
       - name: Verify shared security adoption
         run: clojure -M -m kotoba.security.adoption
+      - name: Checkout workspace siblings for the :test alias
+        # The :test alias pins these as :local/root "../<name>" (workspace
+        # dev deps -- see deps.edn's comment on why local/root, not git,
+        # for the test profile). Hosted CI has no workspace, so clone the
+        # eight direct siblings depth-1 at ../ before `clojure -M:test`.
+        # Each is self-contained (its base :deps are git-pinned; the
+        # local/root paths inside them live only in their own :dev aliases),
+        # so no further cascade is needed.
+        run: |
+          for repo in kotoba compiler kotoba-lang kotoba-core-contracts \
+                      kotoba-selfhost-contracts org-chainagnostic-cacao datom org-w3-did; do
+            git clone --depth 1 "https://github.com/kotoba-lang/$repo.git" "../$repo"
+          done
       - name: Test CLJC contract
         run: clojure -M:test
       - name: Lint CLJC contract
