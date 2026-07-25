@@ -1,6 +1,7 @@
 (ns kototama.network-authority
   "Fail-closed authority envelope for guest-triggered HTTP providers."
-  (:require [clojure.string :as str])
+  (:require [clojure.string :as str]
+            [kotoba.security.effect :as effect])
   (:import [java.net URI]))
 
 (def required-policy-keys
@@ -92,18 +93,27 @@
                       {:kototama.network/code :request-denied
                        :kototama.network/control deny
                        :endpoint endpoint :method method})))
-    (let [headers ((:credential-provider context)
-                   (:network-policy/credential-ref policy))]
-      (when-not (and (map? headers)
-                     (every? (fn [[k v]]
-                               (and (string? k) (not (str/blank? k))
-                                    (string? v) (not (str/blank? v))))
-                             headers))
-        (throw (ex-info "kototama.network-authority: credential resolution denied"
-                        {:kototama.network/code :credential-resolution-denied})))
-      {:endpoint endpoint
-       :method method
-       :purpose (:request-purpose context)
-       :credential-ref (:network-policy/credential-ref policy)
-       :headers headers
-       :max-response-bytes (:network-policy/max-response-bytes policy)})))
+    (effect/guard!
+     {:evaluate (constantly {:allowed? true})
+      :request {:endpoint endpoint :method method}
+      :approved? :allowed?
+      :action :network/request
+      :resource endpoint
+      :digest nil
+      :effect
+      (fn [_]
+        (let [headers ((:credential-provider context)
+                       (:network-policy/credential-ref policy))]
+          (when-not (and (map? headers)
+                         (every? (fn [[k v]]
+                                   (and (string? k) (not (str/blank? k))
+                                        (string? v) (not (str/blank? v))))
+                                 headers))
+            (throw (ex-info "kototama.network-authority: credential resolution denied"
+                            {:kototama.network/code :credential-resolution-denied})))
+          {:endpoint endpoint
+           :method method
+           :purpose (:request-purpose context)
+           :credential-ref (:network-policy/credential-ref policy)
+           :headers headers
+           :max-response-bytes (:network-policy/max-response-bytes policy)}))})))
