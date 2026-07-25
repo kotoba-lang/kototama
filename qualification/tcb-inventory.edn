@@ -75,7 +75,7 @@
    :git-sha "3add3dc6aea77adaf8d1294206832048b5518c16"
    :role :component-admission-contract}
   {:coordinate "io.github.kotoba-lang/compiler"
-   :git-sha "224d80c19deb1fa4ed4f7dba39ffc08574cea5e8"
+   :git-sha "0959a1470128a9b6a26c4370f773e6e868e5e9e5"
    :role :component-artifact-producer}
   {:coordinate "wasmtime"
    :version "42.0.1"

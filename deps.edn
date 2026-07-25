@@ -22,7 +22,7 @@
         ;; micro-TCB executes; a sibling checkout is never an implicit input.
         io.github.kotoba-lang/compiler
         {:git/url "https://github.com/kotoba-lang/compiler.git"
-         :git/sha "224d80c19deb1fa4ed4f7dba39ffc08574cea5e8"}
+         :git/sha "0959a1470128a9b6a26c4370f773e6e868e5e9e5"}
         ;; Component admission verifies identity CIDs structurally before
         ;; linking; a leading `b` is not evidence of content addressing.
         io.github.kotoba-lang/io-multiformats
