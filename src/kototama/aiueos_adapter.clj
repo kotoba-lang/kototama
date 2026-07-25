@@ -84,6 +84,8 @@
 (def ^:private aiueos-cli-contract
   (delay (cli/read-contract)))
 
+(declare host-caps-for-imports)
+
 (defn manifest-for-imports
   "An aiueos manifest requesting IMPORT-IDS (kototama.contract import ids
   translatable via `kototama-import->aiueos-capability`), shaped like
