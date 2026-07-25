@@ -51,7 +51,7 @@
   (let [;; Counter as 4-byte big-endian (deterministic input)
         counter-bytes (-> message-count
                           (bit-and 0xFFFFFFFF)
-                          (unchecked-as-int))
+                          (unchecked-int))
         counter-be (byte-array 4)
         _ (do
             (aset-byte counter-be 0 (unchecked-byte (unsigned-bit-shift-right counter-bytes 24)))
