@@ -180,15 +180,19 @@
   Identity/world validation happens before Wasmtime receives bytes; capability
   imports are rejected by `run-provider-free!`, so this path cannot silently
   acquire WASI or host authority."
-  [world component-bytes]
-  (platform/admit-and-link!
-   world component-bytes
-   #(run-provider-free! (assoc % :runtime :wasmtime-component))))
+  ([world component-bytes]
+   (admit-and-run-provider-free! world nil component-bytes))
+  ([world execution-identity component-bytes]
+   (platform/admit-and-link!
+    world execution-identity component-bytes
+    #(run-provider-free! (assoc % :runtime :wasmtime-component)))))
 
 (defn admit-and-run-effectful!
-  [world component-bytes artifact providers component-host]
-  (platform/admit-and-link!
-   world component-bytes
-   #(run-effectful! (assoc % :runtime :wasmtime-component
-                           :artifact artifact :providers providers
-                           :component-host component-host))))
+  ([world component-bytes artifact providers component-host]
+   (admit-and-run-effectful! world nil component-bytes artifact providers component-host))
+  ([world execution-identity component-bytes artifact providers component-host]
+   (platform/admit-and-link!
+    world execution-identity component-bytes
+    #(run-effectful! (assoc % :runtime :wasmtime-component
+                            :artifact artifact :providers providers
+                            :component-host component-host)))))

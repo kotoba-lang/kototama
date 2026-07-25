@@ -81,7 +81,7 @@
   exact WIT bindings and delegates CID/world verification to component-platform.
   A denial, unknown import, or missing provider aborts before LINKER! runs."
   [artifact world component-bytes linker! providers
-   {:keys [lease-id lease-epoch lease-ttl-ms now-ms] :as opts}]
+   {:keys [lease-id lease-epoch lease-ttl-ms now-ms execution-identity] :as opts}]
   (let [declared (set (:capabilities artifact))
         abilities (:component-imports artifact)
         {:keys [host-caps decision]} (host-caps-for-component artifact opts)
@@ -116,19 +116,21 @@
      (assoc world :imports declared :grants declared
             :provider-bindings (select-keys providers declared)
             :abilities abilities)
+     execution-identity
      component-bytes
      #(linker! (assoc % :lease lease :lease-epoch lease-epoch :now-ms now-ms)))))
 
 (defn admit-and-run-component-with-aiueos!
   [artifact world component-bytes providers
-   {:keys [component-host] :as opts}]
+   {:keys [component-host execution-identity] :as opts}]
   (admit-component-with-aiueos!
    artifact world component-bytes
    (fn [admitted]
      (wasmtime-component/run-effectful!
       (assoc admitted :runtime :wasmtime-component
              :artifact artifact :providers providers
-             :component-host component-host)))
+             :component-host component-host
+             :execution-identity execution-identity)))
    providers opts))
 
 (def ^:private aiueos-cli-contract

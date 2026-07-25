@@ -1,5 +1,6 @@
 (ns kototama.component-platform-test
   (:require [clojure.test :refer [deftest is testing]]
+            [kotoba.abi.contract :as abi]
             [kototama.component-platform :as platform]
             [multiformats.core :as mf]))
 
@@ -17,12 +18,21 @@
    :runtime-identity (cid "runtime") :input-cid (cid "input")
    :outcome-cid (cid "outcome") :host-receipt-cids [(cid "receipt")]})
 
+(defn wit-world-cid [target imports]
+  (let [name->id (into {} (map (fn [[id name]] [name id]) abi/capability-import-names))
+        ids (mapv #(get name->id (name %)) imports)]
+    (mf/cidv1-raw (.getBytes ^String
+                              (case target
+                                :wasm-component-kotoba-v1 (abi/world-wit ids)
+                                :wasm-component-kotoba-v2 (abi/world-wit-v2 ids))
+                              "UTF-8"))))
+
 (def valid
   {:target :wasm-component-kotoba-v1 :wasi-version "0.3.0" :profile :sync
-   :imports #{:kotoba/http-post} :exports #{:app/run}
-   :grants #{:kotoba/http-post}
-   :provider-bindings {:kotoba/http-post :provider/http}
-   :abilities {:kotoba/http-post {:target "https://api.example.test/submit"
+   :imports #{:aiueos.component/aiueos-http-post} :exports #{:app/run}
+   :grants #{:aiueos.component/aiueos-http-post}
+   :provider-bindings {:aiueos.component/aiueos-http-post :provider/http}
+   :abilities {:aiueos.component/aiueos-http-post {:target "https://api.example.test/submit"
                                   :operation :http/post :max-bytes 1024 :max-items 1
                                   :deadline-ms 1000 :audit-id "component-test"}}
    :runtime-bindings {:component-host-sha256
@@ -45,7 +55,7 @@
   (is (= :ability-mismatch (code (assoc valid :abilities {}))))
   (is (= :invalid-runtime-binding (code (assoc valid :runtime-bindings {}))))
   (is (= :invalid-ability
-         (code (assoc-in valid [:abilities :kotoba/http-post :audit-id] ""))))
+         (code (assoc-in valid [:abilities :aiueos.component/aiueos-http-post :audit-id] ""))))
   (is (= :invalid-identity (code (assoc valid :identity {}))))
   (is (= :invalid-identity
          (code (assoc-in valid [:identity :component-cid] "bafycomponent"))))
@@ -91,13 +101,21 @@
   (let [bytes (.getBytes "component" "UTF-8")
         component-cid (mf/cidv1-raw bytes)
         world (assoc-in valid [:identity :component-cid] component-cid)
-        identity (execution-identity component-cid)]
+        identity (assoc (execution-identity component-cid)
+                        :wit-world-cid (wit-world-cid (:target world) (:imports world)))]
     (is (= identity (platform/validate-execution-identity! identity)))
     (is (= :linked
            (platform/admit-and-link! world identity bytes (constantly :linked))))
     (is (= :execution-component-mismatch
            (try (platform/admit-and-link! world (assoc identity :component-cid (cid "other"))
                                          bytes (fn [_] :linked))
+                nil
+                (catch clojure.lang.ExceptionInfo e
+                  (:kototama.component/code (ex-data e))))))
+    (is (= :execution-wit-world-mismatch
+           (try (platform/admit-and-link!
+                 world (assoc identity :wit-world-cid (cid "other-wit"))
+                 bytes (fn [_] :linked))
                 nil
                 (catch clojure.lang.ExceptionInfo e
                   (:kototama.component/code (ex-data e))))))

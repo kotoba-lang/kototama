@@ -46,6 +46,23 @@
                    (every? cid? (:definition-cids identity)))
       (reject :invalid-identity "definition identities must be a bounded non-empty CID set"))))
 
+(defn- world-wit-cid
+  "Rebuild the closed ABI WIT text from the admitted import set.  The WIT
+  world is part of execution identity, rather than metadata a launcher can
+  silently substitute after policy evaluation."
+  [world]
+  (let [name->id (into {} (map (fn [[id name]] [name id]) abi/capability-import-names))
+        ids (mapv #(get name->id (name %)) (:imports world))]
+    (when (some nil? ids)
+      (reject :unknown-wit-import
+              "execution identity can only bind closed ABI WIT imports"))
+    (mf/cidv1-raw
+     (.getBytes ^String
+                (case (:target world)
+                  :wasm-component-kotoba-v1 (abi/world-wit ids)
+                  :wasm-component-kotoba-v2 (abi/world-wit-v2 ids))
+                "UTF-8"))))
+
 (defn validate-execution-identity!
   "Validate the portable execution receipt at the host boundary. The ABI
   schema rejects unknown fields; this tender additionally decodes every CID
@@ -146,10 +163,14 @@
          actual (mf/cidv1-raw component-bytes)]
      (when-not (= declared actual)
        (reject :component-cid-mismatch "component bytes do not match admission identity"))
-     (when (and execution-identity
+    (when (and execution-identity
                 (not= declared (:component-cid execution-identity)))
-       (reject :execution-component-mismatch
+      (reject :execution-component-mismatch
                "execution identity does not bind the admitted component"))
+     (when (and execution-identity
+                (not= (world-wit-cid world) (:wit-world-cid execution-identity)))
+       (reject :execution-wit-world-mismatch
+               "execution identity does not bind the admitted closed WIT world"))
      (when-not (ifn? linker!)
        (reject :invalid-linker "native Component linker is required"))
      (linker! {:component-bytes component-bytes
