@@ -43,6 +43,11 @@
     (reject :invalid-import "Component host only admits aiueos Component imports"))
   (name import))
 
+(defn- host-ability [ability]
+  ;; EDN uses a namespaced keyword for the operation while the native JSON
+  ;; protocol carries its canonical WIT spelling as a string.
+  (update ability :operation name))
+
 (defn run-effectful!
   "Run an admitted effectful Component through the native Wasmtime micro-TCB.
    The host links no WASI interfaces and every imported WIT function is
@@ -73,7 +78,8 @@
             writer (BufferedWriter. (OutputStreamWriter. (.getOutputStream process) "UTF-8"))
             request {:type "run" :component (.toString path)
                      :imports (mapv (fn [[import ability]]
-                                      {:name (host-import-name import) :ability ability})
+                                      {:name (host-import-name import)
+                                       :ability (host-ability ability)})
                                     imports)
                      :fuel (long (or (:fuel budgets) 1))
                      :memory-pages (long (or (:memory-pages budgets) 1))}
@@ -87,7 +93,8 @@
                             "provider-call"
                             (let [import (keyword "aiueos.component" (:import message))
                                   result (provider/invoke! prepared import (:payload message))]
-                              (when-not (= (get abilities import) (:ability message))
+                              (when-not (= (host-ability (get abilities import))
+                                           (:ability message))
                                 (reject :ability-mismatch "native host changed an ability descriptor"))
                               (when-not (integer? result)
                                 (reject :invalid-provider-result "Component provider must return i64"))
