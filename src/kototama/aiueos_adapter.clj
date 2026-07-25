@@ -105,14 +105,16 @@
      component-bytes linker!)))
 
 (defn admit-and-run-component-with-aiueos!
-  [artifact world component-bytes providers {:keys [component-host] :as opts}]
+  [artifact world component-bytes providers
+   {:keys [component-host component-host-sha256] :as opts}]
   (admit-component-with-aiueos!
    artifact world component-bytes
    (fn [admitted]
      (wasmtime-component/run-effectful!
       (assoc admitted :runtime :wasmtime-component
              :artifact artifact :providers providers
-             :component-host component-host)))
+             :component-host component-host
+             :component-host-sha256 component-host-sha256)))
    providers opts))
 
 (def ^:private aiueos-cli-contract
