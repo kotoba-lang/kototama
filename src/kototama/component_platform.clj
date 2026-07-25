@@ -1,12 +1,7 @@
 (ns kototama.component-platform
   "Fail-closed admission for compiler-produced WIT/Component Model worlds."
-  (:require [clojure.edn :as edn]
-            [clojure.java.io :as io]
-            [kotoba.abi.contract :as abi]
+  (:require [kotoba.abi.contract :as abi]
             [multiformats.core :as mf]))
-
-(def contract
-  (edn/read-string (slurp (io/resource "kototama/component-platform.edn"))))
 
 (defn- reject [code message]
   (throw (ex-info message {:phase :component-platform :kototama.component/code code})))
@@ -39,7 +34,7 @@
          (catch Exception _ false))))
 
 (defn- validate-identity! [identity]
-  (let [required (set (get-in contract [:identity :required]))]
+  (let [required #{:component-cid :package-lock-cid :definition-cids}]
     (when-not (and (map? identity) (= required (set (keys identity))))
       (reject :invalid-identity "component identity binding is not exact"))
     (when-not (every? cid?
@@ -62,14 +57,14 @@
 (defn validate-world!
   "Validate a decoded component admission envelope before engine instantiation."
   [world]
-  (let [expected (set (:admission-keys contract))]
+  (let [expected abi/admission-keys]
     (when-not (and (map? world) (= expected (set (keys world))))
       (reject :invalid-envelope "component admission envelope is not exact"))
-    (when-not (= (:target contract) (:target world))
+    (when-not (= abi/component-target (:target world))
       (reject :target-mismatch "component target is unsupported"))
-    (when-not (= (get-in contract [:wasi :default]) (:wasi-version world))
+    (when-not (= abi/wasi-version (:wasi-version world))
       (reject :wasi-mismatch "WASI version requires an explicit compatibility tender"))
-    (when-not (contains? #{:sync :async} (:profile world))
+    (when-not (abi/profile? (:profile world))
       (reject :invalid-profile "component profile is unsupported"))
     (doseq [field [:imports :exports :grants]]
       (when-not (and (set? (field world)) (<= (count (field world)) 256))
@@ -85,10 +80,10 @@
       (reject :ambient-authority "ambient WASI is forbidden"))
     (let [budgets (:budgets world)]
       (when-not (map? budgets) (reject :invalid-budgets "component budgets must be a map"))
-      (let [required (get-in contract [:profiles (:profile world) :required-budgets])]
+      (let [required (abi/required-budget-keys (:profile world))]
         (when-not (every? #(let [n (get budgets %)] (and (integer? n) (pos? n))) required)
           (reject :invalid-budgets "components require positive resource bounds")))
-      (when (and (= :async (:profile world))
+      (when (and (abi/cancellation-required? (:profile world))
                  (not= true (:cancellation budgets)))
         (reject :invalid-budgets "async components require cancellation")))
     (validate-identity! (:identity world))

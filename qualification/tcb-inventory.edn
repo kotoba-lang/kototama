@@ -13,10 +13,14 @@
    :sha256 "247f683e22b80c0a7a74cf3e963dbadf4f2e487c035e93a1bbb782da9f72782d"}
   {:path "src/kototama/compatibility.clj" :role :artifact-admission
    :sha256 "789401eb1066a7870371a48f8ccfd4a7c020aaef825ff92e388b0c919154c911"}
-  {:path "src/kototama/component-platform.edn" :role :component-world-schema
-   :sha256 "b45ecd0e3824dd1b4ff309e89f0fc70d7ca032d294b8a722922e10b7d037c5a5"}
   {:path "src/kototama/component_platform.clj" :role :component-world-admission
-   :sha256 "2044787e4305b94b7e5dee046e5b5fe2ba1798aef46dae6b6c9c3b0b9ddc8d19"}
+   :sha256 "00f0a982bff577ab1faec99d61fcc1ac0f82964dfb01da2f3143a5a82c681796"}
+  {:path "src/kototama/component_provider.cljc" :role :component-provider-admission
+   :sha256 "6b6589291114b37aa1fe874b14c495a5f18444f7e7eb9f811c36bdd7cd52db34"}
+  {:path "src/kototama/wasmtime_component.clj" :role :native-component-engine-adapter
+   :sha256 "07018e7ce2b9e0ca1d3006a04e7c8d7c2f938410b0c4d1dd80d8f45c238ddd43"}
+  {:path "src/kototama/workerd_core.clj" :role :workerd-core-engine-adapter
+   :sha256 "447c6b6327285803ce71ea199845255777cd9afa99b2d866cf17ae72ad5de83e"}
   {:path "src/kototama/contract.cljc" :role :authority-schema
    :sha256 "c706e501b6706743846259366c4460a80abda93a89f963a81591770a8d7dbe2e"}
   {:path "src/kototama/fleet.cljc" :role :lease-authority
@@ -65,6 +69,12 @@
   {:coordinate "io.github.kotoba-lang/aiueos"
    :git-sha "63c13fd48dc53e0f93fa40f6bfce54e62773c656"
    :role :policy-kernel}
+  {:coordinate "io.github.kotoba-lang/abi"
+   :git-sha "9663bf2aeff735b568a3f6cf80591856f11277d3"
+   :role :component-admission-contract}
+  {:coordinate "wasmtime"
+   :version "42.0.1"
+   :role :native-component-engine}
   {:coordinate "java.base" :minimum-version 21
    :role :process-crypto-network-concurrency-runtime}]
  :tcb/native-unsafe
