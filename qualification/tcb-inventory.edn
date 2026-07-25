@@ -18,9 +18,11 @@
   {:path "src/kototama/component_provider.cljc" :role :component-provider-admission
    :sha256 "ba7d53b0062bab1fb44d701334e1ec3cd0f42751fec1f4b81f72c0e82efbd48c"}
   {:path "src/kototama/wasmtime_component.clj" :role :native-component-engine-adapter
-   :sha256 "bffb3e890299c9177e6e0a34240d396a6976afad6f0e61b1615dcc3bf4a3eeff"}
+   :sha256 "5459bd3f7a16a51af53d033166c9e30583a148034661a5a826894f065c7740d1"}
   {:path "native/wasmtime-component-host/src/main.rs" :role :native-component-engine-host
-   :sha256 "f685056bfc8fbb477d8b0bd94a417e5fda494d7d23a992af86e5f08456ce43d3"}
+   :sha256 "f3c328982d8fa8ba30590aef20e9ce1cb35a4b0064954b49dc00ec419c11a749"}
+  {:path "native/wasmtime-component-host/src/v2_bindings.rs" :role :native-component-wit-binding
+   :sha256 "beac30237d5419e44f96696c084b633a8234e3fe23f69316e2b8225e6f66d0a6"}
   {:path "src/kototama/workerd_core.clj" :role :workerd-core-engine-adapter
    :sha256 "447c6b6327285803ce71ea199845255777cd9afa99b2d866cf17ae72ad5de83e"}
   {:path "src/kototama/contract.cljc" :role :authority-schema
