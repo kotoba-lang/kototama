@@ -6,7 +6,7 @@
   network/database/cryptographic provider boundary."
  :tcb/files
  [{:path "src/kototama/aiueos_adapter.clj" :role :policy-authority-adapter
-   :sha256 "9c5d27fa2b7caab939948d1951d0fce951faef5deb21ca453a8a8b901f615134"}
+   :sha256 "0e0d60dbf8f5e84aa942632b9280cdfca773fd61de68e9dc332aec8c511015d0"}
   {:path "src/kototama/browser.cljc" :role :host-support-admission
    :sha256 "4a2b9339078674632198fd59872bd7bb5e9ba47922a856ef1bc633061be07104"}
   {:path "src/kototama/cli.clj" :role :operator-entrypoint
@@ -14,13 +14,13 @@
   {:path "src/kototama/compatibility.clj" :role :artifact-admission
    :sha256 "789401eb1066a7870371a48f8ccfd4a7c020aaef825ff92e388b0c919154c911"}
   {:path "src/kototama/component_platform.clj" :role :component-world-admission
-   :sha256 "00f0a982bff577ab1faec99d61fcc1ac0f82964dfb01da2f3143a5a82c681796"}
+   :sha256 "6b7abff232397be1c8ab152da1ff2c26e759051217fec663c53edd5eee6b907c"}
   {:path "src/kototama/component_provider.cljc" :role :component-provider-admission
    :sha256 "6b6589291114b37aa1fe874b14c495a5f18444f7e7eb9f811c36bdd7cd52db34"}
   {:path "src/kototama/wasmtime_component.clj" :role :native-component-engine-adapter
-   :sha256 "07018e7ce2b9e0ca1d3006a04e7c8d7c2f938410b0c4d1dd80d8f45c238ddd43"}
+   :sha256 "28e519fd758d008a2fe11b32cac3faf612332c5cb1a3a24a45694b692d9459cd"}
   {:path "native/wasmtime-component-host/src/main.rs" :role :native-component-engine-host
-   :sha256 "35040d40d954b754b22f53b5a00fff29e9fc1531ca5695c4cdbaf01ecc20437f"}
+   :sha256 "dae334cff6981e8a16ec96d593258aef1432e5c85c57325566533eaba1098105"}
   {:path "src/kototama/workerd_core.clj" :role :workerd-core-engine-adapter
    :sha256 "447c6b6327285803ce71ea199845255777cd9afa99b2d866cf17ae72ad5de83e"}
   {:path "src/kototama/contract.cljc" :role :authority-schema
@@ -72,7 +72,7 @@
    :git-sha "63c13fd48dc53e0f93fa40f6bfce54e62773c656"
    :role :policy-kernel}
   {:coordinate "io.github.kotoba-lang/abi"
-   :git-sha "9663bf2aeff735b568a3f6cf80591856f11277d3"
+   :git-sha "7a8a448f44b751fc15c4d428cd37c52db7416699"
    :role :component-admission-contract}
   {:coordinate "wasmtime"
    :version "42.0.1"
