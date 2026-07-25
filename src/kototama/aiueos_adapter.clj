@@ -22,6 +22,7 @@
   and not a code-level merge of the two execution namespaces (kototama.
   tender still never decides a grant itself; ADR-2607022700's rule)."
   (:require [aiueos.cli :as cli]
+            [aiueos.component-abi :as component-abi]
             [kototama.contract :as contract]
             [kototama.component-platform :as component-platform]
             [kototama.component-provider :as component-provider]
@@ -57,11 +58,17 @@
   ([artifact] (host-caps-for-component artifact {}))
   ([artifact opts]
    (let [declared (set (:capabilities artifact))
+         _ (component-abi/requested-capabilities! declared)
          imports (mapv component-import->kototama-import declared)]
      (when (or (some nil? imports) (not= (count imports) (count declared)))
        (throw (ex-info "Component declares an unmapped WIT capability"
                        {:phase :component-grant :capabilities declared})))
-     (host-caps-for-imports imports opts))))
+     (let [{:keys [decision] :as result} (host-caps-for-imports imports opts)]
+       (when-not (component-abi/decision-grants-imports? decision declared)
+         (throw (ex-info "Aiueos decision does not cover every Component import"
+                         {:phase :component-grant
+                          :declared declared :decision decision})))
+       result))))
 
 (defn admit-component-with-aiueos!
   "The only bridge from a compiler Component artifact to the native Component
