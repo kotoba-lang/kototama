@@ -111,6 +111,7 @@
             [kototama.contract :as contract]
             [kototama.network-authority :as network]
             [kototama.signer-lifecycle :as signer]
+            [kotoba.abi.contract :as abi]
             [ed25519.core :as ed])
   (:import (com.dylibso.chicory.runtime ExecutionListener HostFunction ImportFunction
                                         ImportValues Instance WasmFunctionHandle)
@@ -199,10 +200,18 @@
     (let [decision (volatile! nil)]
       (swap! authority-state
              (fn [state]
-               (let [active? (contains? (:active state) id)]
-                 (vreset! decision active?)
-                 (if active?
-                   (update-in state [:uses id] (fnil inc 0))
+               (let [active? (contains? (:active state) id)
+                     remaining (get-in state [:remaining id])
+                     usable? (and active? (or (nil? remaining) (pos? remaining)))]
+                 (vreset! decision usable?)
+                 (if usable?
+                   (let [next-state (update-in state [:uses id] (fnil inc 0))]
+                     (if (nil? remaining)
+                       next-state
+                       (let [left (dec remaining)]
+                         (cond-> (assoc-in next-state [:remaining id] left)
+                           (zero? left) (-> (update :active disj id)
+                                            (update :consumed (fnil conj #{}) id)))))
                    state))))
       (when-not @decision
         (denied! id :grant/inactive
@@ -210,6 +219,27 @@
                   :authority @authority-state})))
     (when-not (contains? (:grants caps) id)
       (denied! id :grant/missing {:granted (:grants caps)}))))
+
+(defn- validate-capability-leases!
+  "Optional portable ABI leases narrow an already granted session import.
+  A lease is an audit descriptor, never the handle itself; the live handle and
+  its remaining-use counter stay inside this session's authority atom."
+  [requested leases]
+  (cond
+    (nil? leases) {}
+    (not (map? leases))
+    (throw (ex-info "kototama.tender: capability leases must be a map"
+                    {:kototama.tender/problem :invalid-capability-leases}))
+    (not= (set requested) (set (keys leases)))
+    (throw (ex-info "kototama.tender: leases must exactly cover requested imports"
+                    {:kototama.tender/problem :lease-import-mismatch}))
+    :else
+    (do (doseq [[id lease] leases]
+          (when-not (and (contract/import-id id) (abi/valid-capability-lease? lease))
+            (throw (ex-info "kototama.tender: invalid capability lease"
+                            {:kototama.tender/problem :invalid-capability-lease
+                             :kototama.tender/import id}))))
+        leases)))
 
 ;; ── the 9 kototama.contract/import-surface host functions ──────────────────
 
@@ -1098,7 +1128,7 @@
   ([wasm-bytes requested-imports host-caps]
    (open-session wasm-bytes requested-imports host-caps {}))
   ([wasm-bytes requested-imports host-caps
-    {:keys [store llm-client fuel require-kotoba-compatibility? profile
+    {:keys [store llm-client fuel require-kotoba-compatibility? profile capability-leases
             http-policy request-purpose credential-provider]
      :as opts
      :or {store (in-memory-store) llm-client (default-llm-client) fuel default-fuel-limit}}]
@@ -1123,11 +1153,15 @@
                              wasm-bytes (or profile :development) opts)
          artifact-compatibility (compatibility/validate! wasm-bytes require-kotoba-compatibility?)
          normalized-caps (contract/host-caps host-caps)
+         leases (validate-capability-leases! (contract/requested-import-ids requested-imports)
+                                             capability-leases)
          authority-state (atom {:active (:grants normalized-caps)
                                 :revoked #{}
                                 :dropped #{}
+                                :consumed #{}
+                                :remaining (into {} (map (fn [[id lease]] [id (:uses lease)]) leases))
                                 :uses {}})
-         caps (assoc normalized-caps :authority-state authority-state)
+         caps (assoc normalized-caps :authority-state authority-state :capability-leases leases)
          validation (contract/validate-import-surface requested-imports caps)]
      (when-not (:ok? validation)
        (throw (ex-info "kototama.tender: import surface rejected by contract"
