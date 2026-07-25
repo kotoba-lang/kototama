@@ -75,10 +75,19 @@
   linker. Aiueos decides; this function only translates a grant into the
   exact WIT bindings and delegates CID/world verification to component-platform.
   A denial, unknown import, or missing provider aborts before LINKER! runs."
-  [artifact world component-bytes linker! providers opts]
+  [artifact world component-bytes linker! providers
+   {:keys [lease-id lease-epoch lease-ttl-ms now-ms] :as opts}]
   (let [declared (set (:capabilities artifact))
         abilities (:component-imports artifact)
         {:keys [host-caps decision]} (host-caps-for-component artifact opts)
+        now-ms (or now-ms #(System/currentTimeMillis))
+        issued-at (long (if (ifn? now-ms) (now-ms) now-ms))
+        lease-epoch (or lease-epoch 1)
+        lease (component-abi/issue-lease
+               {:decision decision :imports declared :abilities abilities
+                :now issued-at :epoch lease-epoch
+                :ttl-ms (or lease-ttl-ms 30000)
+                :lease-id (or lease-id (str "component-" issued-at))})
         expected (set (keep component-import->kototama-import declared))]
     (when-not (= expected (:grants host-caps))
       (throw (ex-info "aiueos did not grant every declared Component import"
@@ -102,7 +111,8 @@
      (assoc world :imports declared :grants declared
             :provider-bindings (select-keys providers declared)
             :abilities abilities)
-     component-bytes linker!)))
+     component-bytes
+     #(linker! (assoc % :lease lease :lease-epoch lease-epoch :now-ms now-ms)))))
 
 (defn admit-and-run-component-with-aiueos!
   [artifact world component-bytes providers

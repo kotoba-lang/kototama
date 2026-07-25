@@ -6,7 +6,7 @@
   network/database/cryptographic provider boundary."
  :tcb/files
  [{:path "src/kototama/aiueos_adapter.clj" :role :policy-authority-adapter
-   :sha256 "0e0d60dbf8f5e84aa942632b9280cdfca773fd61de68e9dc332aec8c511015d0"}
+   :sha256 "d5a099ada9bd6c64833164812df7d3da2b7c962a6dc940b3d48346abe56c325e"}
   {:path "src/kototama/browser.cljc" :role :host-support-admission
    :sha256 "4a2b9339078674632198fd59872bd7bb5e9ba47922a856ef1bc633061be07104"}
   {:path "src/kototama/cli.clj" :role :operator-entrypoint
@@ -16,9 +16,9 @@
   {:path "src/kototama/component_platform.clj" :role :component-world-admission
    :sha256 "6b7abff232397be1c8ab152da1ff2c26e759051217fec663c53edd5eee6b907c"}
   {:path "src/kototama/component_provider.cljc" :role :component-provider-admission
-   :sha256 "6b6589291114b37aa1fe874b14c495a5f18444f7e7eb9f811c36bdd7cd52db34"}
+   :sha256 "ba7d53b0062bab1fb44d701334e1ec3cd0f42751fec1f4b81f72c0e82efbd48c"}
   {:path "src/kototama/wasmtime_component.clj" :role :native-component-engine-adapter
-   :sha256 "28e519fd758d008a2fe11b32cac3faf612332c5cb1a3a24a45694b692d9459cd"}
+   :sha256 "bffb3e890299c9177e6e0a34240d396a6976afad6f0e61b1615dcc3bf4a3eeff"}
   {:path "native/wasmtime-component-host/src/main.rs" :role :native-component-engine-host
    :sha256 "dae334cff6981e8a16ec96d593258aef1432e5c85c57325566533eaba1098105"}
   {:path "src/kototama/workerd_core.clj" :role :workerd-core-engine-adapter

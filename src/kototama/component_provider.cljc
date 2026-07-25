@@ -5,6 +5,7 @@
    compatibility, and workerd are engines/adapters, not competing policy
    implementations."
   (:require [clojure.set :as set]
+            [aiueos.component-abi :as component-abi]
             [kotoba.abi.contract :as abi]))
 
 (def supported-runtimes #{:wasmtime-component :chicory-core-compat :workerd-core})
@@ -49,6 +50,15 @@
                       {:phase :component-provider :runtime runtime})))
     request))
 
+(defn- lease-authorized? [{:keys [lease lease-epoch now-ms]} import ability]
+  (if-not lease
+    true
+    (component-abi/lease-authorizes?
+     lease
+     (long (if (ifn? lease-epoch) (lease-epoch) lease-epoch))
+     (long (if (ifn? now-ms) (now-ms) now-ms))
+     import ability)))
+
 (defn invoke!
   "Invoke a native provider through the already-admitted capability boundary.
 
@@ -57,12 +67,16 @@
    deadline, or audit identity by passing a larger request at call time.
    Engine-specific Wasmtime bindings must call this function (or enforce an
    equivalent check inside the native micro-TCB) for each imported WIT call."
-  [{:keys [artifact providers]} import payload]
+  [{:keys [artifact providers] :as prepared} import payload]
   (let [ability (get (:component-imports artifact) import)
         invoke (provider-invoke (get providers import))]
     (when-not (and ability invoke)
       (throw (ex-info "Component import is not admitted for invocation"
                       {:phase :component-provider :import import})))
+    (when-not (lease-authorized? prepared import ability)
+      (throw (ex-info "Component lease is expired, revoked, or does not authorize this import"
+                      {:phase :component-provider :import import
+                       :reason :lease-denied})))
     ;; Payload is deliberately the only guest-controlled value.  The
     ;; capability descriptor remains immutable and exact at the host edge.
     (invoke {:import import :ability ability :payload payload})))
