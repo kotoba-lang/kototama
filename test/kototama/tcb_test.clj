@@ -9,6 +9,7 @@
     "src/kototama/component_platform.clj"
     "src/kototama/component_provider.cljc"
     "src/kototama/wasmtime_component.clj"
+    "native/wasmtime-component-host/src/main.rs"
     "src/kototama/workerd_core.clj"
     "src/kototama/compatibility.clj"
     "src/kototama/aiueos_adapter.clj"
@@ -20,7 +21,7 @@
     "src/kototama/tcb.clj"})
 
 (deftest checked-in-tcb-has-no-drift
-  (is (= {:valid? true :files 25 :external 8 :errors []}
+  (is (= {:valid? true :files 26 :external 8 :errors []}
          (tcb/validate))))
 
 (deftest authority-and-runtime-boundaries-cannot-disappear-silently
