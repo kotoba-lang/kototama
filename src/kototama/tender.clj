@@ -121,7 +121,7 @@
            (java.security MessageDigest SecureRandom)
            (java.net InetAddress Inet6Address URI)
            (java.net.http HttpClient HttpRequest HttpRequest$Builder HttpRequest$BodyPublishers HttpResponse$BodyHandlers)
-           (java.time Duration)
+           (java.time Duration Instant)
            (java.util.concurrent Executors Semaphore TimeUnit TimeoutException)))
 
 ;; ── memory ABI: (ptr,len) in / (out-ptr,out-cap) out, same convention
@@ -200,19 +200,31 @@
     (let [decision (volatile! nil)]
       (swap! authority-state
              (fn [state]
-               (let [active? (contains? (:active state) id)
+               (let [lease (get (:capability-leases caps) id)
+                     now-source (or (:lease-now-ms caps) #(System/currentTimeMillis))
+                     now-ms (long (if (ifn? now-source) (now-source) now-source))
+                     lease-live? (or (nil? lease)
+                                     (< now-ms (.toEpochMilli (Instant/parse (:expires-at lease)))))
+                     active? (and (contains? (:active state) id) lease-live?)
                      remaining (get-in state [:remaining id])
                      usable? (and active? (or (nil? remaining) (pos? remaining)))]
                  (vreset! decision usable?)
-                 (if usable?
+                 (cond
+                   usable?
                    (let [next-state (update-in state [:uses id] (fnil inc 0))]
                      (if (nil? remaining)
                        next-state
                        (let [left (dec remaining)]
                          (cond-> (assoc-in next-state [:remaining id] left)
                            (zero? left) (-> (update :active disj id)
-                                            (update :consumed (fnil conj #{}) id)))))
-                   state))))
+                                            (update :consumed (fnil conj #{}) id))))))
+
+                   lease-live? state
+
+                   :else
+                   (-> state
+                       (update :active disj id)
+                       (update :expired (fnil conj #{}) id))))))
       (when-not @decision
         (denied! id :grant/inactive
                  {:granted (:grants caps)
@@ -220,11 +232,16 @@
     (when-not (contains? (:grants caps) id)
       (denied! id :grant/missing {:granted (:grants caps)}))))
 
+(defn- lease-live? [lease now-ms]
+  (try
+    (< (long now-ms) (.toEpochMilli (Instant/parse (:expires-at lease))))
+    (catch Exception _ false)))
+
 (defn- validate-capability-leases!
   "Optional portable ABI leases narrow an already granted session import.
   A lease is an audit descriptor, never the handle itself; the live handle and
   its remaining-use counter stay inside this session's authority atom."
-  [requested leases]
+  [requested leases execution-identity execution-identity-cid now-ms]
   (cond
     (nil? leases) {}
     (not (map? leases))
@@ -234,8 +251,16 @@
     (throw (ex-info "kototama.tender: leases must exactly cover requested imports"
                     {:kototama.tender/problem :lease-import-mismatch}))
     :else
-    (do (doseq [[id lease] leases]
-          (when-not (and (contract/import-id id) (abi/valid-capability-lease? lease))
+    (do (when-not (and (abi/valid-execution-identity? execution-identity)
+                       (string? execution-identity-cid)
+                       (re-matches #"b.+" execution-identity-cid))
+          (throw (ex-info "kototama.tender: capability leases require an exact execution identity"
+                          {:kototama.tender/problem :missing-execution-identity})))
+        (doseq [[id lease] leases]
+          (when-not (and (contract/import-id id) (abi/valid-capability-lease? lease)
+                         (= execution-identity-cid (:execution-identity-cid lease))
+                         (= (:component-cid execution-identity) (:component-cid lease))
+                         (lease-live? lease now-ms))
             (throw (ex-info "kototama.tender: invalid capability lease"
                             {:kototama.tender/problem :invalid-capability-lease
                              :kototama.tender/import id}))))
@@ -1129,6 +1154,7 @@
    (open-session wasm-bytes requested-imports host-caps {}))
   ([wasm-bytes requested-imports host-caps
     {:keys [store llm-client fuel require-kotoba-compatibility? profile capability-leases
+            execution-identity execution-identity-cid lease-now-ms
             http-policy request-purpose credential-provider]
      :as opts
      :or {store (in-memory-store) llm-client (default-llm-client) fuel default-fuel-limit}}]
@@ -1153,15 +1179,20 @@
                              wasm-bytes (or profile :development) opts)
          artifact-compatibility (compatibility/validate! wasm-bytes require-kotoba-compatibility?)
          normalized-caps (contract/host-caps host-caps)
+         now-ms (long (if (ifn? lease-now-ms) (lease-now-ms)
+                          (or lease-now-ms (System/currentTimeMillis))))
          leases (validate-capability-leases! (contract/requested-import-ids requested-imports)
-                                             capability-leases)
+                                             capability-leases execution-identity
+                                             execution-identity-cid now-ms)
          authority-state (atom {:active (:grants normalized-caps)
                                 :revoked #{}
                                 :dropped #{}
                                 :consumed #{}
+                                :expired #{}
                                 :remaining (into {} (map (fn [[id lease]] [id (:uses lease)]) leases))
                                 :uses {}})
-         caps (assoc normalized-caps :authority-state authority-state :capability-leases leases)
+         caps (assoc normalized-caps :authority-state authority-state :capability-leases leases
+                    :lease-now-ms (or lease-now-ms #(System/currentTimeMillis)))
          validation (contract/validate-import-surface requested-imports caps)]
      (when-not (:ok? validation)
        (throw (ex-info "kototama.tender: import surface rejected by contract"
