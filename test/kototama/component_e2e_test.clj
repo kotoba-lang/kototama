@@ -49,7 +49,10 @@
                    artifact (component-world (:bytes artifact)) (:bytes artifact) providers
                    {:runtime :wasmtime-component
                     :component-host (.getAbsolutePath host)
-                    :component-host-sha256 (sha256-file host)})]
+                    :component-host-sha256 (sha256-file host)
+                    :lease-epoch 1
+                    :lease-ttl-ms 10000
+                    :lease-id "component-e2e-lease"})]
       (testing "only the admitted named WIT import crosses the native host"
         (is (= {:result 107 :runtime :wasmtime-component} outcome))
         (is (= {:import :aiueos.component/aiueos-clock-now

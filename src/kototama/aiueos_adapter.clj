@@ -93,6 +93,11 @@
                 :now issued-at :epoch lease-epoch
                 :ttl-ms (or lease-ttl-ms 30000)
                 :lease-id (or lease-id (str "component-" issued-at))})
+        lease-authorize?
+        #(component-abi/lease-authorizes?
+          lease lease-epoch
+          (long (if (ifn? now-ms) (now-ms) now-ms))
+          %1 %2)
         expected (set (keep component-import->kototama-import declared))]
     (when-not (= expected (:grants host-caps))
       (throw (ex-info "aiueos did not grant every declared Component import"
@@ -111,14 +116,22 @@
     ;; Chicory and workerd remain core-Wasm-only compatibility paths.
     (component-provider/prepare!
      {:runtime (:runtime opts) :component? true :artifact artifact
-      :grants declared :providers (select-keys providers declared)})
+      :grants declared :providers (select-keys providers declared)
+      :lease-authorize? lease-authorize?})
     (component-platform/admit-and-link!
      (assoc world :imports declared :grants declared
             :provider-bindings (select-keys providers declared)
-            :abilities abilities)
+            :abilities abilities
+            :runtime-bindings
+            {:component-host-sha256 (:component-host-sha256 opts)})
      execution-identity
      component-bytes
-     #(linker! (assoc % :lease lease :lease-epoch lease-epoch :now-ms now-ms)))))
+     ;; The admitted world remains a closed ABI envelope. Lease state is
+     ;; host-local and reaches only the provider invocation boundary.
+     #(linker! (assoc % :lease lease
+                      :lease-epoch lease-epoch
+                      :now-ms now-ms
+                      :lease-authorize? lease-authorize?)))))
 
 (defn admit-and-run-component-with-aiueos!
   [artifact world component-bytes providers
