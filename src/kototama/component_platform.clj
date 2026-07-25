@@ -9,6 +9,27 @@
 (defn- reject [code message]
   (throw (ex-info message {:phase :component-platform :kototama.component/code code})))
 
+(defn- cid-looking?
+  "The component platform receives identities only after the artifact/package
+  verifier has structurally decoded their CIDs. This envelope gate still
+  rejects blank or non-CID-shaped substitutions before linking; it deliberately
+  does not duplicate the artifact verifier's multibase implementation."
+  [x]
+  (and (string? x) (.startsWith ^String x "b") (> (count x) 1)))
+
+(defn- validate-identity! [identity]
+  (let [required (set (get-in contract [:identity :required]))]
+    (when-not (and (map? identity) (= required (set (keys identity))))
+      (reject :invalid-identity "component identity binding is not exact"))
+    (when-not (every? cid-looking?
+                      [(:component-cid identity) (:package-lock-cid identity)])
+      (reject :invalid-identity "component and package-lock identities must be CIDs"))
+    (when-not (and (set? (:definition-cids identity))
+                   (seq (:definition-cids identity))
+                   (<= (count (:definition-cids identity)) 1024)
+                   (every? cid-looking? (:definition-cids identity)))
+      (reject :invalid-identity "definition identities must be a bounded non-empty CID set"))))
+
 (defn validate-world!
   "Validate a decoded component admission envelope before engine instantiation."
   [world]
@@ -34,9 +55,11 @@
       (reject :ambient-authority "ambient WASI is forbidden"))
     (let [budgets (:budgets world)]
       (when-not (map? budgets) (reject :invalid-budgets "component budgets must be a map"))
-      (when (= :async (:profile world))
-        (when-not (and (= true (:cancellation budgets))
-                       (every? #(let [n (get budgets %)] (and (integer? n) (pos? n)))
-                               (get-in contract [:profiles :async :required-budgets])))
-          (reject :invalid-budgets "async components require cancellation and positive bounds"))))
+      (let [required (get-in contract [:profiles (:profile world) :required-budgets])]
+        (when-not (every? #(let [n (get budgets %)] (and (integer? n) (pos? n))) required)
+          (reject :invalid-budgets "components require positive resource bounds")))
+      (when (and (= :async (:profile world))
+                 (not= true (:cancellation budgets)))
+        (reject :invalid-budgets "async components require cancellation")))
+    (validate-identity! (:identity world))
     world))

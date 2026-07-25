@@ -76,6 +76,67 @@
        :wasm-field (guest/wasm-field-name id)
        :note (:note row)})))
 
+(def production-requirements
+  "Host configuration evidence required for conditional production imports.
+   Empty means the implementation is built in. These facts are supplied by
+   the host operator; a guest cannot grant them to itself."
+  {:jvm {:http-post #{:http-policy :request-purpose :credential-provider}
+         :log-read #{:store}
+         :log-write #{:store}
+         :llm-infer #{:llm-client}}
+   :browser {:http-post #{:cross-origin-isolated :worker :http-bridge}
+             :llm-infer #{:cross-origin-isolated :worker :llm-proxy}}
+   :node {:http-post #{:http-post-provider}
+          :llm-infer #{:llm-provider}}})
+
+(defn host-admission
+  "Machine-enforced host support admission for REQUESTED imports.
+
+   Production requires every conditional implementation's evidence in
+   CONFIGURED. Unknown hosts/imports and unavailable implementations fail
+   closed in every profile."
+  [host requested {:keys [profile configured]
+                   :or {profile :development configured #{}}}]
+  (let [known-host? (contains? #{:jvm :browser :node} host)
+        requested (mapv contract/import-id requested)
+        unknown? (some nil? requested)
+        checks (mapv (fn [id]
+                       (let [status (get-in host-impl [id host])
+                             required (get-in production-requirements [host id] #{})
+                             missing (set (remove (set configured) required))]
+                         {:import id :status status :required required
+                          :missing missing
+                          :ok? (and (some? status)
+                                    (not= :no status)
+                                    (or (not= :production profile)
+                                        (empty? missing)))}))
+                     (remove nil? requested))
+        errors (cond-> []
+                 (not known-host?) (conj {:code :unknown-host :host host})
+                 unknown? (conj {:code :unknown-import})
+                 true (into
+                       (keep (fn [{:keys [import status missing ok?]}]
+                               (when-not ok?
+                                 {:code (if (seq missing)
+                                          :missing-host-configuration
+                                          :unsupported-import)
+                                  :host host :import import :status status
+                                  :missing missing}))
+                             checks)))]
+    {:ok? (empty? errors)
+     :host host :profile profile :requested requested
+     :configured (set configured) :checks checks :errors errors}))
+
+(defn admit-host!
+  "Return admission or throw before guest instantiation."
+  [host requested opts]
+  (let [result (host-admission host requested opts)]
+    (when-not (:ok? result)
+      (throw (ex-info "kototama.browser: host surface rejected before execution"
+                      {:kototama.host/code :host-surface-rejected
+                       :kototama.host/admission result})))
+    result))
+
 (defn parity-matrix
   "Full matrix: vector of {:import :jvm :browser :node :wasm-field :note}."
   []

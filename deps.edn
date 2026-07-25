@@ -27,6 +27,8 @@
          :git/sha "63c13fd48dc53e0f93fa40f6bfce54e62773c656"}}
  :aliases
  {:cli  {:main-opts ["-m" "kototama.cli"]}
+  :tcb-check {:main-opts ["-m" "kototama.tcb"]}
+  :release-evidence {:main-opts ["-m" "kototama.release-evidence"]}
   :postgresql-interop
   {:extra-deps {io.github.kotoba-lang/kotoba {:local/root "../kotoba"}
                 io.github.kotoba-lang/compiler {:local/root "../compiler"}

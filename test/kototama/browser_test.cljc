@@ -37,3 +37,29 @@
     (is (= :r2 (:level r)))
     (is (= :advanced-partial (:status r)))
     (is (seq (:verify r)))))
+
+(deftest production-host-admission-fails-closed
+  (testing "browser conditional imports require concrete runtime evidence"
+    (let [denied (browser/host-admission
+                  :browser [:http-post :llm-infer]
+                  {:profile :production
+                   :configured #{:cross-origin-isolated :worker :http-bridge}})]
+      (is (false? (:ok? denied)))
+      (is (= #{:llm-proxy} (-> denied :errors first :missing))))
+    (is (:ok? (browser/host-admission
+               :browser [:http-post :llm-infer]
+               {:profile :production
+                :configured #{:cross-origin-isolated :worker
+                              :http-bridge :llm-proxy}}))))
+  (testing "node injection is never treated as a production fallback"
+    (is (false? (:ok? (browser/host-admission
+                       :node [:http-post] {:profile :production}))))
+    (is (:ok? (browser/host-admission
+               :node [:http-post]
+               {:profile :production
+                :configured #{:http-post-provider}}))))
+  (testing "unknown hosts and imports fail closed"
+    (is (false? (:ok? (browser/host-admission
+                       :invented [:sha256-hex] {:profile :production}))))
+    (is (false? (:ok? (browser/host-admission
+                       :jvm [:invented] {:profile :production}))))))
