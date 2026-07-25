@@ -22,7 +22,11 @@
   and not a code-level merge of the two execution namespaces (kototama.
   tender still never decides a grant itself; ADR-2607022700's rule)."
   (:require [aiueos.cli :as cli]
-            [kototama.contract :as contract]))
+            [aiueos.component-abi :as component-abi]
+            [kototama.contract :as contract]
+            [kototama.component-platform :as component-platform]
+            [kototama.component-provider :as component-provider]
+            [kototama.wasmtime-component :as wasmtime-component]))
 
 (def kototama-import->aiueos-capability
   "kototama.contract import id -> aiueos capability keyword, for the subset
@@ -37,6 +41,81 @@
   {:log-write :log/write
    :clock-monotonic :clock/monotonic
    :random-bytes :random/bytes})
+
+(def component-import->kototama-import
+  "Stable compiler Component WIT import -> tender import id.  This is a
+  closed map: an unknown Component import is never translated to ambient
+  WASI or a best-effort host binding."
+  {:aiueos.component/aiueos-clock-now :clock-monotonic
+   :aiueos.component/aiueos-log-append :log-write})
+
+(declare host-caps-for-imports)
+
+(defn host-caps-for-component
+  "Ask aiueos for exactly the imports declared by a compiler Component
+  artifact. ARTIFACT is the compiler result's public capability set; unknown
+  names fail closed before an aiueos request is made."
+  ([artifact] (host-caps-for-component artifact {}))
+  ([artifact opts]
+   (let [declared (set (:capabilities artifact))
+         _ (component-abi/requested-capabilities! declared)
+         imports (mapv component-import->kototama-import declared)]
+     (when (or (some nil? imports) (not= (count imports) (count declared)))
+       (throw (ex-info "Component declares an unmapped WIT capability"
+                       {:phase :component-grant :capabilities declared})))
+     (let [{:keys [decision] :as result} (host-caps-for-imports imports opts)]
+       (when-not (component-abi/decision-grants-imports? decision declared)
+         (throw (ex-info "Aiueos decision does not cover every Component import"
+                         {:phase :component-grant
+                          :declared declared :decision decision})))
+       result))))
+
+(defn admit-component-with-aiueos!
+  "The only bridge from a compiler Component artifact to the native Component
+  linker. Aiueos decides; this function only translates a grant into the
+  exact WIT bindings and delegates CID/world verification to component-platform.
+  A denial, unknown import, or missing provider aborts before LINKER! runs."
+  [artifact world component-bytes linker! providers opts]
+  (let [declared (set (:capabilities artifact))
+        abilities (:component-imports artifact)
+        {:keys [host-caps decision]} (host-caps-for-component artifact opts)
+        expected (set (keep component-import->kototama-import declared))]
+    (when-not (= expected (:grants host-caps))
+      (throw (ex-info "aiueos did not grant every declared Component import"
+                      {:phase :component-grant :decision decision
+                       :declared declared :granted (:grants host-caps)})))
+    (when-not (= declared (set (keys (select-keys providers declared))))
+      (throw (ex-info "Component provider binding is missing"
+                      {:phase :component-grant :declared declared
+                       :providers (set (keys providers))})))
+    (when-not (= declared (set (keys abilities)))
+      (throw (ex-info "Component artifact ability descriptors do not match imports"
+                      {:phase :component-grant :declared declared
+                       :abilities (set (keys abilities))})))
+    ;; Engine selection is part of the TCB boundary, never an ambient detail
+    ;; of LINKER!.  Today the sole admitted Component adapter is Wasmtime;
+    ;; Chicory and workerd remain core-Wasm-only compatibility paths.
+    (component-provider/prepare!
+     {:runtime (:runtime opts) :component? true :artifact artifact
+      :grants declared :providers (select-keys providers declared)})
+    (component-platform/admit-and-link!
+     (assoc world :imports declared :grants declared
+            :provider-bindings (select-keys providers declared)
+            :abilities abilities)
+     component-bytes linker!)))
+
+(defn admit-and-run-component-with-aiueos!
+  [artifact world component-bytes providers
+   {:keys [component-host component-host-sha256] :as opts}]
+  (admit-component-with-aiueos!
+   artifact world component-bytes
+   (fn [admitted]
+     (wasmtime-component/run-effectful!
+      (assoc admitted :runtime :wasmtime-component
+             :artifact artifact :providers providers
+             :component-host component-host
+             :component-host-sha256 component-host-sha256)))
+   providers opts))
 
 (def ^:private aiueos-cli-contract
   (delay (cli/read-contract)))

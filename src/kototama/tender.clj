@@ -105,8 +105,11 @@
   a real `com.atproto.repo.createRecord` body from a `.kotoba` guest."
   (:require [clojure.data.json :as json]
             [clojure.string :as str]
+            [kototama.browser :as browser]
             [kototama.compatibility :as compatibility]
             [kototama.contract :as contract]
+            [kototama.network-authority :as network]
+            [kototama.signer-lifecycle :as signer]
             [ed25519.core :as ed])
   (:import (com.dylibso.chicory.runtime ExecutionListener HostFunction ImportFunction
                                         ImportValues Instance WasmFunctionHandle)
@@ -116,7 +119,8 @@
            (java.security MessageDigest SecureRandom)
            (java.net InetAddress Inet6Address URI)
            (java.net.http HttpClient HttpRequest HttpRequest$Builder HttpRequest$BodyPublishers HttpResponse$BodyHandlers)
-           (java.time Duration)))
+           (java.time Duration)
+           (java.util.concurrent Executors Semaphore TimeUnit TimeoutException)))
 
 ;; ── memory ABI: (ptr,len) in / (out-ptr,out-cap) out, same convention
 ;; `kotoba.wasm-exec`'s read-str/write-bytes! establish ─────────────────────
@@ -185,9 +189,26 @@
 ;; ── per-call grant re-check (defense in depth — pre-flight already ran in
 ;; `instantiate`, but no HostFunction body trusts that alone) ───────────────
 
-(defn- ensure-granted! [caps id]
-  (when-not (contains? (:grants caps) id)
-    (denied! id :grant/missing {:granted (:grants caps)})))
+(defn- ensure-granted!
+  "Common call-time authority chokepoint for all nine host functions.
+   When a session authority-state is present, verification and use accounting
+   are one atomic swap so revoke/drop cannot race between check and consume."
+  [caps id]
+  (if-let [authority-state (:authority-state caps)]
+    (let [decision (volatile! nil)]
+      (swap! authority-state
+             (fn [state]
+               (let [active? (contains? (:active state) id)]
+                 (vreset! decision active?)
+                 (if active?
+                   (update-in state [:uses id] (fnil inc 0))
+                   state))))
+      (when-not @decision
+        (denied! id :grant/inactive
+                 {:granted (:grants caps)
+                  :authority @authority-state})))
+    (when-not (contains? (:grants caps) id)
+      (denied! id :grant/missing {:granted (:grants caps)}))))
 
 ;; ── the 9 kototama.contract/import-surface host functions ──────────────────
 
@@ -394,7 +415,7 @@
   endpoint can restrict it further than the unconditional denylist above,
   which only blocks internal/metadata destinations, not \"any public
   host\"."
-  [caps limits-state]
+  [caps limits-state network-context]
   (host-fn "http_post" (mapv valtype [:i32 :i32 :i32 :i32 :i32 :i32]) ValType/I32
            (fn [instance args]
              (ensure-granted! caps :http-post)
@@ -405,14 +426,31 @@
                          (not (contract/url-allowed? (:limits caps) url)))
                    -1
                    (let [body (read-bytes! instance (aget args 2) (aget args 3))
-                         req (-> (HttpRequest/newBuilder (URI/create url))
-                                (.timeout (Duration/ofMillis (caps-timeout-ms caps :http-request-timeout-ms)))
-                                (.POST (HttpRequest$BodyPublishers/ofByteArray body))
-                                .build)
-                         resp (.send (timed-http-client (caps-timeout-ms caps :http-connect-timeout-ms))
-                                     req (HttpResponse$BodyHandlers/ofByteArray))]
-                     (swap! limits-state update :http-posts inc)
-                     (write-bytes! instance (aget args 4) (aget args 5) (.body resp)))))))))
+                         authority
+                         (try
+                           (when network-context
+                             (network/authorize-request!
+                              network-context url :post (count body)
+                              (inc (:http-posts @limits-state))))
+                           (catch Exception _ ::denied))]
+                     (if (= ::denied authority)
+                       -1
+                       (let [builder (-> (HttpRequest/newBuilder (URI/create url))
+                                         (.timeout (Duration/ofMillis (caps-timeout-ms caps :http-request-timeout-ms)))
+                                         (.POST (HttpRequest$BodyPublishers/ofByteArray body)))
+                             _ (doseq [[header value] (:headers authority)]
+                                 (.header builder header value))
+                             req (.build builder)
+                             resp (.send (timed-http-client (caps-timeout-ms caps :http-connect-timeout-ms)) req
+                                         (HttpResponse$BodyHandlers/ofByteArray))
+                             response ^bytes (.body resp)
+                             response-limit (or (:max-response-bytes authority)
+                                                (aget args 5))]
+                         (swap! limits-state update :http-posts inc)
+                         (if (> (alength response) response-limit)
+                           -1
+                           (write-bytes! instance (aget args 4) (aget args 5)
+                                         response)))))))))))
 
 (defn- http-fetch-host-fn
   "`(url-ptr url-len out-ptr out-cap) -> bytes-written|-1`. Synchronous
@@ -995,6 +1033,33 @@
   guests, still trips a genuinely unbounded loop in a fraction of a second."
   5000000)
 
+(defn artifact-sha256 [^bytes wasm-bytes]
+  (apply str
+         (map #(format "%02x" (bit-and (int %) 0xff))
+              (.digest (MessageDigest/getInstance "SHA-256") wasm-bytes))))
+
+(defn- production-artifact-admission!
+  [wasm-bytes profile
+   {:keys [signer-registry signed-manifest manifest-now-ms
+           verify-manifest-fn]}]
+  (if (not= :production profile)
+    {:required? false :authorized? true}
+    (do
+      (when-not (and signer-registry (map? signed-manifest)
+                     (integer? manifest-now-ms) (ifn? verify-manifest-fn))
+        (throw (ex-info "kototama.tender: signed manifest required in production"
+                        {:kototama.tender/problem :signed-manifest-required})))
+      (let [actual (artifact-sha256 wasm-bytes)
+            declared (:manifest/artifact-sha256 signed-manifest)]
+        (when-not (= actual declared)
+          (throw (ex-info "kototama.tender: manifest artifact digest mismatch"
+                          {:kototama.tender/problem :artifact-digest-mismatch
+                           :declared declared :actual actual})))
+        (assoc (signer/authorize-manifest!
+                signer-registry signed-manifest manifest-now-ms
+                verify-manifest-fn)
+               :required? true :artifact-sha256 actual)))))
+
 (defn- memory-limits-for
   "Chicory `MemoryLimits` capping how far the guest's `memory.grow` can
   reach, to `min(caps-limit, module's-own-declared-max)` -- the module's
@@ -1032,10 +1097,36 @@
   ([wasm-bytes requested-imports host-caps]
    (open-session wasm-bytes requested-imports host-caps {}))
   ([wasm-bytes requested-imports host-caps
-    {:keys [store llm-client fuel require-kotoba-compatibility?]
+    {:keys [store llm-client fuel require-kotoba-compatibility? profile
+            http-policy request-purpose credential-provider]
+     :as opts
      :or {store (in-memory-store) llm-client (default-llm-client) fuel default-fuel-limit}}]
-   (let [artifact-compatibility (compatibility/validate! wasm-bytes require-kotoba-compatibility?)
-         caps (contract/host-caps host-caps)
+   (let [configured (cond-> #{}
+                      (contains? opts :store) (conj :store)
+                      (contains? opts :llm-client) (conj :llm-client)
+                      (contains? opts :http-policy) (conj :http-policy)
+                      (contains? opts :request-purpose) (conj :request-purpose)
+                      (contains? opts :credential-provider)
+                      (conj :credential-provider))
+         host-admission (browser/admit-host!
+                         :jvm requested-imports
+                         {:profile (or profile :development)
+                          :configured configured})
+         network-context
+         (when (and (= :production profile)
+                    (some #{:http-post}
+                          (contract/requested-import-ids requested-imports)))
+           (network/make-context http-policy request-purpose
+                                 credential-provider))
+         artifact-admission (production-artifact-admission!
+                             wasm-bytes (or profile :development) opts)
+         artifact-compatibility (compatibility/validate! wasm-bytes require-kotoba-compatibility?)
+         normalized-caps (contract/host-caps host-caps)
+         authority-state (atom {:active (:grants normalized-caps)
+                                :revoked #{}
+                                :dropped #{}
+                                :uses {}})
+         caps (assoc normalized-caps :authority-state authority-state)
          validation (contract/validate-import-surface requested-imports caps)]
      (when-not (:ok? validation)
        (throw (ex-info "kototama.tender: import surface rejected by contract"
@@ -1046,7 +1137,8 @@
                      :sign #(sign-host-fn caps limits-state)
                      :verify #(verify-host-fn caps limits-state)
                      :sha256-hex #(sha256-hex-host-fn caps limits-state)
-                     :http-post #(http-post-host-fn caps limits-state)
+                     :http-post #(http-post-host-fn caps limits-state
+                                                    network-context)
                      :llm-infer #(llm-infer-host-fn caps limits-state llm-client)
                      :log-read #(log-read-host-fn caps limits-state store)
                      :log-write #(log-write-host-fn caps limits-state store)
@@ -1072,9 +1164,50 @@
         :fuel-used fuel-used
         :fuel-limit fuel
         :caps caps
+        :authority-state authority-state
         :requested (:requested validation)
+        :host-admission host-admission
+        :artifact-admission artifact-admission
         :compatibility artifact-compatibility
         :validation validation}))))
+
+(defn authority-snapshot
+  "Immutable snapshot of a session's active/revoked/dropped grants and use
+   counters."
+  [session]
+  (if-let [state (:authority-state session)]
+    @state
+    (throw (ex-info "kototama.tender: session has no authority state"
+                    {:kototama.tender/problem :missing-authority-state}))))
+
+(defn- deactivate-import!
+  [session import-id disposition reason]
+  (let [id (contract/import-id import-id)
+        state (:authority-state session)]
+    (when-not (and id state)
+      (throw (ex-info "kototama.tender: cannot deactivate import"
+                      {:kototama.tender/problem :invalid-deactivation
+                       :kototama.tender/import import-id})))
+    (swap! state
+           (fn [current]
+             (-> current
+                 (update :active disj id)
+                 (update disposition conj id)
+                 (assoc-in [:reasons id] reason))))
+    (authority-snapshot session)))
+
+(defn revoke-import!
+  "Revoke one import for an existing session. Every subsequent host call sees
+   the change without re-instantiation."
+  ([session import-id] (revoke-import! session import-id :operator-revocation))
+  ([session import-id reason]
+   (deactivate-import! session import-id :revoked reason)))
+
+(defn drop-import!
+  "Voluntarily and irreversibly drop one import from a session."
+  ([session import-id] (drop-import! session import-id :session-drop))
+  ([session import-id reason]
+   (deactivate-import! session import-id :dropped reason)))
 
 (defn instantiate
   "Backward-compatible Instance-only entry. Prefer `open-session` /
@@ -1154,6 +1287,50 @@
   ([wasm-bytes requested-imports host-caps opts]
    (call-main (instantiate wasm-bytes requested-imports host-caps opts))))
 
+(def default-run-deadline-ms 30000)
+(def default-run-permits
+  "Process-wide admission bound for concurrently executing guest calls."
+  (Semaphore. 64 true))
+
+(defn run-main-bounded
+  "Run a guest behind wall-clock, cancellation, and concurrency boundaries.
+
+   `:deadline-ms` must be positive. `:run-permits` may inject a shared fair
+   Semaphore; production callers should share one across their tender pool.
+   Admission is non-blocking, so saturation fails closed instead of creating
+   an unbounded queue. A deadline cancels/interupts the worker Future; Wasm
+   instruction fuel remains the hard backstop for CPU-only guests."
+  ([wasm-bytes requested-imports host-caps]
+   (run-main-bounded wasm-bytes requested-imports host-caps {}))
+  ([wasm-bytes requested-imports host-caps
+    {:keys [deadline-ms run-permits]
+     :or {deadline-ms default-run-deadline-ms
+          run-permits default-run-permits}
+     :as opts}]
+   (when-not (and (integer? deadline-ms) (pos? deadline-ms))
+     (throw (ex-info "kototama.tender: deadline-ms must be positive"
+                     {:kototama.tender/problem :invalid-deadline
+                      :kototama.tender/deadline-ms deadline-ms})))
+   (when-not (.tryAcquire ^Semaphore run-permits)
+     (throw (ex-info "kototama.tender: concurrent run limit reached"
+                     {:kototama.tender/problem :concurrency-exhausted})))
+   (let [executor (Executors/newSingleThreadExecutor)
+         task (.submit executor
+                       ^java.util.concurrent.Callable
+                       (fn [] (run-main wasm-bytes requested-imports host-caps
+                                        (dissoc opts :deadline-ms :run-permits))))]
+     (try
+       (.get task (long deadline-ms) TimeUnit/MILLISECONDS)
+       (catch TimeoutException e
+         (.cancel task true)
+         (throw (ex-info "kototama.tender: wall-clock deadline exceeded"
+                         {:kototama.tender/problem :deadline-exceeded
+                          :kototama.tender/deadline-ms deadline-ms}
+                         e)))
+       (finally
+         (.shutdownNow executor)
+         (.release ^Semaphore run-permits))))))
+
 (defn run-report
   "`open-session` + `call-main` with a structured post-run report.
 
@@ -1177,6 +1354,54 @@
        {:ok? false
         :error (or (ex-data e) {:message (.getMessage e)})
         :message (.getMessage e)}))))
+
+(defn run-report-bounded
+  "Production-oriented run-report with mandatory wall deadline, cancellation,
+   and shared concurrency admission. Operational denials use run-report's
+   structured error shape."
+  ([wasm-bytes requested-imports host-caps]
+   (run-report-bounded wasm-bytes requested-imports host-caps {}))
+  ([wasm-bytes requested-imports host-caps
+    {:keys [deadline-ms run-permits]
+     :or {deadline-ms default-run-deadline-ms
+          run-permits default-run-permits}
+     :as opts}]
+   (cond
+     (not (and (integer? deadline-ms) (pos? deadline-ms)))
+     {:ok? false
+      :error {:kototama.tender/problem :invalid-deadline
+              :kototama.tender/deadline-ms deadline-ms}
+      :message "kototama.tender: deadline-ms must be positive"}
+
+     (not (.tryAcquire ^Semaphore run-permits))
+     {:ok? false
+      :error {:kototama.tender/problem :concurrency-exhausted}
+      :message "kototama.tender: concurrent run limit reached"}
+
+     :else
+     (let [executor (Executors/newSingleThreadExecutor)
+           task (.submit executor
+                         ^java.util.concurrent.Callable
+                         (fn [] (run-report
+                                 wasm-bytes requested-imports host-caps
+                                 (dissoc opts :deadline-ms :run-permits))))]
+       (try
+         (.get task (long deadline-ms) TimeUnit/MILLISECONDS)
+         (catch TimeoutException _
+           (.cancel task true)
+           {:ok? false
+            :error {:kototama.tender/problem :deadline-exceeded
+                    :kototama.tender/deadline-ms deadline-ms}
+            :message "kototama.tender: wall-clock deadline exceeded"})
+         (catch Exception e
+           {:ok? false
+            :error (or (some-> e .getCause ex-data)
+                       (ex-data e)
+                       {:message (.getMessage e)})
+            :message (.getMessage e)})
+         (finally
+           (.shutdownNow executor)
+           (.release ^Semaphore run-permits)))))))
 
 (defn inspect-module
   "Parse WASM-BYTES (no Instantiation) and report structural surface:

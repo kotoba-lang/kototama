@@ -5,7 +5,9 @@
             [kototama.fleet :as fleet]
             [kototama.fleet-store :as store]
             [kototama.fleet-exec :as exec]
-            [kototama.guest :as guest]))
+            [kototama.guest :as guest]
+            [kototama.signer-lifecycle :as signer]
+            [kototama.tender :as tender]))
 
 (defn- wat->wasm [wat]
   (let [in (java.io.File/createTempFile "fleet-aiueos" ".wat")
@@ -68,6 +70,92 @@
     (is (true? (get-in last [:result :ok?])))
     (is (= 120 (get-in last [:result :result])))
     (is (pos? (get-in last [:result :fuel-used])))))
+
+(deftest fleet-execute-mandates-production-resource-boundaries
+  (testing "shared concurrency saturation fails before a fleet guest runs"
+    (let [permits (java.util.concurrent.Semaphore. 1)
+          _ (.acquire permits)
+          run (exec/make-execute
+               {:wasm "kototama/fixtures/kotoba-compiled-fact.wasm"
+                :grants [] :run-permits permits})
+          report (run {:kototama.fleet/grants []
+                       :kototama.fleet/fuel-limit 5000000})]
+      (try
+        (is (false? (:ok? report)))
+        (is (= :concurrency-exhausted
+               (get-in report [:error :kototama.tender/problem])))
+        (finally (.release permits)))))
+  (testing "a blocking injected provider is cancelled at the fleet deadline"
+    (let [wasm (wat->wasm
+                "(module
+                   (import \"kotoba\" \"llm_infer\"
+                     (func $llm (param i32 i32 i32 i32) (result i32)))
+                   (memory (export \"memory\") 1)
+                   (data (i32.const 0) \"hello\")
+                   (func (export \"main\") (result i64)
+                     (i64.extend_i32_s
+                       (call $llm (i32.const 0) (i32.const 5)
+                                  (i32.const 100) (i32.const 64)))))")
+          started (promise)
+          interrupted (promise)
+          run (exec/make-execute
+               {:wasm wasm :grants [:llm-infer] :deadline-ms 1000
+                :llm-client
+                {:infer-fn (fn [_]
+                             (deliver started true)
+                             (try (Thread/sleep 10000)
+                                  (catch InterruptedException _
+                                    (deliver interrupted true)))
+                             "late")}})
+          report (run {:kototama.fleet/grants [:llm-infer]
+                       :kototama.fleet/fuel-limit 5000000})]
+      (is (false? (:ok? report)))
+      (is (= :deadline-exceeded
+             (get-in report [:error :kototama.tender/problem])))
+      (is (= true (deref started 1000 false)))
+      (is (= true (deref interrupted 1000 false))))))
+
+(deftest fleet-production-profile-mandates-signed-artifact-admission
+  (let [path "kototama/fixtures/kotoba-compiled-fact.wasm"
+        wasm (exec/load-wasm path)
+        digest (tender/artifact-sha256 wasm)
+        registry (signer/new-registry :root)
+        root-verify (fn [_ body signature]
+                      (= signature [:root (:epoch (read-string body))]))
+        _ (signer/apply-trust-update!
+           registry
+           {:epoch 1 :issued-at-ms 100
+            :add-signers
+            {:release/a {:key-id :release/a :public-key :pub/a
+                         :not-before-ms 100 :expires-at-ms 1000
+                         :status :active}}
+            :revoke-signers #{} :emergency-distrust #{}
+            :signature [:root 1]}
+           root-verify)
+        manifest {:manifest/id :fixture/fact
+                  :manifest/signer-key-id :release/a
+                  :manifest/artifact-sha256 digest
+                  :manifest/signature [:manifest :pub/a digest]}
+        verify-manifest
+        (fn [public-key body signature]
+          (= signature [:manifest public-key
+                        (:manifest/artifact-sha256 (read-string body))]))
+        tick {:kototama.fleet/grants []
+              :kototama.fleet/fuel-limit 5000000}
+        unsigned ((exec/make-execute
+                   {:wasm path :grants [] :profile :production})
+                  tick)
+        signed ((exec/make-execute
+                 {:wasm path :grants [] :profile :production
+                  :signer-registry registry :signed-manifest manifest
+                  :manifest-now-ms 500
+                  :verify-manifest-fn verify-manifest})
+                tick)]
+    (is (false? (:ok? unsigned)))
+    (is (= :signed-manifest-required
+           (get-in unsigned [:error :kototama.tender/problem])))
+    (is (true? (:ok? signed)))
+    (is (= 120 (:result signed)))))
 
 (deftest bootstrap-and-run-persists
   (let [dir (str "tmp/fleet-boot-" (System/currentTimeMillis))

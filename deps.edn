@@ -16,6 +16,13 @@
         org.clojure/data.json {:mvn/version "2.5.0"}
         io.github.kotoba-lang/security {:git/url "https://github.com/kotoba-lang/security.git"
                                         :git/sha "23d2e0b6b521318adb43230a5a5c21c76adb738c"}
+        io.github.kotoba-lang/abi {:git/url "https://github.com/kotoba-lang/abi.git"
+                                   :git/sha "9663bf2aeff735b568a3f6cf80591856f11277d3"}
+        ;; Component admission verifies identity CIDs structurally before
+        ;; linking; a leading `b` is not evidence of content addressing.
+        io.github.kotoba-lang/io-multiformats
+        {:git/url "https://github.com/kotoba-lang/io-multiformats.git"
+         :git/sha "310724803db65840f00d2d98d7887f2b6a512bd3"}
         ;; kototama.aiueos-adapter calls aiueos.cli/command-result directly
         ;; (in-process, not the bb-decide subprocess -- see the adapter's
         ;; namespace docstring for why) to translate a REAL aiueos policy
@@ -24,9 +31,11 @@
         ;; repo) has been merged back into kotoba-lang/aiueos.
         io.github.kotoba-lang/aiueos
         {:git/url "https://github.com/kotoba-lang/aiueos.git"
-         :git/sha "63c13fd48dc53e0f93fa40f6bfce54e62773c656"}}
+         :git/sha "32a6f9723ae5d838d0fa2a414d5e16c7877773a5"}}
  :aliases
  {:cli  {:main-opts ["-m" "kototama.cli"]}
+  :tcb-check {:main-opts ["-m" "kototama.tcb"]}
+  :release-evidence {:main-opts ["-m" "kototama.release-evidence"]}
   :postgresql-interop
   {:extra-deps {io.github.kotoba-lang/kotoba {:local/root "../kotoba"}
                 io.github.kotoba-lang/compiler {:local/root "../compiler"}

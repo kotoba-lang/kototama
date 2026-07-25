@@ -1,13 +1,16 @@
 # kototama
 
-**Role: the `.kotoba` WASM runtime** — tender / host that **runs** guest
-modules produced by the **kotoba language** (`kotoba wasm emit`).  
-It does **not** own the language or the AOT compiler.
+**Role: the Kotoba Wasm/Component runtime and engine boundary** — tender / host
+that validates, compiles, links, budgets, and runs guest modules produced by
+the Kotoba compiler. It does **not** own the language, compiler, grant policy,
+or fleet placement.
 
 ```text
-kotoba   = language   (.kotoba → check → wasm emit → guest.wasm)  ← kotoba-lang/kotoba
-kototama = runtime    (host & run that .wasm)                     ← this repo
-aiueos   = OS / broker (decides grants; tender only enforces)
+kotoba/compiler = language compiler (.kotoba → Core Wasm → Component)
+abi             = WIT, manifest, identity, and conformance contract
+kototama        = runtime / engine (validate, compile, link, run)
+aiueos          = authority (decides grants; supplies named providers)
+murakumo        = cluster control plane (places and observes, never grants)
 ```
 
 Stack vocabulary: [ADR-2607022400](https://github.com/com-junkawasaki/root/blob/main/90-docs/adr/2607022400-kototama-unikernel-tender-runtime-vocabulary.md).
@@ -36,9 +39,18 @@ under capability grants that `aiueos` decides. Solo5's *tender* pattern —
 kototama hosts, the component is guest. **Do not reimplement the compiler here.**
 
 The current portable contract is WIT plus the WebAssembly Component Model on
-WASI 0.3. Kototama verifies and composes compiler-produced component worlds;
+WASI 0.3, versioned in [`kotoba-lang/abi`](https://github.com/kotoba-lang/abi).
+Kototama verifies and composes compiler-produced component worlds;
 sync functions remain sync, while async functions/futures/streams require
-explicit cancellation and bounded lifetime/item/byte budgets. See ADR 0009.
+explicit cancellation and bounded lifetime/item/byte budgets. A host accepts
+only declared WIT imports and a verified, scoped aiueos grant; it must not turn
+a WASI import into ambient filesystem, network, clock, random, environment, or
+process access. Kototama is the product-facing engine API; its initial engine
+adapter may embed a mature native engine such as Wasmtime. Boot, isolation,
+device adapters, and root-key use remain a small native micro-TCB. A nested
+Wasm engine is not the product path: it adds an engine but cannot replace the
+outer native engine that starts and isolates it. See
+[`ADR-2607252500`](https://github.com/com-junkawasaki/root/blob/main/90-docs/adr/2607252500-kotoba-wasm-component-first-execution-boundary.edn).
 
 **Compile guests with [`kotoba-lang/kotoba`](https://github.com/kotoba-lang/kotoba).**
 

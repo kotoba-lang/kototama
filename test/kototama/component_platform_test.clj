@@ -1,13 +1,22 @@
 (ns kototama.component-platform-test
   (:require [clojure.test :refer [deftest is testing]]
-            [kototama.component-platform :as platform]))
+            [kototama.component-platform :as platform]
+            [multiformats.core :as mf]))
+
+(defn cid [value]
+  (mf/cidv1-raw (.getBytes ^String value "UTF-8")))
 
 (def valid
   {:target :wasm-component-kotoba-v1 :wasi-version "0.3.0" :profile :sync
    :imports #{:kotoba/http-post} :exports #{:app/run}
    :grants #{:kotoba/http-post}
    :provider-bindings {:kotoba/http-post :provider/http}
-   :ambient-wasi false :budgets {}})
+   :abilities {:kotoba/http-post {:target "https://api.example.test/submit"
+                                  :operation :http/post :max-bytes 1024 :max-items 1
+                                  :deadline-ms 1000 :audit-id "component-test"}}
+   :ambient-wasi false :budgets {:fuel 1000000 :memory-pages 4}
+   :identity {:component-cid (cid "component") :package-lock-cid (cid "lock")
+              :definition-cids #{(cid "definition")}}})
 
 (defn code [value]
   (try (platform/validate-world! value) nil
@@ -19,12 +28,35 @@
   (is (= :wasi-mismatch (code (assoc valid :wasi-version "0.2.11"))))
   (is (= :ambient-authority (code (assoc valid :ambient-wasi true))))
   (is (= :capability-denied (code (assoc valid :grants #{}))))
-  (is (= :unbound-import (code (assoc valid :provider-bindings {})))))
+  (is (= :unbound-import (code (assoc valid :provider-bindings {}))))
+  (is (= :ability-mismatch (code (assoc valid :abilities {}))))
+  (is (= :invalid-ability
+         (code (assoc-in valid [:abilities :kotoba/http-post :audit-id] ""))))
+  (is (= :invalid-identity (code (assoc valid :identity {}))))
+  (is (= :invalid-identity
+         (code (assoc-in valid [:identity :component-cid] "bafycomponent"))))
+  (is (= :invalid-budgets (code (assoc valid :budgets {})))))
 
 (deftest async-world-requires-cancellation-and-bounds
   (testing "WASI 0.3 does not imply unbounded async authority"
     (is (= :invalid-budgets (code (assoc valid :profile :async))))
     (let [async (assoc valid :profile :async
-                       :budgets {:cancellation true :deadline-ms 1000
+                       :budgets {:fuel 1000000 :memory-pages 4 :cancellation true :deadline-ms 1000
                                  :max-items 32 :max-bytes 65536})]
       (is (= async (platform/validate-world! async))))))
+
+(deftest component-bytes-are-verified-before-the-linker-receives-them
+  (let [bytes (.getBytes "component" "UTF-8")
+        world (assoc-in valid [:identity :component-cid] (mf/cidv1-raw bytes))
+        linked (atom nil)]
+    (is (= :linked
+           (platform/admit-and-link! world bytes
+                                     (fn [request] (reset! linked request) :linked))))
+    (is (= bytes (:component-bytes @linked)))
+    (is (= (:abilities world) (:abilities @linked)))
+    (is (= :component-cid-mismatch
+           (try (platform/admit-and-link!
+                 (assoc-in world [:identity :component-cid] (cid "other")) bytes identity)
+                nil
+                (catch clojure.lang.ExceptionInfo e
+                  (:kototama.component/code (ex-data e))))))))

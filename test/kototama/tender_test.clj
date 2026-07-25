@@ -8,6 +8,7 @@
             [clojure.java.io :as io]
             [clojure.java.shell :as shell]
             [clojure.string :as str]
+            [kototama.signer-lifecycle :as signer]
             [kototama.tender :as tender]
             [kototama.contract :as contract])
   (:import (com.sun.net.httpserver HttpExchange HttpHandler HttpServer)
@@ -920,6 +921,111 @@
       (is (thrown-with-msg? clojure.lang.ExceptionInfo #"rejected by contract"
                             (tender/instantiate (byte-array 0) [:llm-infer] caps))))))
 
+(deftest production-host-support-is-checked-before-wasm-parsing
+  (testing "default LLM and in-memory storage are not production fallbacks"
+    (doseq [import [:llm-infer :log-read :log-write]]
+      (let [caps (contract/host-caps
+                  {:grants [import]
+                   :limits {:max-llm-infers 1
+                            :allow-write-imports? true}})]
+        (try
+          (tender/instantiate (byte-array 0) [import] caps
+                              {:profile :production})
+          (is false (str import " should be denied"))
+          (catch clojure.lang.ExceptionInfo e
+            (is (= :host-surface-rejected
+                   (:kototama.host/code (ex-data e)))))))))
+  (testing "explicit providers pass host admission and reach artifact parsing"
+    (let [caps (contract/host-caps
+                {:grants [:llm-infer]
+                 :limits {:max-llm-infers 1}})]
+      (is (thrown? Exception
+                   (tender/instantiate
+                    (byte-array 0) [:llm-infer] caps
+                    {:profile :production
+                     :llm-client {:infer-fn (fn [_] "ok")}}))))))
+
+(deftest production-http-requires-complete-bound-authority-before-artifact-parse
+  (let [caps (contract/host-caps
+              {:grants [:http-post] :limits {:max-http-posts 1}})
+        configured {:profile :production
+                    :http-policy {}
+                    :request-purpose :model-inference
+                    :credential-provider (constantly {"Authorization" "x"})}]
+    (testing "missing authority configuration is rejected by host admission"
+      (try
+        (tender/open-session (byte-array 0) [:http-post] caps
+                             {:profile :production})
+        (is false "unconfigured production HTTP should fail")
+        (catch clojure.lang.ExceptionInfo e
+          (is (= :host-surface-rejected
+                 (:kototama.host/code (ex-data e)))))))
+    (testing "present but incomplete policy is rejected before signed artifact parsing"
+      (try
+        (tender/open-session (byte-array 0) [:http-post] caps configured)
+        (is false "incomplete production network policy should fail")
+        (catch clojure.lang.ExceptionInfo e
+          (is (= :incomplete-policy
+                 (:kototama.network/code (ex-data e)))))))))
+
+(defn- production-signing-fixture [wasm]
+  (let [registry (signer/new-registry :root)
+        root-verify (fn [_ body signature]
+                      (= signature [:root (:epoch (read-string body))]))
+        verify-manifest
+        (fn [public-key body signature]
+          (= signature [:manifest public-key
+                        (:manifest/artifact-sha256 (read-string body))]))
+        signer-record {:key-id :release/a :public-key :pub/a
+                       :not-before-ms 1000 :expires-at-ms 3000
+                       :status :active}
+        update {:epoch 1 :issued-at-ms 900
+                :add-signers {:release/a signer-record}
+                :revoke-signers #{} :emergency-distrust #{}
+                :signature [:root 1]}
+        _ (signer/apply-trust-update! registry update root-verify)
+        digest (tender/artifact-sha256 wasm)
+        manifest {:manifest/id :fixture/fact
+                  :manifest/signer-key-id :release/a
+                  :manifest/artifact-sha256 digest
+                  :manifest/signature [:manifest :pub/a digest]}]
+    {:signer-registry registry :signed-manifest manifest
+     :manifest-now-ms 1500 :verify-manifest-fn verify-manifest}))
+
+(deftest production-artifact-admission-is-signed-digest-bound-and-live
+  (let [wasm (wat->wasm "(module (func (export \"main\") (result i64) (i64.const 7)))")
+        caps (contract/host-caps {})
+        signing (production-signing-fixture wasm)]
+    (testing "unsigned production artifacts fail before parsing"
+      (try
+        (tender/open-session wasm [] caps {:profile :production})
+        (is false "unsigned artifact should be denied")
+        (catch clojure.lang.ExceptionInfo e
+          (is (= :signed-manifest-required
+                 (:kototama.tender/problem (ex-data e)))))))
+    (testing "authorized manifest is bound to the exact Wasm digest"
+      (let [session (tender/open-session
+                     wasm [] caps (assoc signing :profile :production))]
+        (is (= 7 (tender/session-call-main session)))
+        (is (true? (get-in session [:artifact-admission :authorized?]))))
+      (is (thrown-with-msg?
+           clojure.lang.ExceptionInfo #"digest mismatch"
+           (tender/open-session
+            (byte-array (concat wasm [0]))
+            [] caps (assoc signing :profile :production)))))
+    (testing "emergency distrust applies to the next admission without restart"
+      (signer/apply-trust-update!
+       (:signer-registry signing)
+       {:epoch 2 :issued-at-ms 1600 :add-signers {}
+        :revoke-signers #{} :emergency-distrust #{:release/a}
+        :signature [:root 2]}
+       (fn [_ body signature]
+         (= signature [:root (:epoch (read-string body))])))
+      (is (thrown-with-msg?
+           clojure.lang.ExceptionInfo #"manifest signer denied"
+           (tender/open-session
+            wasm [] caps (assoc signing :profile :production)))))))
+
 (deftest llm-infer-round-trips-through-an-injected-mock-client
   (let [wasm (wat->wasm llm-infer-wat)
         caps (contract/host-caps {:grants [:llm-infer] :limits {:max-llm-infers 1}})
@@ -961,6 +1067,44 @@
     (is (thrown-with-msg? clojure.lang.ExceptionInfo #"fuel limit"
                           (tender/run-main wasm [] caps {:fuel 10000})))))
 
+(deftest bounded-run-enforces-deadline-and-concurrency-admission
+  (testing "a blocking host provider is cancelled at the wall deadline"
+    (let [wasm (wat->wasm llm-infer-wat)
+          caps (contract/host-caps
+                {:grants [:llm-infer] :limits {:max-llm-infers 1}})
+          started (promise)
+          interrupted (promise)]
+      (is (thrown-with-msg?
+           clojure.lang.ExceptionInfo #"deadline exceeded"
+           (tender/run-main-bounded
+            wasm [:llm-infer] caps
+            {:deadline-ms 50
+             :llm-client {:infer-fn
+                          (fn [_]
+                            (deliver started true)
+                            (try (Thread/sleep 10000)
+                                 (catch InterruptedException _
+                                   (deliver interrupted true)))
+                            "late")}})))
+      (is (= true (deref started 1000 false)))
+      (is (= true (deref interrupted 1000 false)))))
+  (testing "saturation is rejected without queuing or parsing a guest"
+    (let [permits (java.util.concurrent.Semaphore. 1)]
+      (.acquire permits)
+      (try
+        (is (thrown-with-msg?
+             clojure.lang.ExceptionInfo #"concurrent run limit"
+             (tender/run-main-bounded
+              (byte-array 0) [] (contract/host-caps {})
+              {:run-permits permits :deadline-ms 100})))
+        (finally (.release permits))))))
+
+(deftest bounded-run-rejects-invalid-deadline-before-execution
+  (is (thrown-with-msg?
+       clojure.lang.ExceptionInfo #"deadline-ms must be positive"
+       (tender/run-main-bounded
+        (byte-array 0) [] (contract/host-caps {}) {:deadline-ms 0}))))
+
 (deftest memory-grow-within-cap-succeeds
   (let [wasm (wat->wasm (memory-grow-wat 1)) ; 1 initial + 1 = 2, exactly the cap
         caps (contract/host-caps {:limits {:max-memory-pages 2}})
@@ -978,6 +1122,31 @@
         caps (contract/host-caps {:grants [:clock-monotonic] :limits {:max-memory-pages 0}})]
     (is (pos? (tender/run-main wasm [:clock-monotonic] caps))
         "a guest declaring no memory section links and runs fine even with max-memory-pages 0")))
+
+(deftest session-grants-have-call-time-use-revoke-and-drop-lifecycle
+  (testing "successful host use is accounted and revocation applies immediately"
+    (let [wasm (wat->wasm clock-monotonic-wat)
+          caps (contract/host-caps {:grants [:clock-monotonic]})
+          session (tender/open-session wasm [:clock-monotonic] caps)]
+      (is (pos? (tender/session-call-main session)))
+      (is (= 1 (get-in (tender/authority-snapshot session)
+                       [:uses :clock-monotonic])))
+      (tender/revoke-import! session :clock-monotonic :incident-response)
+      (is (thrown-with-msg?
+           clojure.lang.ExceptionInfo #"host import denied"
+           (tender/session-call-main session)))
+      (is (= :incident-response
+             (get-in (tender/authority-snapshot session)
+                     [:reasons :clock-monotonic])))))
+  (testing "voluntary drop uses the same common host-call chokepoint"
+    (let [wasm (wat->wasm clock-monotonic-wat)
+          caps (contract/host-caps {:grants [:clock-monotonic]})
+          session (tender/open-session wasm [:clock-monotonic] caps)]
+      (tender/drop-import! session :clock-monotonic)
+      (is (contains? (:dropped (tender/authority-snapshot session))
+                     :clock-monotonic))
+      (is (thrown? clojure.lang.ExceptionInfo
+                   (tender/session-call-main session))))))
 
 (deftest log-write-byte-limit-denies-once-exceeded
   (let [wasm (wat->wasm log-write-thrice-wat)
