@@ -7,6 +7,8 @@
  :tcb/files
  [{:path "src/kototama/aiueos_adapter.clj" :role :policy-authority-adapter
    :sha256 "9e3fdb2e52aca8d017ad94d2d5bedd760039ed68357bade3a3fda033680fb6b9"}
+  {:path "src/kototama/component_authority.clj" :role :component-epoch-consumer
+   :sha256 "8a7e4963905e3f547230f3bdbceba60b76693a2c8462dd816efa3a33e9654a9d"}
   {:path "src/kototama/browser.cljc" :role :host-support-admission
    :sha256 "c7ee94f63c95c85a515074e291edbe9ccbfbef697e076dcda9687b7b517384ac"}
   {:path "src/kototama/cli.clj" :role :operator-entrypoint
@@ -72,7 +74,7 @@
    :git-sha "fc70904b49df13a20b54ab00de99284b02c9a458"
    :role :policy-kernel}
   {:coordinate "io.github.kotoba-lang/abi"
-   :git-sha "c389f687bbacd70623970ef908475e8dadec5876"
+   :git-sha "d1fed65e0fe17e660ae1f18fcb1a1346813ed7b8"
    :role :component-admission-contract}
   {:coordinate "wasmtime"
    :version "42.0.1"
