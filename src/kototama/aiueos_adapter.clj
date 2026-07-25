@@ -23,7 +23,8 @@
   tender still never decides a grant itself; ADR-2607022700's rule)."
   (:require [aiueos.cli :as cli]
             [kototama.contract :as contract]
-            [kototama.component-platform :as component-platform]))
+            [kototama.component-platform :as component-platform]
+            [kototama.component-provider :as component-provider]))
 
 (def kototama-import->aiueos-capability
   "kototama.contract import id -> aiueos capability keyword, for the subset
@@ -83,6 +84,12 @@
       (throw (ex-info "Component artifact ability descriptors do not match imports"
                       {:phase :component-grant :declared declared
                        :abilities (set (keys abilities))})))
+    ;; Engine selection is part of the TCB boundary, never an ambient detail
+    ;; of LINKER!.  Today the sole admitted Component adapter is Wasmtime;
+    ;; Chicory and workerd remain core-Wasm-only compatibility paths.
+    (component-provider/prepare!
+     {:runtime (:runtime opts) :component? true :artifact artifact
+      :grants declared :providers (select-keys providers declared)})
     (component-platform/admit-and-link!
      (assoc world :imports declared :grants declared
             :provider-bindings (select-keys providers declared)
