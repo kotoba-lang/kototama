@@ -68,6 +68,7 @@
   A denial, unknown import, or missing provider aborts before LINKER! runs."
   [artifact world component-bytes linker! providers opts]
   (let [declared (set (:capabilities artifact))
+        abilities (:component-imports artifact)
         {:keys [host-caps decision]} (host-caps-for-component artifact opts)
         expected (set (keep component-import->kototama-import declared))]
     (when-not (= expected (:grants host-caps))
@@ -78,9 +79,14 @@
       (throw (ex-info "Component provider binding is missing"
                       {:phase :component-grant :declared declared
                        :providers (set (keys providers))})))
+    (when-not (= declared (set (keys abilities)))
+      (throw (ex-info "Component artifact ability descriptors do not match imports"
+                      {:phase :component-grant :declared declared
+                       :abilities (set (keys abilities))})))
     (component-platform/admit-and-link!
      (assoc world :imports declared :grants declared
-            :provider-bindings (select-keys providers declared))
+            :provider-bindings (select-keys providers declared)
+            :abilities abilities)
      component-bytes linker!)))
 
 (def ^:private aiueos-cli-contract

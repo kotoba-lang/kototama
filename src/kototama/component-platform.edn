@@ -2,7 +2,7 @@
  :target :wasm-component-kotoba-v1
  :wasi {:default "0.3.0" :legacy ["0.2.11"]}
  :admission-keys [:target :wasi-version :profile :imports :exports
-                  :grants :provider-bindings :ambient-wasi :budgets :identity]
+                  :grants :provider-bindings :abilities :ambient-wasi :budgets :identity]
  :profiles {:sync {:wit-function :func :async-values false
                    :required-budgets [:fuel :memory-pages]}
             :async {:wit-function :async-func :async-values [:future :stream]

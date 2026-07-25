@@ -11,6 +11,9 @@
    :imports #{:kotoba/http-post} :exports #{:app/run}
    :grants #{:kotoba/http-post}
    :provider-bindings {:kotoba/http-post :provider/http}
+   :abilities {:kotoba/http-post {:target "https://api.example.test/submit"
+                                  :operation :http/post :max-bytes 1024 :max-items 1
+                                  :deadline-ms 1000 :audit-id "component-test"}}
    :ambient-wasi false :budgets {:fuel 1000000 :memory-pages 4}
    :identity {:component-cid (cid "component") :package-lock-cid (cid "lock")
               :definition-cids #{(cid "definition")}}})
@@ -26,6 +29,9 @@
   (is (= :ambient-authority (code (assoc valid :ambient-wasi true))))
   (is (= :capability-denied (code (assoc valid :grants #{}))))
   (is (= :unbound-import (code (assoc valid :provider-bindings {}))))
+  (is (= :ability-mismatch (code (assoc valid :abilities {}))))
+  (is (= :invalid-ability
+         (code (assoc-in valid [:abilities :kotoba/http-post :audit-id] ""))))
   (is (= :invalid-identity (code (assoc valid :identity {}))))
   (is (= :invalid-identity
          (code (assoc-in valid [:identity :component-cid] "bafycomponent"))))
@@ -47,6 +53,7 @@
            (platform/admit-and-link! world bytes
                                      (fn [request] (reset! linked request) :linked))))
     (is (= bytes (:component-bytes @linked)))
+    (is (= (:abilities world) (:abilities @linked)))
     (is (= :component-cid-mismatch
            (try (platform/admit-and-link!
                  (assoc-in world [:identity :component-cid] (cid "other")) bytes identity)
