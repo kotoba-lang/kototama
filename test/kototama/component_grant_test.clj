@@ -13,7 +13,11 @@
 
 (deftest denied-or-unbound-component-never-reaches-linker
   (let [bytes (.getBytes "component" "UTF-8")
-        artifact {:capabilities #{:aiueos.component/aiueos-clock-now}}
+        artifact {:capabilities #{:aiueos.component/aiueos-clock-now}
+                  :component-imports
+                  {:aiueos.component/aiueos-clock-now
+                   {:target "clock://monotonic" :operation :clock/now
+                    :max-bytes 1 :max-items 1 :deadline-ms 10 :audit-id "test"}}}
         world {:target :wasm-component-kotoba-v1 :wasi-version "0.3.0" :profile :sync
                :exports #{:app/run} :ambient-wasi false :budgets {:fuel 1 :memory-pages 1}
                :identity {:component-cid (mf/cidv1-raw bytes)

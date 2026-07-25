@@ -50,6 +50,22 @@
                    (every? cid? (:definition-cids identity)))
       (reject :invalid-identity "definition identities must be a bounded non-empty CID set"))))
 
+(defn- validate-abilities! [imports abilities]
+  (let [required #{:target :operation :max-bytes :max-items :deadline-ms :audit-id}]
+    (when-not (and (map? abilities)
+                   (= imports (set (keys abilities))))
+      (reject :ability-mismatch "every declared import requires one exact scoped ability"))
+    (doseq [[import ability] abilities]
+      (when-not (and (keyword? import)
+                     (map? ability)
+                     (= required (set (keys ability)))
+                     (string? (:target ability)) (seq (:target ability))
+                     (keyword? (:operation ability))
+                     (string? (:audit-id ability)) (seq (:audit-id ability))
+                     (every? #(pos-int? (get ability %))
+                             [:max-bytes :max-items :deadline-ms]))
+        (reject :invalid-ability "component ability is not a complete bounded descriptor")))))
+
 (defn validate-world!
   "Validate a decoded component admission envelope before engine instantiation."
   [world]
@@ -71,6 +87,7 @@
       (reject :unbound-import "every declared import requires one exact provider binding"))
     (when-not (every? (:grants world) (:imports world))
       (reject :capability-denied "component import is not granted"))
+    (validate-abilities! (:imports world) (:abilities world))
     (when-not (false? (:ambient-wasi world))
       (reject :ambient-authority "ambient WASI is forbidden"))
     (let [budgets (:budgets world)]
@@ -98,5 +115,6 @@
       (reject :invalid-linker "native Component linker is required"))
     (linker! {:component-bytes component-bytes
               :imports (:provider-bindings world)
+              :abilities (:abilities world)
               :budgets (:budgets world)
               :identity (:identity world)})))
