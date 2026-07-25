@@ -11,6 +11,7 @@
             [kototama.component-provider :as provider])
   (:import [java.io BufferedReader BufferedWriter File InputStreamReader OutputStreamWriter]
            [java.nio.file Files Path]
+           [java.security MessageDigest]
            [java.util.concurrent TimeUnit]))
 
 (defn- reject [code message]
@@ -22,11 +23,28 @@
          (catch NumberFormatException _
            (reject :invalid-engine-output "Wasmtime did not return one i64 result")))))
 
-(defn- host-executable! [path]
+(defn- sha256-file [^File file]
+  (let [digest (MessageDigest/getInstance "SHA-256")]
+    (with-open [input (java.io.FileInputStream. file)]
+      (let [buffer (byte-array 8192)]
+        (loop [read (.read input buffer)]
+          (when (pos? read)
+            (.update digest buffer 0 read)
+            (recur (.read input buffer))))))
+    (apply str (map #(format "%02x" (bit-and (int %) 0xff)) (.digest digest)))))
+
+(defn- host-executable! [path expected-sha256]
   (let [file (when path (File. ^String path))]
     (when-not (and file (.isAbsolute file) (.isFile file) (.canExecute file))
       (reject :invalid-component-host
               "effectful Component execution requires an absolute executable native host path"))
+    (when-not (and (string? expected-sha256)
+                   (re-matches #"[0-9a-f]{64}" expected-sha256))
+      (reject :invalid-component-host-identity
+              "effectful Component execution requires a pinned host SHA-256"))
+    (when-not (= expected-sha256 (sha256-file file))
+      (reject :component-host-identity-mismatch
+              "native Component host bytes do not match the admitted SHA-256"))
     (.getPath file)))
 
 (defn- write-json-line! [^BufferedWriter writer value]
@@ -52,7 +70,8 @@
   "Run an admitted effectful Component through the native Wasmtime micro-TCB.
    The host links no WASI interfaces and every imported WIT function is
    synchronously delegated through the previously admitted provider boundary."
-  [{:keys [runtime component-bytes imports abilities budgets artifact providers component-host]}]
+  [{:keys [runtime component-bytes imports abilities budgets artifact providers
+           component-host component-host-sha256]}]
   (when-not (= :wasmtime-component runtime)
     (reject :runtime-mismatch "Wasmtime Component adapter was not selected"))
   (when-not (bytes? component-bytes)
@@ -64,7 +83,7 @@
   (let [prepared (provider/prepare!
                   {:runtime runtime :component? true :artifact artifact
                    :grants (set (keys imports)) :providers providers})
-        executable (host-executable! component-host)
+        executable (host-executable! component-host component-host-sha256)
         deadline-ms (long (or (:deadline-ms budgets) 30000))
         path (Files/createTempFile "kototama-component-" ".wasm"
                                    (make-array java.nio.file.attribute.FileAttribute 0))]
@@ -166,9 +185,10 @@
    #(run-provider-free! (assoc % :runtime :wasmtime-component))))
 
 (defn admit-and-run-effectful!
-  [world component-bytes artifact providers component-host]
+  [world component-bytes artifact providers component-host component-host-sha256]
   (platform/admit-and-link!
    world component-bytes
    #(run-effectful! (assoc % :runtime :wasmtime-component
                            :artifact artifact :providers providers
-                           :component-host component-host))))
+                           :component-host component-host
+                           :component-host-sha256 component-host-sha256))))
