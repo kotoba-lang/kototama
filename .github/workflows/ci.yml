@@ -7,6 +7,16 @@ on:
       - main
 
 jobs:
+  wasmtime-component-host:
+    name: native Wasmtime Component host
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Check locked native micro-TCB
+        working-directory: native/wasmtime-component-host
+        run: cargo check --locked
+
   cljc-contract:
     name: CLJC contract gate
     runs-on: ubuntu-latest
