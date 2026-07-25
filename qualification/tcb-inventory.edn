@@ -1,5 +1,5 @@
 {:tcb/version 1
- :tcb/as-of "2026-07-23"
+ :tcb/as-of "2026-07-25"
  :tcb/scope
  "Code whose compromise can grant actor:host authority, bypass production
   admission or resource containment, falsify fleet fencing, or cross a
