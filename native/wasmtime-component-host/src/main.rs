@@ -9,6 +9,8 @@
 //! No WASI linker is installed.  Therefore a Component receives only the
 //! separately named aiueos imports carried in its admitted envelope.
 
+mod v2_bindings;
+
 use anyhow::{anyhow, bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
