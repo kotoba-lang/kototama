@@ -4,7 +4,8 @@
    Kototama owns this contract and grant enforcement; Wasmtime, Chicory-core
    compatibility, and workerd are engines/adapters, not competing policy
    implementations."
-  (:require [clojure.set :as set]))
+  (:require [clojure.set :as set]
+            [kotoba.abi.contract :as abi]))
 
 (def supported-runtimes #{:wasmtime-component :chicory-core-compat :workerd-core})
 
@@ -40,7 +41,7 @@
     (when-not (= declared granted)
       (throw (ex-info "Component capabilities and grants differ"
                       {:phase :component-provider :declared declared :grants granted})))
-    (when-not (= declared (set (keys providers)))
+    (when-not (abi/exact-import-grant-provider-sets? declared granted providers)
       (throw (ex-info "Component providers must exactly match grants"
                       {:phase :component-provider :declared declared
                        :providers (set (keys providers))})))
