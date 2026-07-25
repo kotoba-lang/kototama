@@ -48,3 +48,37 @@
                  (adapter/admit-component-with-aiueos!
                   artifact world bytes #(reset! linked true) providers {:runtime :chicory-core-compat})))
     (is (false? @linked))))
+
+(deftest provider-authorization-observes-live-control-plane-epoch
+  (let [bytes (.getBytes "component" "UTF-8")
+        import :aiueos.component/aiueos-clock-now
+        ability {:target "clock://monotonic" :operation :clock/now
+                 :max-bytes 1 :max-items 1 :deadline-ms 10 :audit-id "epoch-test"}
+        artifact {:capabilities #{import}
+                  :component-imports {import ability}}
+        world {:target :wasm-component-kotoba-v1 :wasi-version "0.3.0" :profile :sync
+               :exports #{:app/run} :ambient-wasi false
+               :budgets {:fuel 1 :memory-pages 1}
+               :identity {:component-cid (mf/cidv1-raw bytes)
+                          :package-lock-cid (mf/cidv1-raw (.getBytes "lock" "UTF-8"))
+                          :definition-cids #{(mf/cidv1-raw (.getBytes "def" "UTF-8"))}}}
+        epoch (atom 7)
+        admitted (atom nil)]
+    (adapter/admit-component-with-aiueos!
+     artifact world bytes #(reset! admitted %) {import :clock-provider}
+     {:runtime :wasmtime-component
+      :component-host-sha256 (apply str (repeat 64 "a"))
+      :lease-epoch-source #(deref epoch)
+      :now-ms (constantly 1000)
+      :lease-ttl-ms 10000})
+    (is (= 7 (:lease-epoch @admitted)))
+    (is (true? ((:lease-authorize? @admitted) import ability)))
+    (reset! epoch 8)
+    (is (false? ((:lease-authorize? @admitted) import ability)))))
+
+(deftest invalid-live-epoch-source-fails-closed
+  (is (thrown? clojure.lang.ExceptionInfo
+                 (#'adapter/current-lease-epoch! (constantly 0))))
+  (is (thrown? clojure.lang.ExceptionInfo
+                 (#'adapter/current-lease-epoch!
+                  #(throw (ex-info "control plane unavailable" {}))))))

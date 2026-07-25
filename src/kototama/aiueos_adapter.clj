@@ -56,6 +56,22 @@
 
 (declare host-caps-for-imports)
 
+(defn- current-lease-epoch!
+  [epoch-source]
+  (let [epoch (try
+                (epoch-source)
+                (catch Exception cause
+                  (throw (ex-info "Component lease epoch source failed"
+                                  {:phase :component-grant
+                                   :reason :epoch-source-failed}
+                                  cause))))]
+    (when-not (and (integer? epoch) (pos? epoch))
+      (throw (ex-info "Component lease epoch must be a positive integer"
+                      {:phase :component-grant
+                       :reason :invalid-lease-epoch
+                       :epoch epoch})))
+    epoch))
+
 (defn host-caps-for-component
   "Ask aiueos for exactly the imports declared by a compiler Component
   artifact. ARTIFACT is the compiler result's public capability set; unknown
@@ -81,21 +97,27 @@
   exact WIT bindings and delegates CID/world verification to component-platform.
   A denial, unknown import, or missing provider aborts before LINKER! runs."
   [artifact world component-bytes linker! providers
-   {:keys [lease-id lease-epoch lease-ttl-ms now-ms execution-identity] :as opts}]
+   {:keys [lease-id lease-epoch lease-epoch-source lease-ttl-ms now-ms
+           execution-identity] :as opts}]
   (let [declared (set (:capabilities artifact))
         abilities (:component-imports artifact)
         {:keys [host-caps decision]} (host-caps-for-component artifact opts)
         now-ms (or now-ms #(System/currentTimeMillis))
         issued-at (long (if (ifn? now-ms) (now-ms) now-ms))
-        lease-epoch (or lease-epoch 1)
+        _ (when (and lease-epoch-source (not (ifn? lease-epoch-source)))
+            (throw (ex-info "Component lease epoch source must be callable"
+                            {:phase :component-grant
+                             :reason :invalid-epoch-source})))
+        epoch-source (or lease-epoch-source (constantly (or lease-epoch 1)))
+        issued-epoch (current-lease-epoch! epoch-source)
         lease (component-abi/issue-lease
                {:decision decision :imports declared :abilities abilities
-                :now issued-at :epoch lease-epoch
+                :now issued-at :epoch issued-epoch
                 :ttl-ms (or lease-ttl-ms 30000)
                 :lease-id (or lease-id (str "component-" issued-at))})
         lease-authorize?
         #(component-abi/lease-authorizes?
-          lease lease-epoch
+          lease (current-lease-epoch! epoch-source)
           (long (if (ifn? now-ms) (now-ms) now-ms))
           %1 %2)
         expected (set (keep component-import->kototama-import declared))]
@@ -129,7 +151,8 @@
      ;; The admitted world remains a closed ABI envelope. Lease state is
      ;; host-local and reaches only the provider invocation boundary.
      #(linker! (assoc % :lease lease
-                      :lease-epoch lease-epoch
+                      :lease-epoch issued-epoch
+                      :lease-epoch-source epoch-source
                       :now-ms now-ms
                       :lease-authorize? lease-authorize?)))))
 
