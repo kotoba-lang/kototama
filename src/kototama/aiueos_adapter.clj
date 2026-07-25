@@ -46,6 +46,8 @@
   {:aiueos.component/aiueos-clock-now :clock-monotonic
    :aiueos.component/aiueos-log-append :log-write})
 
+(declare host-caps-for-imports)
+
 (defn host-caps-for-component
   "Ask aiueos for exactly the imports declared by a compiler Component
   artifact. ARTIFACT is the compiler result's public capability set; unknown
@@ -83,8 +85,6 @@
 
 (def ^:private aiueos-cli-contract
   (delay (cli/read-contract)))
-
-(declare host-caps-for-imports)
 
 (defn manifest-for-imports
   "An aiueos manifest requesting IMPORT-IDS (kototama.contract import ids
