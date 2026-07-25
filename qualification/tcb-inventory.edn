@@ -20,7 +20,7 @@
   {:path "src/kototama/wasmtime_component.clj" :role :native-component-engine-adapter
    :sha256 "5459bd3f7a16a51af53d033166c9e30583a148034661a5a826894f065c7740d1"}
   {:path "native/wasmtime-component-host/src/main.rs" :role :native-component-engine-host
-   :sha256 "f3c328982d8fa8ba30590aef20e9ce1cb35a4b0064954b49dc00ec419c11a749"}
+   :sha256 "eaf24f9de954970f33bcc4c2e5230b575b5d6b16558134b07042067ae52e6e60"}
   {:path "native/wasmtime-component-host/src/v2_bindings.rs" :role :native-component-wit-binding
    :sha256 "beac30237d5419e44f96696c084b633a8234e3fe23f69316e2b8225e6f66d0a6"}
   {:path "src/kototama/workerd_core.clj" :role :workerd-core-engine-adapter

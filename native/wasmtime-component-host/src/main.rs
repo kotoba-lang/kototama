@@ -66,9 +66,8 @@ struct State {
     // process.  A compromised or buggy provider therefore cannot turn a
     // bounded grant into an unbounded sequence of guest calls.
     calls: BTreeMap<String, u64>,
-    // `acquire` is intentionally restricted to a single admitted named
-    // import. The v2 WIT operation has no selector, so choosing among several
-    // grants here would turn an opaque resource into an ambient authority.
+    // A WIT v2 acquisition request is mapped to this exact admitted import;
+    // the guest can name an operation but cannot create or widen a grant.
     admitted_imports: BTreeMap<String, Ability>,
 }
 
@@ -347,14 +346,23 @@ impl v2_capability::HostGrant for State {
 }
 
 impl v2_capability::Host for State {
-    fn acquire(&mut self) -> wasmtime::Result<Result<Resource<Grant>, V2Denial>> {
-        if self.admitted_imports.len() != 1 {
+    fn acquire(
+        &mut self,
+        request: v2_capability::GrantRequest,
+    ) -> wasmtime::Result<Result<Resource<Grant>, V2Denial>> {
+        let name = match request {
+            v2_capability::GrantRequest::IdentitySign => "aiueos-identity-sign",
+            v2_capability::GrantRequest::IdentityVerify => "aiueos-identity-verify",
+            v2_capability::GrantRequest::HashSha256 => "aiueos-hash-sha256",
+            v2_capability::GrantRequest::HttpPost => "aiueos-http-post",
+            v2_capability::GrantRequest::LogRead => "aiueos-log-read",
+            v2_capability::GrantRequest::LogAppend => "aiueos-log-append",
+            v2_capability::GrantRequest::ClockNow => "aiueos-clock-now",
+        };
+        let Some(ability) = self.admitted_imports.get(name).cloned() else {
             return Ok(Err(V2Denial::ProviderFailed));
-        }
-        let (name, ability) = self.admitted_imports.iter().next().expect("checked length");
-        let name = name.clone();
-        let ability = ability.clone();
-        Ok(issue_grant(self, &name, &ability).map_err(denial))
+        };
+        Ok(issue_grant(self, name, &ability).map_err(denial))
     }
 }
 
@@ -608,5 +616,36 @@ mod tests {
         let grant = issue_grant(&mut state, "aiueos-clock-now", &ability).unwrap();
         assert!(authorize_grant(&state, &grant, "aiueos-clock-now", &ability).is_ok());
         assert!(authorize_grant(&state, &grant, "aiueos-log-append", &ability).is_err());
+    }
+
+    #[test]
+    fn typed_acquire_issues_only_the_requested_admitted_grant() {
+        let protocol = Arc::new(Mutex::new(Protocol {
+            input: BufReader::new(io::stdin()),
+            output: BufWriter::new(io::stdout()),
+        }));
+        let ability = bounded_ability();
+        let mut state = State {
+            protocol,
+            limits: StoreLimitsBuilder::new().build(),
+            grants: ResourceTable::new(),
+            calls: BTreeMap::new(),
+            admitted_imports: BTreeMap::from([("aiueos-clock-now".into(), ability.clone())]),
+        };
+        let grant = <State as v2_capability::Host>::acquire(
+            &mut state,
+            v2_capability::GrantRequest::ClockNow,
+        )
+        .unwrap()
+        .unwrap();
+        assert!(authorize_grant(&state, &grant, "aiueos-clock-now", &ability).is_ok());
+        assert!(
+            <State as v2_capability::Host>::acquire(
+                &mut state,
+                v2_capability::GrantRequest::HttpPost,
+            )
+            .unwrap()
+            .is_err()
+        );
     }
 }
