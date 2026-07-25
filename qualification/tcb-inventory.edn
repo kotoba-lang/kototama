@@ -54,7 +54,7 @@
   {:path "src/kototama/tcb.clj" :role :tcb-drift-verifier
    :sha256 "9c7c9a9527d6a7c553ea7b4712bbb3a069aff1958874086537c7dba75aeeee18"}
   {:path "src/kototama/tender.clj" :role :wasm-runtime-host-abi
-   :sha256 "cf2bb933c845da44fa83f4d53781bf8dc0cbcf46c49f6e9f4833ebf7959f6752"}
+   :sha256 "a387166b632b05c6295c1ea83f403e8fa85ce0ccac000b8bafe17dbf2758bb34"}
   {:path "src/kototama/transport_provider.clj" :role :transport-provider-boundary
    :sha256 "e660a3388c15d258d49721212da675ed0bdb503f4c8008d37687e0787784a698"}]
  :tcb/external

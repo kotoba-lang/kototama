@@ -110,7 +110,6 @@
             [kototama.compatibility :as compatibility]
             [kototama.contract :as contract]
             [kototama.network-authority :as network]
-            [kotoba.security.effect :as effect]
             [kototama.signer-lifecycle :as signer]
             [ed25519.core :as ed])
   (:import (com.dylibso.chicory.runtime ExecutionListener HostFunction ImportFunction
