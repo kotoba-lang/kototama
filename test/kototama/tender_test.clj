@@ -643,6 +643,21 @@
       (is (thrown? clojure.lang.ExceptionInfo
                    (tender/session-call-main session))))))
 
+(deftest capability-lease-use-budget-is-consumed-atomically
+  (let [wasm (wat->wasm clock-monotonic-wat)
+        caps (contract/host-caps {:grants [:clock-monotonic]})
+        lease {:format :kotoba.capability-lease/v1
+               :capability-cid "bafy-lease" :execution-identity-cid "bafy-execution"
+               :component-cid "bafy-component" :resource-cid "bafy-clock"
+               :purpose :clock/monotonic :expires-at "2026-07-25T00:01:00Z"
+               :uses 1 :transfer :non-transferable :delegation-depth 0}
+        session (tender/open-session wasm [:clock-monotonic] caps
+                                     {:capability-leases {:clock-monotonic lease}})]
+    (is (pos? (tender/session-call-main session)))
+    (is (zero? (get-in (tender/authority-snapshot session) [:remaining :clock-monotonic])))
+    (is (contains? (:consumed (tender/authority-snapshot session)) :clock-monotonic))
+    (is (thrown? clojure.lang.ExceptionInfo (tender/session-call-main session)))))
+
 (deftest log-write-byte-limit-denies-once-exceeded
   (let [wasm (wat->wasm log-write-thrice-wat)
         caps (contract/host-caps {:grants [:log-write]
