@@ -69,7 +69,10 @@ jobs:
           done
           # The Component E2E targets the published compiler Component ABI,
           # rather than whatever happens to be at compiler/main.
-          git -C ../compiler fetch --depth 1 origin e228eae
+          # The commit is carried by the published feature branch; fetching
+          # the named ref (rather than an abbreviated object ID) works from a
+          # fresh, shallow GitHub Actions clone.
+          git -C ../compiler fetch origin agent/nested-record-ref-v1
           git -C ../compiler checkout --detach e228eae
       - name: Test CLJC contract
         env:
