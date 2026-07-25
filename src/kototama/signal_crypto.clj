@@ -5,12 +5,9 @@
   - HKDF-Extract/Expand (RFC 5869)
   - Epoch-key derivation (per-message ephemeral nonce)
   - AEAD encryption/decryption wrapper (ChaCha20-Poly1305)"
-  #?(:clj (:require [kotoba.security.hkdf :as hkdf]
+    (:require [kotoba.security.hkdf :as hkdf]
                     [kotoba.security.aead :as aead]
-                    [kotoba.security.ed25519 :as ed25519])
-     :cljs (:require [kotoba.security.hkdf :as hkdf]
-                    [kotoba.security.aead :as aead]
-                    [kotoba.security.ed25519 :as ed25519])))
+                    [kotoba.security.ed25519 :as ed25519]))
 
 (def AEAD-KEY-LEN 32)
 (def AEAD-NONCE-LEN 12)
