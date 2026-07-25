@@ -16,6 +16,8 @@
         org.clojure/data.json {:mvn/version "2.5.0"}
         io.github.kotoba-lang/security {:git/url "https://github.com/kotoba-lang/security.git"
                                         :git/sha "c83183f7b66afda6a095e690ff617075a39cc0eb"}
+        io.github.kotoba-lang/abi {:git/url "https://github.com/kotoba-lang/abi.git"
+                                   :git/sha "85a91d5b6b774b3be91722c7759621132de08d8d"}
         ;; Component admission verifies identity CIDs structurally before
         ;; linking; a leading `b` is not evidence of content addressing.
         io.github.kotoba-lang/io-multiformats
