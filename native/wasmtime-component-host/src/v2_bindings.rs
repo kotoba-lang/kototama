@@ -8,4 +8,9 @@ wasmtime::component::bindgen!({
     path: "wit/aiueos-capability-v2",
     world: "application",
     imports: { default: trappable },
+    // The opaque WIT resource is backed by the native-only record below;
+    // generated provider traits therefore cannot manufacture a grant.
+    with: {
+        "aiueos:capability/capability.grant": crate::Grant,
+    },
 });

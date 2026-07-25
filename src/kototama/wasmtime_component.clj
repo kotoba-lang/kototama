@@ -2,8 +2,8 @@
   "Narrow native Wasmtime adapter for provider-free Kotoba Components.
 
   It intentionally exposes no WASI directories, environment, arguments, or
-  inherited stdio. Effectful Components stay rejected until their typed WIT
-  provider adapters are implemented; the CLI must never become an ambient
+  inherited stdio. The native host delegates only its admitted scalar-v1 or
+  typed-v2 named provider calls; the CLI must never become an ambient
   authority escape hatch."
   (:require [clojure.string :as str]
             [clojure.data.json :as json]
@@ -122,15 +122,19 @@
                           (case (:type message)
                             "provider-call"
                             (let [import (keyword "aiueos.component" (:import message))
-                                  result (provider/invoke! prepared import (:payload message))]
+                                  payload (:payload message)
+                                  legacy-scalar? (contains? payload :value)
+                                  result (provider/invoke! prepared import payload)]
                               (when-not (= (host-ability (get abilities import))
                                            (:ability message))
                                 (reject :ability-mismatch "native host changed an ability descriptor"))
-                              (when-not (integer? result)
+                              (when (and legacy-scalar? (not (integer? result)))
                                 (reject :invalid-provider-result "Component provider must return i64"))
-                              (write-json-line! writer {:type "provider-result"
-                                                        :import (:import message)
-                                                        :value (long result)})
+                              (write-json-line! writer
+                                                (cond-> {:type "provider-result"
+                                                         :import (:import message)}
+                                                  legacy-scalar? (assoc :value (long result))
+                                                  (not legacy-scalar?) (assoc :payload result)))
                               (recur))
                             "result" {:result (long (:value message)) :runtime runtime}
                             "error" (reject :engine-failed

@@ -11,9 +11,9 @@
 
 mod v2_bindings;
 
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{Context, Result, anyhow, bail};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::BTreeMap;
 use std::io::{self, BufRead, BufReader, BufWriter, Write};
 use std::sync::{Arc, Mutex};
@@ -66,27 +66,41 @@ struct State {
     // process.  A compromised or buggy provider therefore cannot turn a
     // bounded grant into an unbounded sequence of guest calls.
     calls: BTreeMap<String, u64>,
+    // `acquire` is intentionally restricted to a single admitted named
+    // import. The v2 WIT operation has no selector, so choosing among several
+    // grants here would turn an opaque resource into an ambient authority.
+    admitted_imports: BTreeMap<String, Ability>,
 }
 
 #[derive(Debug, Clone)]
-struct Grant {
+pub struct Grant {
     import: String,
     ability: Ability,
 }
 
 fn issue_grant(state: &mut State, name: &str, ability: &Ability) -> Result<Resource<Grant>> {
     validate_ability(name, ability)?;
-    state.grants.push(Grant {
-        import: name.to_owned(),
-        ability: ability.clone(),
-    }).map_err(|error| anyhow!("cannot issue Component grant resource: {error}"))
+    state
+        .grants
+        .push(Grant {
+            import: name.to_owned(),
+            ability: ability.clone(),
+        })
+        .map_err(|error| anyhow!("cannot issue Component grant resource: {error}"))
 }
 
-fn authorize_grant(state: &State, grant: &Resource<Grant>, name: &str, ability: &Ability) -> Result<()> {
+fn authorize_grant(
+    state: &State,
+    grant: &Resource<Grant>,
+    name: &str,
+    ability: &Ability,
+) -> Result<()> {
     // Borrowed resources are looked up in a host-only table. A forged handle,
     // wrong resource type, or a handle issued for another import is denied
     // before provider protocol I/O begins.
-    let issued = state.grants.get(grant)
+    let issued = state
+        .grants
+        .get(grant)
         .map_err(|error| anyhow!("invalid Component grant resource: {error}"))?;
     if issued.import != name || issued.ability != *ability {
         bail!("Component grant resource does not authorize import {name}");
@@ -114,8 +128,11 @@ fn validate_ability(name: &str, ability: &Ability) -> Result<()> {
     if ability.operation != expected_operation {
         bail!("import {name} is bound to an invalid operation");
     }
-    if ability.target.is_empty() || ability.audit_id.is_empty()
-        || ability.max_bytes == 0 || ability.max_items == 0 || ability.deadline_ms == 0
+    if ability.target.is_empty()
+        || ability.audit_id.is_empty()
+        || ability.max_bytes == 0
+        || ability.max_items == 0
+        || ability.deadline_ms == 0
     {
         bail!("import {name} has an unbounded or incomplete ability");
     }
@@ -129,9 +146,15 @@ fn send(protocol: &mut Protocol, value: &Value) -> Result<()> {
     Ok(())
 }
 
-fn consume_item_quota(calls: &mut BTreeMap<String, u64>, name: &str, ability: &Ability) -> Result<()> {
+fn consume_item_quota(
+    calls: &mut BTreeMap<String, u64>,
+    name: &str,
+    ability: &Ability,
+) -> Result<()> {
     let calls = calls.entry(name.to_owned()).or_insert(0);
-    *calls = calls.checked_add(1).ok_or_else(|| anyhow!("provider call counter overflow"))?;
+    *calls = calls
+        .checked_add(1)
+        .ok_or_else(|| anyhow!("provider call counter overflow"))?;
     if *calls > ability.max_items {
         bail!("import {name} exceeded its admitted max-items quota");
     }
@@ -142,13 +165,19 @@ fn provider_call(state: &mut State, name: &str, ability: &Ability, value: i64) -
     // The descriptor is captured while linking, never supplied by the guest.
     validate_ability(name, ability)?;
     consume_item_quota(&mut state.calls, name, ability)?;
-    let mut protocol = state.protocol.lock().map_err(|_| anyhow!("protocol lock poisoned"))?;
-    send(&mut protocol, &json!({
-        "type": "provider-call",
-        "import": name,
-        "ability": ability,
-        "payload": { "value": value }
-    }))?;
+    let mut protocol = state
+        .protocol
+        .lock()
+        .map_err(|_| anyhow!("protocol lock poisoned"))?;
+    send(
+        &mut protocol,
+        &json!({
+            "type": "provider-call",
+            "import": name,
+            "ability": ability,
+            "payload": { "value": value }
+        }),
+    )?;
     let mut response = String::new();
     if protocol.input.read_line(&mut response)? == 0 {
         bail!("provider closed protocol before responding");
@@ -160,9 +189,269 @@ fn provider_call(state: &mut State, name: &str, ability: &Ability, value: i64) -
     if response.get("import") != Some(&Value::String(name.into())) {
         bail!("provider response import does not match request");
     }
-    response.get("value")
+    response
+        .get("value")
         .and_then(Value::as_i64)
         .ok_or_else(|| anyhow!("provider response must contain an i64 value"))
+}
+
+fn provider_call_typed(
+    state: &mut State,
+    name: &str,
+    ability: &Ability,
+    payload: Value,
+) -> Result<Value> {
+    validate_ability(name, ability)?;
+    consume_item_quota(&mut state.calls, name, ability)?;
+    let mut protocol = state
+        .protocol
+        .lock()
+        .map_err(|_| anyhow!("protocol lock poisoned"))?;
+    send(
+        &mut protocol,
+        &json!({
+            "type": "provider-call",
+            "import": name,
+            "ability": ability,
+            "payload": payload
+        }),
+    )?;
+    let mut response = String::new();
+    if protocol.input.read_line(&mut response)? == 0 {
+        bail!("provider closed protocol before responding");
+    }
+    let response: Value = serde_json::from_str(&response).context("invalid provider response")?;
+    if response.get("type") != Some(&Value::String("provider-result".into()))
+        || response.get("import") != Some(&Value::String(name.into()))
+    {
+        bail!("provider response does not match typed request");
+    }
+    response
+        .get("payload")
+        .cloned()
+        .ok_or_else(|| anyhow!("typed provider response is missing payload"))
+}
+
+use crate::v2_bindings::aiueos::capability::capability as v2_capability;
+type V2Denial = v2_capability::Denial;
+
+fn denial(error: anyhow::Error) -> V2Denial {
+    if error.to_string().contains("max-items quota") {
+        V2Denial::Quota
+    } else {
+        V2Denial::ProviderFailed
+    }
+}
+
+fn v2_authorize(state: &State, grant: &Resource<Grant>, name: &str) -> Result<Ability> {
+    let ability = state
+        .admitted_imports
+        .get(name)
+        .ok_or_else(|| anyhow!("Component did not admit typed import {name}"))?;
+    authorize_grant(state, grant, name, ability)?;
+    Ok(ability.clone())
+}
+
+fn typed_call(
+    state: &mut State,
+    grant: &Resource<Grant>,
+    name: &str,
+    payload: Value,
+) -> Result<Value, V2Denial> {
+    let ability = v2_authorize(state, grant, name).map_err(denial)?;
+    if serde_json::to_vec(&payload)
+        .map_err(|_| V2Denial::ProviderFailed)?
+        .len()
+        > ability.max_bytes as usize
+    {
+        return Err(V2Denial::Quota);
+    }
+    let result = provider_call_typed(state, name, &ability, payload).map_err(denial)?;
+    if serde_json::to_vec(&result)
+        .map_err(|_| V2Denial::ProviderFailed)?
+        .len()
+        > ability.max_bytes as usize
+    {
+        return Err(V2Denial::Quota);
+    }
+    Ok(result)
+}
+
+fn bytes(value: &Value) -> Result<Vec<u8>, V2Denial> {
+    value
+        .as_array()
+        .ok_or(V2Denial::ProviderFailed)?
+        .iter()
+        .map(|byte| {
+            byte.as_u64()
+                .filter(|byte| *byte <= u8::MAX as u64)
+                .map(|byte| byte as u8)
+                .ok_or(V2Denial::ProviderFailed)
+        })
+        .collect()
+}
+
+fn bytes_response(value: Value) -> Result<v2_capability::BytesResponse, V2Denial> {
+    Ok(v2_capability::BytesResponse {
+        bytes: bytes(value.get("bytes").ok_or(V2Denial::ProviderFailed)?)?,
+    })
+}
+
+fn headers(value: &Value) -> Result<Vec<(String, String)>, V2Denial> {
+    value
+        .as_array()
+        .ok_or(V2Denial::ProviderFailed)?
+        .iter()
+        .map(|entry| {
+            let pair = entry.as_array().ok_or(V2Denial::ProviderFailed)?;
+            if pair.len() != 2 {
+                return Err(V2Denial::ProviderFailed);
+            }
+            Ok((
+                pair[0].as_str().ok_or(V2Denial::ProviderFailed)?.to_owned(),
+                pair[1].as_str().ok_or(V2Denial::ProviderFailed)?.to_owned(),
+            ))
+        })
+        .collect()
+}
+
+fn http_response(value: Value) -> Result<v2_capability::HttpPostResponse, V2Denial> {
+    Ok(v2_capability::HttpPostResponse {
+        status: value
+            .get("status")
+            .and_then(Value::as_u64)
+            .filter(|status| *status <= u16::MAX as u64)
+            .ok_or(V2Denial::ProviderFailed)? as u16,
+        headers: headers(value.get("headers").ok_or(V2Denial::ProviderFailed)?)?,
+        body: bytes(value.get("body").ok_or(V2Denial::ProviderFailed)?)?,
+    })
+}
+
+fn log_read_response(value: Value) -> Result<v2_capability::LogReadResponse, V2Denial> {
+    Ok(v2_capability::LogReadResponse {
+        next_cursor: value
+            .get("next-cursor")
+            .and_then(Value::as_u64)
+            .ok_or(V2Denial::ProviderFailed)?,
+        bytes: bytes(value.get("bytes").ok_or(V2Denial::ProviderFailed)?)?,
+    })
+}
+
+impl v2_capability::HostGrant for State {
+    fn drop(&mut self, rep: Resource<Grant>) -> wasmtime::Result<()> {
+        self.grants
+            .delete(rep)
+            .map(|_| ())
+            .map_err(|error| wasmtime::Error::msg(format!("cannot drop Component grant: {error}")))
+    }
+}
+
+impl v2_capability::Host for State {
+    fn acquire(&mut self) -> wasmtime::Result<Result<Resource<Grant>, V2Denial>> {
+        if self.admitted_imports.len() != 1 {
+            return Ok(Err(V2Denial::ProviderFailed));
+        }
+        let (name, ability) = self.admitted_imports.iter().next().expect("checked length");
+        let name = name.clone();
+        let ability = ability.clone();
+        Ok(issue_grant(self, &name, &ability).map_err(denial))
+    }
+}
+
+impl v2_bindings::aiueos::capability::identity::Host for State {
+    fn sign(
+        &mut self,
+        authority: Resource<Grant>,
+        request: v2_capability::BytesRequest,
+    ) -> wasmtime::Result<Result<v2_capability::BytesResponse, V2Denial>> {
+        Ok(typed_call(
+            self,
+            &authority,
+            "aiueos-identity-sign",
+            json!({"bytes": request.bytes}),
+        )
+        .and_then(bytes_response))
+    }
+    fn verify(
+        &mut self,
+        authority: Resource<Grant>,
+        request: v2_capability::BytesRequest,
+    ) -> wasmtime::Result<Result<bool, V2Denial>> {
+        Ok(typed_call(
+            self,
+            &authority,
+            "aiueos-identity-verify",
+            json!({"bytes": request.bytes}),
+        )
+        .and_then(|value| value.as_bool().ok_or(V2Denial::ProviderFailed)))
+    }
+}
+
+impl v2_bindings::aiueos::capability::hash::Host for State {
+    fn sha256(
+        &mut self,
+        authority: Resource<Grant>,
+        request: v2_capability::BytesRequest,
+    ) -> wasmtime::Result<Result<v2_capability::BytesResponse, V2Denial>> {
+        Ok(typed_call(
+            self,
+            &authority,
+            "aiueos-hash-sha256",
+            json!({"bytes": request.bytes}),
+        )
+        .and_then(bytes_response))
+    }
+}
+
+impl v2_bindings::aiueos::capability::http::Host for State {
+    fn post(
+        &mut self,
+        authority: Resource<Grant>,
+        request: v2_capability::HttpPostRequest,
+    ) -> wasmtime::Result<Result<v2_capability::HttpPostResponse, V2Denial>> {
+        let payload =
+            json!({"path": request.path, "headers": request.headers, "body": request.body});
+        Ok(typed_call(self, &authority, "aiueos-http-post", payload).and_then(http_response))
+    }
+}
+
+impl v2_bindings::aiueos::capability::log::Host for State {
+    fn read(
+        &mut self,
+        authority: Resource<Grant>,
+        request: v2_capability::LogReadRequest,
+    ) -> wasmtime::Result<Result<v2_capability::LogReadResponse, V2Denial>> {
+        let payload = json!({"cursor": request.cursor, "max-bytes": request.max_bytes});
+        Ok(typed_call(self, &authority, "aiueos-log-read", payload).and_then(log_read_response))
+    }
+    fn append(
+        &mut self,
+        authority: Resource<Grant>,
+        request: v2_capability::BytesRequest,
+    ) -> wasmtime::Result<Result<(), V2Denial>> {
+        Ok(typed_call(
+            self,
+            &authority,
+            "aiueos-log-append",
+            json!({"bytes": request.bytes}),
+        )
+        .and_then(|value| {
+            if value.is_null() {
+                Ok(())
+            } else {
+                Err(V2Denial::ProviderFailed)
+            }
+        }))
+    }
+}
+
+impl v2_bindings::aiueos::capability::clock::Host for State {
+    fn now(&mut self, authority: Resource<Grant>) -> wasmtime::Result<Result<u64, V2Denial>> {
+        Ok(
+            typed_call(self, &authority, "aiueos-clock-now", Value::Null)
+                .and_then(|value| value.as_u64().ok_or(V2Denial::ProviderFailed)),
+        )
+    }
 }
 
 // With Wasmtime's deliberately minimal feature set its error type does not
@@ -188,35 +477,62 @@ fn run(request: Run, protocol: Arc<Mutex<Protocol>>) -> Result<i64> {
     config.wasm_component_model(true);
     config.consume_fuel(true);
     let engine = wasmtime_result(Engine::new(&config), "cannot create Component engine")?;
-    let component = wasmtime_result(Component::from_file(&engine, &request.component),
-                                    "cannot compile admitted Component")?;
+    let component = wasmtime_result(
+        Component::from_file(&engine, &request.component),
+        "cannot compile admitted Component",
+    )?;
     let limits = StoreLimitsBuilder::new()
         .memory_size(request.memory_pages.saturating_mul(65536) as usize)
         .build();
-    let mut store = Store::new(&engine, State {
-        protocol,
-        limits,
-        grants: ResourceTable::new(),
-        calls: BTreeMap::new(),
-    });
+    let mut store = Store::new(
+        &engine,
+        State {
+            protocol,
+            limits,
+            grants: ResourceTable::new(),
+            calls: BTreeMap::new(),
+            admitted_imports: imports.clone(),
+        },
+    );
     store.limiter(|state| &mut state.limits);
     wasmtime_result(store.set_fuel(request.fuel), "cannot set Component fuel")?;
 
     let mut linker = Linker::<State>::new(&engine);
+    // Register the generated v2 interfaces as named Component imports. This
+    // remains separate from the legacy scalar v1 bindings below and adds no
+    // WASI or fallback namespace.
+    wasmtime_result(
+        v2_bindings::Application::add_to_linker::<State, wasmtime::component::HasSelf<State>>(
+            &mut linker,
+            |state| state,
+        ),
+        "cannot bind typed Component capability interfaces",
+    )?;
     for (name, ability) in imports {
         let import_name = name.clone();
-        wasmtime_result(linker.root().func_wrap(&name, move |mut cx, (value,): (i64,)| {
-            provider_call(cx.data_mut(), &import_name, &ability, value)
-                .map(|result| (result,))
-                .map_err(|error| wasmtime::Error::msg(error.to_string()))
-        }), "cannot bind admitted Component import")?;
+        wasmtime_result(
+            linker
+                .root()
+                .func_wrap(&name, move |mut cx, (value,): (i64,)| {
+                    provider_call(cx.data_mut(), &import_name, &ability, value)
+                        .map(|result| (result,))
+                        .map_err(|error| wasmtime::Error::msg(error.to_string()))
+                }),
+            "cannot bind admitted Component import",
+        )?;
     }
-    let instance = wasmtime_result(linker.instantiate(&mut store, &component),
-                                   "Component imports did not match the admitted bindings")?;
-    let function = instance.get_func(&mut store, "main")
+    let instance = wasmtime_result(
+        linker.instantiate(&mut store, &component),
+        "Component imports did not match the admitted bindings",
+    )?;
+    let function = instance
+        .get_func(&mut store, "main")
         .ok_or_else(|| anyhow!("Component does not export main"))?;
     let mut results = [Val::S64(0)];
-    wasmtime_result(function.call(&mut store, &[], &mut results), "Component main failed")?;
+    wasmtime_result(
+        function.call(&mut store, &[], &mut results),
+        "Component main failed",
+    )?;
     match results.into_iter().next() {
         Some(Val::S64(value)) => Ok(value),
         _ => bail!("Component main must return s64"),
@@ -231,12 +547,17 @@ fn main() {
     let outcome = (|| -> Result<i64> {
         let mut line = String::new();
         {
-            let mut locked = protocol.lock().map_err(|_| anyhow!("protocol lock poisoned"))?;
+            let mut locked = protocol
+                .lock()
+                .map_err(|_| anyhow!("protocol lock poisoned"))?;
             if locked.input.read_line(&mut line)? == 0 {
                 bail!("missing run envelope");
             }
         }
-        run(serde_json::from_str(&line).context("invalid run envelope")?, protocol.clone())
+        run(
+            serde_json::from_str(&line).context("invalid run envelope")?,
+            protocol.clone(),
+        )
     })();
     let terminal = match outcome {
         Ok(value) => json!({ "type": "result", "value": value }),
@@ -281,6 +602,7 @@ mod tests {
             limits: StoreLimitsBuilder::new().build(),
             grants: ResourceTable::new(),
             calls: BTreeMap::new(),
+            admitted_imports: BTreeMap::new(),
         };
         let ability = bounded_ability();
         let grant = issue_grant(&mut state, "aiueos-clock-now", &ability).unwrap();
