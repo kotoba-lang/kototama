@@ -38,6 +38,26 @@
    :clock-monotonic :clock/monotonic
    :random-bytes :random/bytes})
 
+(def component-import->kototama-import
+  "Stable compiler Component WIT import -> tender import id.  This is a
+  closed map: an unknown Component import is never translated to ambient
+  WASI or a best-effort host binding."
+  {:aiueos.component/aiueos-clock-now :clock-monotonic
+   :aiueos.component/aiueos-log-append :log-write})
+
+(defn host-caps-for-component
+  "Ask aiueos for exactly the imports declared by a compiler Component
+  artifact. ARTIFACT is the compiler result's public capability set; unknown
+  names fail closed before an aiueos request is made."
+  ([artifact] (host-caps-for-component artifact {}))
+  ([artifact opts]
+   (let [declared (set (:capabilities artifact))
+         imports (mapv component-import->kototama-import declared)]
+     (when (or (some nil? imports) (not= (count imports) (count declared)))
+       (throw (ex-info "Component declares an unmapped WIT capability"
+                       {:phase :component-grant :capabilities declared})))
+     (host-caps-for-imports imports opts))))
+
 (def ^:private aiueos-cli-contract
   (delay (cli/read-contract)))
 
