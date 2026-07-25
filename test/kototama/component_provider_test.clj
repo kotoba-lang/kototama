@@ -6,6 +6,7 @@
   (let [request {:runtime :wasmtime-component :component? true
                  :grants #{:aiueos.component/aiueos-clock-now}
                  :providers {:aiueos.component/aiueos-clock-now (fn [_] :clock)}
+                 :lease-authorize? (fn [_ _] true)
                  :artifact {:capabilities #{:aiueos.component/aiueos-clock-now}
                             :component-imports
                             {:aiueos.component/aiueos-clock-now
@@ -30,7 +31,8 @@
                                 :audit-id "component-test"}}}
                    :grants #{:aiueos.component/aiueos-clock-now}
                    :providers
-                   {:aiueos.component/aiueos-clock-now #(reset! seen %) }})]
+                   {:aiueos.component/aiueos-clock-now #(reset! seen %) }
+                   :lease-authorize? (fn [_ _] true)})]
     (provider/invoke! prepared :aiueos.component/aiueos-clock-now {:value 42})
     (is (= {:import :aiueos.component/aiueos-clock-now
             :ability {:target "clock://monotonic" :operation :clock/now

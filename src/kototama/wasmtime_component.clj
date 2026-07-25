@@ -64,14 +64,20 @@
 (defn- host-ability [ability]
   ;; EDN uses a namespaced keyword for the operation while the native JSON
   ;; protocol carries its canonical WIT spelling as a string.
-  (update ability :operation name))
+  (update ability :operation
+          (fn [operation]
+            (when-not (qualified-keyword? operation)
+              (reject :invalid-ability
+                      "Component ability operation must be a qualified keyword"))
+            (str (namespace operation) "/" (name operation)))))
 
 (defn run-effectful!
   "Run an admitted effectful Component through the native Wasmtime micro-TCB.
    The host links no WASI interfaces and every imported WIT function is
    synchronously delegated through the previously admitted provider boundary."
   [{:keys [runtime component-bytes imports abilities budgets artifact providers
-           component-host runtime-bindings lease lease-epoch now-ms]}]
+           component-host runtime-bindings lease lease-epoch now-ms
+           lease-authorize?]}]
   (when-not (= :wasmtime-component runtime)
     (reject :runtime-mismatch "Wasmtime Component adapter was not selected"))
   (when-not (bytes? component-bytes)
@@ -83,7 +89,8 @@
   (let [prepared (provider/prepare!
                   {:runtime runtime :component? true :artifact artifact
                    :grants (set (keys imports)) :providers providers
-                   :lease lease :lease-epoch lease-epoch :now-ms now-ms})
+                   :lease lease :lease-epoch lease-epoch :now-ms now-ms
+                   :lease-authorize? lease-authorize?})
         executable (host-executable! component-host (:component-host-sha256 runtime-bindings))
         deadline-ms (long (or (:deadline-ms budgets) 30000))
         path (Files/createTempFile "kototama-component-" ".wasm"
@@ -97,10 +104,13 @@
             reader (BufferedReader. (InputStreamReader. (.getInputStream process) "UTF-8"))
             writer (BufferedWriter. (OutputStreamWriter. (.getOutputStream process) "UTF-8"))
             request {:type "run" :component (.toString path)
+                     ;; `imports` is the admitted provider binding map; its
+                     ;; values are opaque callbacks.  The native protocol must
+                     ;; receive the separately admitted ability descriptors.
                      :imports (mapv (fn [[import ability]]
                                       {:name (host-import-name import)
                                        :ability (host-ability ability)})
-                                    imports)
+                                    abilities)
                      :fuel (long (or (:fuel budgets) 1))
                      :memory-pages (long (or (:memory-pages budgets) 1))}
             outcome (future

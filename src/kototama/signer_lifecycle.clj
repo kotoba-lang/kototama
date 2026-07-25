@@ -1,6 +1,7 @@
 (ns kototama.signer-lifecycle
   "Monotonic, root-authorized manifest signer lifecycle."
-  (:require [kotoba.security.effect :as effect]))
+  (:require [kotoba.security.ed25519 :as ed25519]
+            [kotoba.security.effect :as effect]))
 
 (defn new-registry
   "Create a live signer registry. ROOT-KEY-ID identifies the offline/control

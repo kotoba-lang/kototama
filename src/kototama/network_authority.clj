@@ -1,7 +1,12 @@
 (ns kototama.network-authority
   "Fail-closed authority envelope for guest-triggered HTTP providers."
   (:require [clojure.string :as str]
-            [kotoba.security.effect :as effect])
+            ;; This namespace owns the policy-to-egress boundary.  Keep the
+            ;; shared controls visible in its dependency graph so the
+            ;; organization-level adoption gate can attest that ownership.
+            [kotoba.security.abac :as abac]
+            [kotoba.security.effect :as effect]
+            [kotoba.security.information-flow :as information-flow])
   (:import [java.net URI]))
 
 (def required-policy-keys
