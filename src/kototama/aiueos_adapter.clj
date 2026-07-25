@@ -22,7 +22,8 @@
   and not a code-level merge of the two execution namespaces (kototama.
   tender still never decides a grant itself; ADR-2607022700's rule)."
   (:require [aiueos.cli :as cli]
-            [kototama.contract :as contract]))
+            [kototama.contract :as contract]
+            [kototama.component-platform :as component-platform]))
 
 (def kototama-import->aiueos-capability
   "kototama.contract import id -> aiueos capability keyword, for the subset
@@ -57,6 +58,28 @@
        (throw (ex-info "Component declares an unmapped WIT capability"
                        {:phase :component-grant :capabilities declared})))
      (host-caps-for-imports imports opts))))
+
+(defn admit-component-with-aiueos!
+  "The only bridge from a compiler Component artifact to the native Component
+  linker. Aiueos decides; this function only translates a grant into the
+  exact WIT bindings and delegates CID/world verification to component-platform.
+  A denial, unknown import, or missing provider aborts before LINKER! runs."
+  [artifact world component-bytes linker! providers opts]
+  (let [declared (set (:capabilities artifact))
+        {:keys [host-caps decision]} (host-caps-for-component artifact opts)
+        expected (set (keep component-import->kototama-import declared))]
+    (when-not (= expected (:grants host-caps))
+      (throw (ex-info "aiueos did not grant every declared Component import"
+                      {:phase :component-grant :decision decision
+                       :declared declared :granted (:grants host-caps)})))
+    (when-not (= declared (set (keys (select-keys providers declared))))
+      (throw (ex-info "Component provider binding is missing"
+                      {:phase :component-grant :declared declared
+                       :providers (set (keys providers))})))
+    (component-platform/admit-and-link!
+     (assoc world :imports declared :grants declared
+            :provider-bindings (select-keys providers declared))
+     component-bytes linker!)))
 
 (def ^:private aiueos-cli-contract
   (delay (cli/read-contract)))
