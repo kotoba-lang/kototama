@@ -4,8 +4,8 @@
             ;; This namespace owns the policy-to-egress boundary.  Keep the
             ;; shared controls visible in its dependency graph so the
             ;; organization-level adoption gate can attest that ownership.
-            [kotoba.security.abac]
-            [kotoba.security.information-flow])
+            [kotoba.security.abac :as abac]
+            [kotoba.security.information-flow :as information-flow])
   (:import [java.net URI]))
 
 (def required-policy-keys
