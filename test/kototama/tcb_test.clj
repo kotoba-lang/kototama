@@ -7,6 +7,9 @@
     "src/kototama/tender.clj"
     "src/kototama/browser.cljc"
     "src/kototama/component_platform.clj"
+    "src/kototama/component_provider.cljc"
+    "src/kototama/wasmtime_component.clj"
+    "src/kototama/workerd_core.clj"
     "src/kototama/compatibility.clj"
     "src/kototama/aiueos_adapter.clj"
     "src/kototama/fleet_exec.clj"
@@ -17,7 +20,7 @@
     "src/kototama/tcb.clj"})
 
 (deftest checked-in-tcb-has-no-drift
-  (is (= {:valid? true :files 23 :external 6 :errors []}
+  (is (= {:valid? true :files 25 :external 8 :errors []}
          (tcb/validate))))
 
 (deftest authority-and-runtime-boundaries-cannot-disappear-silently
