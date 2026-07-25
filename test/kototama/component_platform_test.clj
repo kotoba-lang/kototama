@@ -6,6 +6,17 @@
 (defn cid [value]
   (mf/cidv1-raw (.getBytes ^String value "UTF-8")))
 
+(defn execution-identity [component-cid]
+  {:format :kotoba.execution-identity/v1
+   :plan-cid (cid "plan") :code-closure-cid (cid "closure")
+   :artifact-cid (cid "artifact") :compiler-contract (cid "compiler-contract")
+   :component-cid component-cid :wit-world-cid (cid "wit-world")
+   :package-lock-cid (cid "package-lock") :policy-cid (cid "policy")
+   :policy-decision-cid (cid "decision") :db-basis (cid "basis")
+   :grant-cids [(cid "grant")] :approval-cids [(cid "approval")]
+   :runtime-identity (cid "runtime") :input-cid (cid "input")
+   :outcome-cid (cid "outcome") :host-receipt-cids [(cid "receipt")]})
+
 (def valid
   {:target :wasm-component-kotoba-v1 :wasi-version "0.3.0" :profile :sync
    :imports #{:kotoba/http-post} :exports #{:app/run}
@@ -68,5 +79,24 @@
            (try (platform/admit-and-link!
                  (assoc-in world [:identity :component-cid] (cid "other")) bytes identity)
                 nil
+                (catch clojure.lang.ExceptionInfo e
+                  (:kototama.component/code (ex-data e))))))))
+
+(deftest execution-identity-is-verified-before-component-linking
+  (let [bytes (.getBytes "component" "UTF-8")
+        component-cid (mf/cidv1-raw bytes)
+        world (assoc-in valid [:identity :component-cid] component-cid)
+        identity (execution-identity component-cid)]
+    (is (= identity (platform/validate-execution-identity! identity)))
+    (is (= :linked
+           (platform/admit-and-link! world identity bytes (constantly :linked))))
+    (is (= :execution-component-mismatch
+           (try (platform/admit-and-link! world (assoc identity :component-cid (cid "other"))
+                                         bytes (fn [_] :linked))
+                nil
+                (catch clojure.lang.ExceptionInfo e
+                  (:kototama.component/code (ex-data e))))))
+    (is (= :invalid-execution-identity
+           (try (platform/validate-execution-identity! (assoc identity :extra true)) nil
                 (catch clojure.lang.ExceptionInfo e
                   (:kototama.component/code (ex-data e))))))))

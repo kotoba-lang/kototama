@@ -46,6 +46,30 @@
                    (every? cid? (:definition-cids identity)))
       (reject :invalid-identity "definition identities must be a bounded non-empty CID set"))))
 
+(defn validate-execution-identity!
+  "Validate the portable execution receipt at the host boundary. The ABI
+  schema rejects unknown fields; this tender additionally decodes every CID
+  before an engine can observe the component or provider bindings."
+  [identity]
+  (when-not (abi/valid-execution-identity? identity)
+    (reject :invalid-execution-identity "execution identity is not an exact ABI v1 descriptor"))
+  (doseq [field [:code-closure-cid :artifact-cid :compiler-contract
+                 :package-lock-cid :policy-cid :policy-decision-cid :db-basis
+                 :runtime-identity :input-cid :outcome-cid]
+          :let [value (get identity field)]]
+    (when-not (cid? value)
+      (reject :invalid-execution-identity "execution identity contains an invalid CID")))
+  (doseq [field [:component-cid :wit-world-cid :plan-cid]
+          :let [value (get identity field)]
+          :when (some? value)]
+    (when-not (cid? value)
+      (reject :invalid-execution-identity "execution identity contains an invalid optional CID")))
+  (doseq [field [:grant-cids :approval-cids :host-receipt-cids]
+          value (get identity field)]
+    (when-not (cid? value)
+      (reject :invalid-execution-identity "execution identity contains an invalid receipt CID")))
+  identity)
+
 (defn- validate-abilities! [imports abilities]
   (when-not (and (map? abilities)
                  (= imports (set (keys abilities))))
@@ -112,17 +136,26 @@
   "The sole Component execution hand-off.  The native engine/linker is passed
   in by the micro-TCB, but it receives bytes and provider bindings only after
   this gate has verified identity, world, grants, and resource bounds."
-  [world component-bytes linker!]
-  (let [world (validate-world! world)
-        declared (get-in world [:identity :component-cid])
-        actual (mf/cidv1-raw component-bytes)]
-    (when-not (= declared actual)
-      (reject :component-cid-mismatch "component bytes do not match admission identity"))
-    (when-not (ifn? linker!)
-      (reject :invalid-linker "native Component linker is required"))
-    (linker! {:component-bytes component-bytes
-              :imports (:provider-bindings world)
-              :abilities (:abilities world)
-              :runtime-bindings (:runtime-bindings world)
-              :budgets (:budgets world)
-              :identity (:identity world)})))
+  ([world component-bytes linker!]
+   (admit-and-link! world nil component-bytes linker!))
+  ([world execution-identity component-bytes linker!]
+   (let [world (validate-world! world)
+         execution-identity (when execution-identity
+                              (validate-execution-identity! execution-identity))
+         declared (get-in world [:identity :component-cid])
+         actual (mf/cidv1-raw component-bytes)]
+     (when-not (= declared actual)
+       (reject :component-cid-mismatch "component bytes do not match admission identity"))
+     (when (and execution-identity
+                (not= declared (:component-cid execution-identity)))
+       (reject :execution-component-mismatch
+               "execution identity does not bind the admitted component"))
+     (when-not (ifn? linker!)
+       (reject :invalid-linker "native Component linker is required"))
+     (linker! {:component-bytes component-bytes
+               :imports (:provider-bindings world)
+               :abilities (:abilities world)
+               :runtime-bindings (:runtime-bindings world)
+               :budgets (:budgets world)
+               :identity (:identity world)
+               :execution-identity execution-identity}))))
