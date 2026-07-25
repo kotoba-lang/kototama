@@ -6,8 +6,11 @@
   provider adapters are implemented; the CLI must never become an ambient
   authority escape hatch."
   (:require [clojure.string :as str]
-            [kototama.component-platform :as platform])
-  (:import [java.nio.file Files Path]
+            [clojure.data.json :as json]
+            [kototama.component-platform :as platform]
+            [kototama.component-provider :as provider])
+  (:import [java.io BufferedReader BufferedWriter File InputStreamReader OutputStreamWriter]
+           [java.nio.file Files Path]
            [java.util.concurrent TimeUnit]))
 
 (defn- reject [code message]
@@ -18,6 +21,97 @@
     (try (Long/parseLong trimmed)
          (catch NumberFormatException _
            (reject :invalid-engine-output "Wasmtime did not return one i64 result")))))
+
+(defn- host-executable! [path]
+  (let [file (when path (File. ^String path))]
+    (when-not (and file (.isAbsolute file) (.isFile file) (.canExecute file))
+      (reject :invalid-component-host
+              "effectful Component execution requires an absolute executable native host path"))
+    (.getPath file)))
+
+(defn- write-json-line! [^BufferedWriter writer value]
+  (.write writer (json/write-str value))
+  (.newLine writer)
+  (.flush writer))
+
+(defn- read-json-line! [^BufferedReader reader]
+  (when-let [line (.readLine reader)]
+    (json/read-str line :key-fn keyword)))
+
+(defn- host-import-name [import]
+  (when-not (= "aiueos.component" (namespace import))
+    (reject :invalid-import "Component host only admits aiueos Component imports"))
+  (name import))
+
+(defn run-effectful!
+  "Run an admitted effectful Component through the native Wasmtime micro-TCB.
+   The host links no WASI interfaces and every imported WIT function is
+   synchronously delegated through the previously admitted provider boundary."
+  [{:keys [runtime component-bytes imports abilities budgets artifact providers component-host]}]
+  (when-not (= :wasmtime-component runtime)
+    (reject :runtime-mismatch "Wasmtime Component adapter was not selected"))
+  (when-not (bytes? component-bytes)
+    (reject :invalid-component "Component bytes are required"))
+  (when (empty? imports)
+    (reject :provider-free-component "effectful runner requires an admitted import"))
+  (when-not (= (set (keys imports)) (set (keys abilities)))
+    (reject :ability-mismatch "native Component imports and abilities must be exact"))
+  (let [prepared (provider/prepare!
+                  {:runtime runtime :component? true :artifact artifact
+                   :grants (set (keys imports)) :providers providers})
+        executable (host-executable! component-host)
+        deadline-ms (long (or (:deadline-ms budgets) 30000))
+        path (Files/createTempFile "kototama-component-" ".wasm"
+                                   (make-array java.nio.file.attribute.FileAttribute 0))]
+    (try
+      (Files/write path component-bytes (make-array java.nio.file.OpenOption 0))
+      (let [process (.start (doto (ProcessBuilder. (into-array String [executable]))
+                              (.redirectInput java.lang.ProcessBuilder$Redirect/PIPE)
+                              (.redirectError java.lang.ProcessBuilder$Redirect/PIPE)
+                              (.redirectOutput java.lang.ProcessBuilder$Redirect/PIPE)))
+            reader (BufferedReader. (InputStreamReader. (.getInputStream process) "UTF-8"))
+            writer (BufferedWriter. (OutputStreamWriter. (.getOutputStream process) "UTF-8"))
+            request {:type "run" :component (.toString path)
+                     :imports (mapv (fn [[import ability]]
+                                      {:name (host-import-name import) :ability ability})
+                                    imports)
+                     :fuel (long (or (:fuel budgets) 1))
+                     :memory-pages (long (or (:memory-pages budgets) 1))}
+            outcome (future
+                      (write-json-line! writer request)
+                      (loop []
+                        (let [message (read-json-line! reader)]
+                          (when-not message
+                            (reject :engine-failed "native Component host closed its protocol"))
+                          (case (:type message)
+                            "provider-call"
+                            (let [import (keyword "aiueos.component" (:import message))
+                                  result (provider/invoke! prepared import (:payload message))]
+                              (when-not (= (get abilities import) (:ability message))
+                                (reject :ability-mismatch "native host changed an ability descriptor"))
+                              (when-not (integer? result)
+                                (reject :invalid-provider-result "Component provider must return i64"))
+                              (write-json-line! writer {:type "provider-result"
+                                                        :import (:import message)
+                                                        :value (long result)})
+                              (recur))
+                            "result" {:result (long (:value message)) :runtime runtime}
+                            "error" (reject :engine-failed
+                                            (str "native Component host rejected execution: "
+                                                 (:message message)))
+                            (reject :invalid-engine-output
+                                    "native Component host emitted an unknown envelope")))))
+            result (deref outcome deadline-ms ::deadline)]
+        (when (= ::deadline result)
+          (.destroyForcibly process)
+          (reject :deadline-exceeded "Component exceeded its execution deadline"))
+        (.waitFor process 1000 TimeUnit/MILLISECONDS)
+        (when-not (zero? (.exitValue process))
+          (reject :engine-failed "native Component host exited unsuccessfully"))
+        result)
+      (catch java.io.IOException _
+        (reject :runtime-unavailable "native Wasmtime Component host is unavailable"))
+      (finally (Files/deleteIfExists path)))))
 
 (defn run-provider-free!
   "Execute a verified, provider-free Component's main export through the
@@ -63,3 +157,11 @@
   (platform/admit-and-link!
    world component-bytes
    #(run-provider-free! (assoc % :runtime :wasmtime-component))))
+
+(defn admit-and-run-effectful!
+  [world component-bytes artifact providers component-host]
+  (platform/admit-and-link!
+   world component-bytes
+   #(run-effectful! (assoc % :runtime :wasmtime-component
+                           :artifact artifact :providers providers
+                           :component-host component-host))))
