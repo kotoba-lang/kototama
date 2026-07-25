@@ -35,9 +35,14 @@
      :wasm       path string or byte[]
      :grants     override lease grants (default from tick)
      :caps-extra extra HostCaps keys (e.g. :limits)
-     :store      optional fleet-store for side-effect free (unused here)
-     :fuel       override fuel (default from tick :fuel-limit)"
-  [{:keys [wasm grants caps-extra fuel] :as opts}]
+     :store/:llm-client explicit production providers
+     :deadline-ms wall deadline (default tender/default-run-deadline-ms)
+     :run-permits shared concurrency semaphore
+     :fuel override fuel (default from tick :fuel-limit)"
+  [{:keys [wasm grants caps-extra fuel store llm-client deadline-ms run-permits
+           profile signer-registry signed-manifest manifest-now-ms
+           verify-manifest-fn]
+    :as opts}]
   (let [wasm-bytes (load-wasm wasm)]
     (fn [tick]
       (let [g (or grants (:kototama.fleet/grants tick) [])
@@ -57,7 +62,18 @@
                                {:max-llm-infers 4})
                              (:limits caps-extra))}
                    (dissoc caps-extra :limits)))]
-        (tender/run-report wasm-bytes g caps {:fuel fuel'})))))
+        (tender/run-report-bounded
+         wasm-bytes g caps
+         (cond-> {:fuel fuel'
+                  :profile (or profile :development)
+                  :deadline-ms (or deadline-ms tender/default-run-deadline-ms)}
+           store (assoc :store store)
+           llm-client (assoc :llm-client llm-client)
+           run-permits (assoc :run-permits run-permits)
+           signer-registry (assoc :signer-registry signer-registry)
+           signed-manifest (assoc :signed-manifest signed-manifest)
+           manifest-now-ms (assoc :manifest-now-ms manifest-now-ms)
+           verify-manifest-fn (assoc :verify-manifest-fn verify-manifest-fn)))))))
 
 (defn run-lease!
   "Drive N ticks (or until governor stops) for lease-id.

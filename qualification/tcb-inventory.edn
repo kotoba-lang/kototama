@@ -1,0 +1,86 @@
+{:tcb/version 1
+ :tcb/as-of "2026-07-23"
+ :tcb/scope
+ "Code whose compromise can grant actor:host authority, bypass production
+  admission or resource containment, falsify fleet fencing, or cross a
+  network/database/cryptographic provider boundary."
+ :tcb/files
+ [{:path "src/kototama/aiueos_adapter.clj" :role :policy-authority-adapter
+   :sha256 "a545dab38a4d7792c59b91df28ef61c7fee72a0655488532ebffff5b4e36e62a"}
+  {:path "src/kototama/browser.cljc" :role :host-support-admission
+   :sha256 "4a2b9339078674632198fd59872bd7bb5e9ba47922a856ef1bc633061be07104"}
+  {:path "src/kototama/cli.clj" :role :operator-entrypoint
+   :sha256 "247f683e22b80c0a7a74cf3e963dbadf4f2e487c035e93a1bbb782da9f72782d"}
+  {:path "src/kototama/compatibility.clj" :role :artifact-admission
+   :sha256 "789401eb1066a7870371a48f8ccfd4a7c020aaef825ff92e388b0c919154c911"}
+  {:path "src/kototama/component-platform.edn" :role :component-world-schema
+   :sha256 "b45ecd0e3824dd1b4ff309e89f0fc70d7ca032d294b8a722922e10b7d037c5a5"}
+  {:path "src/kototama/component_platform.clj" :role :component-world-admission
+   :sha256 "2044787e4305b94b7e5dee046e5b5fe2ba1798aef46dae6b6c9c3b0b9ddc8d19"}
+  {:path "src/kototama/contract.cljc" :role :authority-schema
+   :sha256 "c706e501b6706743846259366c4460a80abda93a89f963a81591770a8d7dbe2e"}
+  {:path "src/kototama/fleet.cljc" :role :lease-authority
+   :sha256 "326193334a5fbf99511346ea489a95ae6bea998ac89d1c59c5df38374ca53fa2"}
+  {:path "src/kototama/fleet_exec.clj" :role :production-execution-entrypoint
+   :sha256 "2cb1d908314aaad68ca3203c129af003cd73202647fb1a7a68a8a09a31c56c92"}
+  {:path "src/kototama/fleet_fence.cljc" :role :distributed-fencing
+   :sha256 "7f14842a6b5703514e593cbf2879df94c21ea06ae660d7f2f5bf96e6c9b13eb5"}
+  {:path "src/kototama/fleet_store.clj" :role :checkpoint-persistence
+   :sha256 "ee51bf93ad5cfcd36d7a585bc03167c9a7e877528b19c645230e8387d7efbe3e"}
+  {:path "src/kototama/guest.cljc" :role :guest-abi-mapping
+   :sha256 "1b752375c2b0e58eb511f8ee5b46892349773357a18130d81de162b76025bc21"}
+  {:path "src/kototama/linker.clj" :role :postgresql-link-boundary
+   :sha256 "6cf53a05c9a7329f220cb062464007060c83ea357ed27f9c1776dc592e905641"}
+  {:path "src/kototama/network_authority.clj" :role :network-provider-authority
+   :sha256 "c3ea4862af444146b069b0f52e1df094942269b4613508477d065da3d1e6f575"}
+  {:path "src/kototama/postgresql_pool_provider.clj" :role :database-provider-boundary
+   :sha256 "9147ffee055e43bf5c9fb8ed149b07a2e71e43de606c225b0f50f92e0871b965"}
+  {:path "src/kototama/release_evidence.clj" :role :release-attestation-builder
+   :sha256 "5f1f0cb60ea2f1eb5d05d5d86722f8365575c5b6c8178ef015de05875d0d08c3"}
+  {:path "src/kototama/signal/signal_crypto.cljc" :role :signal-cryptography
+   :sha256 "7363be549024730967c2a471dc817ae5d01cc89934d899254add8e66d8e8b388"}
+  {:path "src/kototama/signal/signal_protocol.cljc" :role :signal-authentication
+   :sha256 "34d2229e2d7fb40df52e125e9c5f3a4ae96540c99e0c9754e8fd1d148a303731"}
+  {:path "src/kototama/signal/signal_request.cljc" :role :signal-request-authority
+   :sha256 "3a6f26195d413d1a1b634176fe2777f414985006990f11ada67d209a1f21ba2b"}
+  {:path "src/kototama/signer_lifecycle.clj" :role :manifest-signer-trust
+   :sha256 "a30d028497674a772989a12f352992e2c15b36348e6474e7eb2d4129e8c187ff"}
+  {:path "src/kototama/tcb.clj" :role :tcb-drift-verifier
+   :sha256 "9c7c9a9527d6a7c553ea7b4712bbb3a069aff1958874086537c7dba75aeeee18"}
+  {:path "src/kototama/tender.clj" :role :wasm-runtime-host-abi
+   :sha256 "bab35e4bd9fd50a9b36692a921708bbe3a8a766a94093cdd36f25634a43fab16"}
+  {:path "src/kototama/transport_provider.clj" :role :transport-provider-boundary
+   :sha256 "e660a3388c15d258d49721212da675ed0bdb503f4c8008d37687e0787784a698"}]
+ :tcb/external
+ [{:coordinate "com.dylibso.chicory/wasm" :version "1.4.0"
+   :role :wasm-parser}
+  {:coordinate "com.dylibso.chicory/runtime" :version "1.4.0"
+   :role :wasm-runtime}
+  {:coordinate "io.github.kotoba-lang/ed25519"
+   :git-sha "fdcefb9f1b83461fee54d04b63e374fa301ee847"
+   :role :signature-provider}
+  {:coordinate "io.github.kotoba-lang/security"
+   :git-sha "c83183f7b66afda6a095e690ff617075a39cc0eb"
+   :role :shared-security-primitives}
+  {:coordinate "io.github.kotoba-lang/aiueos"
+   :git-sha "63c13fd48dc53e0f93fa40f6bfce54e62773c656"
+   :role :policy-kernel}
+  {:coordinate "java.base" :minimum-version 21
+   :role :process-crypto-network-concurrency-runtime}]
+ :tcb/native-unsafe
+ [{:boundary "Chicory Instance.Builder/withUnsafeExecutionListener"
+   :owner "com.dylibso.chicory/runtime"
+   :use "per-instruction fuel enforcement"
+   :risk "unstable runtime hook; runtime upgrade requires containment retest"}
+  {:boundary "JDK HttpClient and DNS resolver"
+   :owner "java.net.http/java.net"
+   :use "guest-triggered HTTP and LLM egress"
+   :risk "resolver cannot pin validated address; DNS rebinding remains open"}
+  {:boundary "JVM process and JIT"
+   :owner "java.base"
+   :use "runtime isolation boundary"
+   :risk "same-process isolation, not a hardware or process sandbox"}]
+ :tcb/excluded
+ [{:scope "Wasm guests" :reason :untrusted-workload}
+  {:scope "tests and qualification fixtures" :reason :evidence-not-runtime}
+  {:scope "documentation" :reason :no-runtime-authority}]}
