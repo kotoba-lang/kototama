@@ -71,7 +71,7 @@
    The host links no WASI interfaces and every imported WIT function is
    synchronously delegated through the previously admitted provider boundary."
   [{:keys [runtime component-bytes imports abilities budgets artifact providers
-           component-host component-host-sha256]}]
+           component-host runtime-bindings]}]
   (when-not (= :wasmtime-component runtime)
     (reject :runtime-mismatch "Wasmtime Component adapter was not selected"))
   (when-not (bytes? component-bytes)
@@ -83,7 +83,7 @@
   (let [prepared (provider/prepare!
                   {:runtime runtime :component? true :artifact artifact
                    :grants (set (keys imports)) :providers providers})
-        executable (host-executable! component-host component-host-sha256)
+        executable (host-executable! component-host (:component-host-sha256 runtime-bindings))
         deadline-ms (long (or (:deadline-ms budgets) 30000))
         path (Files/createTempFile "kototama-component-" ".wasm"
                                    (make-array java.nio.file.attribute.FileAttribute 0))]
@@ -185,10 +185,9 @@
    #(run-provider-free! (assoc % :runtime :wasmtime-component))))
 
 (defn admit-and-run-effectful!
-  [world component-bytes artifact providers component-host component-host-sha256]
+  [world component-bytes artifact providers component-host]
   (platform/admit-and-link!
    world component-bytes
    #(run-effectful! (assoc % :runtime :wasmtime-component
                            :artifact artifact :providers providers
-                           :component-host component-host
-                           :component-host-sha256 component-host-sha256))))
+                           :component-host component-host))))

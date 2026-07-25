@@ -57,6 +57,10 @@ struct Protocol {
 struct State {
     protocol: Arc<Mutex<Protocol>>,
     limits: StoreLimits,
+    // Per-import accounting lives in the native host, not the provider
+    // process.  A compromised or buggy provider therefore cannot turn a
+    // bounded grant into an unbounded sequence of guest calls.
+    calls: BTreeMap<String, u64>,
 }
 
 fn allowed_operation(name: &str) -> Option<&'static str> {
@@ -89,9 +93,19 @@ fn send(protocol: &mut Protocol, value: &Value) -> Result<()> {
     Ok(())
 }
 
+fn consume_item_quota(calls: &mut BTreeMap<String, u64>, name: &str, ability: &Ability) -> Result<()> {
+    let calls = calls.entry(name.to_owned()).or_insert(0);
+    *calls = calls.checked_add(1).ok_or_else(|| anyhow!("provider call counter overflow"))?;
+    if *calls > ability.max_items {
+        bail!("import {name} exceeded its admitted max-items quota");
+    }
+    Ok(())
+}
+
 fn provider_call(state: &mut State, name: &str, ability: &Ability, value: i64) -> Result<i64> {
     // The descriptor is captured while linking, never supplied by the guest.
     validate_ability(name, ability)?;
+    consume_item_quota(&mut state.calls, name, ability)?;
     let mut protocol = state.protocol.lock().map_err(|_| anyhow!("protocol lock poisoned"))?;
     send(&mut protocol, &json!({
         "type": "provider-call",
@@ -143,7 +157,11 @@ fn run(request: Run, protocol: Arc<Mutex<Protocol>>) -> Result<i64> {
     let limits = StoreLimitsBuilder::new()
         .memory_size(request.memory_pages.saturating_mul(65536) as usize)
         .build();
-    let mut store = Store::new(&engine, State { protocol, limits });
+    let mut store = Store::new(&engine, State {
+        protocol,
+        limits,
+        calls: BTreeMap::new(),
+    });
     store.limiter(|state| &mut state.limits);
     wasmtime_result(store.set_fuel(request.fuel), "cannot set Component fuel")?;
 
@@ -189,5 +207,29 @@ fn main() {
     };
     if let Ok(mut locked) = protocol.lock() {
         let _ = send(&mut locked, &terminal);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn bounded_ability() -> Ability {
+        Ability {
+            target: "clock://monotonic".into(),
+            operation: "clock/now".into(),
+            max_bytes: 1,
+            max_items: 1,
+            deadline_ms: 1,
+            audit_id: "native-quota-test".into(),
+        }
+    }
+
+    #[test]
+    fn native_host_rejects_calls_after_the_admitted_item_quota() {
+        let mut calls = BTreeMap::new();
+        let ability = bounded_ability();
+        consume_item_quota(&mut calls, "aiueos-clock-now", &ability).unwrap();
+        assert!(consume_item_quota(&mut calls, "aiueos-clock-now", &ability).is_err());
     }
 }

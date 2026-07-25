@@ -22,10 +22,12 @@
             (recur (.read input buffer))))))
     (apply str (map #(format "%02x" (bit-and (int %) 0xff)) (.digest digest)))))
 
-(defn- component-world [bytes]
+(defn- component-world [bytes host-sha256]
   {:target abi/component-target :wasi-version abi/wasi-version :profile :sync
    :imports #{} :exports #{:app/main} :grants #{} :provider-bindings {}
-   :abilities {} :ambient-wasi abi/ambient-wasi?
+   :abilities {}
+   :runtime-bindings {:component-host-sha256 host-sha256}
+   :ambient-wasi abi/ambient-wasi?
    :budgets {:fuel 100000 :memory-pages 4 :deadline-ms 10000}
    :identity {:component-cid (mf/cidv1-raw bytes)
               :package-lock-cid (mf/cidv1-raw (.getBytes "e2e-lock" "UTF-8"))
@@ -45,11 +47,11 @@
                      (fn [{:keys [payload] :as request}]
                        (reset! seen request)
                        (+ 100 (:value payload)))}
+          host-sha256 (sha256-file host)
           outcome (adapter/admit-and-run-component-with-aiueos!
-                   artifact (component-world (:bytes artifact)) (:bytes artifact) providers
+                   artifact (component-world (:bytes artifact) host-sha256) (:bytes artifact) providers
                    {:runtime :wasmtime-component
-                    :component-host (.getAbsolutePath host)
-                    :component-host-sha256 (sha256-file host)})]
+                    :component-host (.getAbsolutePath host)})]
       (testing "only the admitted named WIT import crosses the native host"
         (is (= {:result 107 :runtime :wasmtime-component} outcome))
         (is (= {:import :aiueos.component/aiueos-clock-now

@@ -54,6 +54,24 @@
     (when-not (and (keyword? import) (abi/valid-ability? ability))
       (reject :invalid-ability "component ability is not a complete bounded descriptor"))))
 
+(defn- validate-runtime-bindings! [imports bindings]
+  ;; The Component admission itself—not an arbitrary launcher argument—pins
+  ;; the micro-TCB that will satisfy effectful imports.  Pure Components bind
+  ;; nothing.  This keeps executable substitution outside the guest's and
+  ;; provider's authority.
+  (let [host-sha256 (:component-host-sha256 bindings)]
+    (when-not (map? bindings)
+      (reject :invalid-runtime-binding "runtime bindings must be a map"))
+    (if (seq imports)
+      (when-not (and (= #{:component-host-sha256} (set (keys bindings)))
+                     (string? host-sha256)
+                     (re-matches #"[0-9a-f]{64}" host-sha256))
+        (reject :invalid-runtime-binding
+                "effectful Components require an admission-bound native host SHA-256"))
+      (when-not (empty? bindings)
+        (reject :invalid-runtime-binding
+                "provider-free Components must not carry runtime authority")))))
+
 (defn validate-world!
   "Validate a decoded component admission envelope before engine instantiation."
   [world]
@@ -76,6 +94,7 @@
     (when-not (every? (:grants world) (:imports world))
       (reject :capability-denied "component import is not granted"))
     (validate-abilities! (:imports world) (:abilities world))
+    (validate-runtime-bindings! (:imports world) (:runtime-bindings world))
     (when-not (false? (:ambient-wasi world))
       (reject :ambient-authority "ambient WASI is forbidden"))
     (let [budgets (:budgets world)]
@@ -104,5 +123,6 @@
     (linker! {:component-bytes component-bytes
               :imports (:provider-bindings world)
               :abilities (:abilities world)
+              :runtime-bindings (:runtime-bindings world)
               :budgets (:budgets world)
               :identity (:identity world)})))

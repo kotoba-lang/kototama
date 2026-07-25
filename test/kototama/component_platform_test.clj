@@ -14,6 +14,8 @@
    :abilities {:kotoba/http-post {:target "https://api.example.test/submit"
                                   :operation :http/post :max-bytes 1024 :max-items 1
                                   :deadline-ms 1000 :audit-id "component-test"}}
+   :runtime-bindings {:component-host-sha256
+                      "0000000000000000000000000000000000000000000000000000000000000000"}
    :ambient-wasi false :budgets {:fuel 1000000 :memory-pages 4}
    :identity {:component-cid (cid "component") :package-lock-cid (cid "lock")
               :definition-cids #{(cid "definition")}}})
@@ -30,6 +32,7 @@
   (is (= :capability-denied (code (assoc valid :grants #{}))))
   (is (= :unbound-import (code (assoc valid :provider-bindings {}))))
   (is (= :ability-mismatch (code (assoc valid :abilities {}))))
+  (is (= :invalid-runtime-binding (code (assoc valid :runtime-bindings {}))))
   (is (= :invalid-ability
          (code (assoc-in valid [:abilities :kotoba/http-post :audit-id] ""))))
   (is (= :invalid-identity (code (assoc valid :identity {}))))
@@ -44,6 +47,13 @@
                        :budgets {:fuel 1000000 :memory-pages 4 :cancellation true :deadline-ms 1000
                                  :max-items 32 :max-bytes 65536})]
       (is (= async (platform/validate-world! async))))))
+
+(deftest provider-free-components-carry-no-native-host-authority
+  (let [pure (assoc valid :imports #{} :grants #{} :provider-bindings {}
+                    :abilities {} :runtime-bindings {})]
+    (is (= pure (platform/validate-world! pure)))
+    (is (= :invalid-runtime-binding
+           (code (assoc pure :runtime-bindings (:runtime-bindings valid)))))))
 
 (deftest component-bytes-are-verified-before-the-linker-receives-them
   (let [bytes (.getBytes "component" "UTF-8")
