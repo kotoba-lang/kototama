@@ -51,15 +51,16 @@
 
 (deftest parity-score-ratio
   (let [s (browser/parity-score)]
-    ;; ADR-2607230943's 4 new imports (http-fetch/cbor-encode/json-encode/
-    ;; json-extract-field) plus this wave's http-post-headers are JVM-only
-    ;; so far -- an honest gap, not yet ported to wasm-webcomponent's
-    ;; actor-host.js -- so total grows to 14 while browser-yes stays at the
-    ;; pre-existing 9.
+    ;; cbor-encode/json-encode/json-extract-field (ADR-2607230943's pure-
+    ;; computation second-wave imports) are now byte-for-byte ported to
+    ;; wasm-webcomponent's actor-host.js (test/verify-codec-host.mjs locks
+    ;; the JVM byte parity), moving browser-yes 9 -> 12. The remaining 2
+    ;; JVM-only imports are http-fetch and http-post-headers -- both need
+    ;; the SAB/Worker network bridge, not yet ported.
     (is (= 14 (:total s)))
-    (is (= 9 (:browser-yes s)))
-    (is (= 5 (:browser-no s)))
-    (is (= (/ 9.0 14) (:ratio s)))))
+    (is (= 12 (:browser-yes s)))
+    (is (= 2 (:browser-no s)))
+    (is (= (/ 12.0 14) (:ratio s)))))
 
 (deftest r2-report-shape
   (let [r (browser/r2-report)]
