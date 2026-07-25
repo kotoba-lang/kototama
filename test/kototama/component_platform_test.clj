@@ -1,6 +1,10 @@
 (ns kototama.component-platform-test
   (:require [clojure.test :refer [deftest is testing]]
-            [kototama.component-platform :as platform]))
+            [kototama.component-platform :as platform]
+            [multiformats.core :as mf]))
+
+(defn cid [value]
+  (mf/cidv1-raw (.getBytes ^String value "UTF-8")))
 
 (def valid
   {:target :wasm-component-kotoba-v1 :wasi-version "0.3.0" :profile :sync
@@ -8,8 +12,8 @@
    :grants #{:kotoba/http-post}
    :provider-bindings {:kotoba/http-post :provider/http}
    :ambient-wasi false :budgets {:fuel 1000000 :memory-pages 4}
-   :identity {:component-cid "bafycomponent" :package-lock-cid "bafylock"
-              :definition-cids #{"bafydefinition"}}})
+   :identity {:component-cid (cid "component") :package-lock-cid (cid "lock")
+              :definition-cids #{(cid "definition")}}})
 
 (defn code [value]
   (try (platform/validate-world! value) nil
@@ -23,6 +27,8 @@
   (is (= :capability-denied (code (assoc valid :grants #{}))))
   (is (= :unbound-import (code (assoc valid :provider-bindings {}))))
   (is (= :invalid-identity (code (assoc valid :identity {}))))
+  (is (= :invalid-identity
+         (code (assoc-in valid [:identity :component-cid] "bafycomponent"))))
   (is (= :invalid-budgets (code (assoc valid :budgets {})))))
 
 (deftest async-world-requires-cancellation-and-bounds
