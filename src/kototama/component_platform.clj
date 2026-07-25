@@ -83,3 +83,20 @@
         (reject :invalid-budgets "async components require cancellation")))
     (validate-identity! (:identity world))
     world))
+
+(defn admit-and-link!
+  "The sole Component execution hand-off.  The native engine/linker is passed
+  in by the micro-TCB, but it receives bytes and provider bindings only after
+  this gate has verified identity, world, grants, and resource bounds."
+  [world component-bytes linker!]
+  (let [world (validate-world! world)
+        declared (get-in world [:identity :component-cid])
+        actual (mf/cidv1-raw component-bytes)]
+    (when-not (= declared actual)
+      (reject :component-cid-mismatch "component bytes do not match admission identity"))
+    (when-not (ifn? linker!)
+      (reject :invalid-linker "native Component linker is required"))
+    (linker! {:component-bytes component-bytes
+              :imports (:provider-bindings world)
+              :budgets (:budgets world)
+              :identity (:identity world)})))
