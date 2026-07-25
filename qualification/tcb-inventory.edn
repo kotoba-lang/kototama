@@ -72,7 +72,7 @@
    :git-sha "63c13fd48dc53e0f93fa40f6bfce54e62773c656"
    :role :policy-kernel}
   {:coordinate "io.github.kotoba-lang/abi"
-   :git-sha "9663bf2aeff735b568a3f6cf80591856f11277d3"
+   :git-sha "c389f687bbacd70623970ef908475e8dadec5876"
    :role :component-admission-contract}
   {:coordinate "wasmtime"
    :version "42.0.1"
