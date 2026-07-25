@@ -9,18 +9,6 @@
 
 (def supported-runtimes #{:wasmtime-component :chicory-core-compat :workerd-core})
 
-(def ^:private ability-keys
-  #{:target :operation :max-bytes :max-items :deadline-ms :audit-id})
-
-(defn- valid-ability? [ability]
-  (and (map? ability)
-       (= ability-keys (set (keys ability)))
-       (string? (:target ability)) (seq (:target ability))
-       (keyword? (:operation ability))
-       (string? (:audit-id ability)) (seq (:audit-id ability))
-       (every? #(pos-int? (get ability %))
-               [:max-bytes :max-items :deadline-ms])))
-
 (defn- provider-invoke [provider]
   (cond
     (ifn? provider) provider
@@ -49,7 +37,7 @@
     ;; independently enforce.  A capability name alone is not authority.
     (when-not (and (map? abilities)
                    (= declared (set (keys abilities)))
-                   (every? valid-ability? (vals abilities)))
+                   (every? abi/valid-ability? (vals abilities)))
       (throw (ex-info "Component providers require complete scoped abilities"
                       {:phase :component-provider :declared declared})))
     (when-not (every? provider-invoke (vals providers))

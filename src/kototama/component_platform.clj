@@ -2,6 +2,7 @@
   "Fail-closed admission for compiler-produced WIT/Component Model worlds."
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
+            [kotoba.abi.contract :as abi]
             [multiformats.core :as mf]))
 
 (def contract
@@ -51,20 +52,12 @@
       (reject :invalid-identity "definition identities must be a bounded non-empty CID set"))))
 
 (defn- validate-abilities! [imports abilities]
-  (let [required #{:target :operation :max-bytes :max-items :deadline-ms :audit-id}]
-    (when-not (and (map? abilities)
-                   (= imports (set (keys abilities))))
-      (reject :ability-mismatch "every declared import requires one exact scoped ability"))
-    (doseq [[import ability] abilities]
-      (when-not (and (keyword? import)
-                     (map? ability)
-                     (= required (set (keys ability)))
-                     (string? (:target ability)) (seq (:target ability))
-                     (keyword? (:operation ability))
-                     (string? (:audit-id ability)) (seq (:audit-id ability))
-                     (every? #(pos-int? (get ability %))
-                             [:max-bytes :max-items :deadline-ms]))
-        (reject :invalid-ability "component ability is not a complete bounded descriptor")))))
+  (when-not (and (map? abilities)
+                 (= imports (set (keys abilities))))
+    (reject :ability-mismatch "every declared import requires one exact scoped ability"))
+  (doseq [[import ability] abilities]
+    (when-not (and (keyword? import) (abi/valid-ability? ability))
+      (reject :invalid-ability "component ability is not a complete bounded descriptor"))))
 
 (defn validate-world!
   "Validate a decoded component admission envelope before engine instantiation."
