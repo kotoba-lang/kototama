@@ -64,7 +64,11 @@
 (defn- host-ability [ability]
   ;; EDN uses a namespaced keyword for the operation while the native JSON
   ;; protocol carries its canonical WIT spelling as a string.
-  (update ability :operation name))
+  (update ability :operation
+          (fn [operation]
+            (if-let [ns (namespace operation)]
+              (str ns "/" (name operation))
+              (name operation)))))
 
 (defn run-effectful!
   "Run an admitted effectful Component through the native Wasmtime micro-TCB.
@@ -97,10 +101,10 @@
             reader (BufferedReader. (InputStreamReader. (.getInputStream process) "UTF-8"))
             writer (BufferedWriter. (OutputStreamWriter. (.getOutputStream process) "UTF-8"))
             request {:type "run" :component (.toString path)
-                     :imports (mapv (fn [[import ability]]
+                     :imports (mapv (fn [import]
                                       {:name (host-import-name import)
-                                       :ability (host-ability ability)})
-                                    imports)
+                                       :ability (host-ability (get abilities import))})
+                                    (keys imports))
                      :fuel (long (or (:fuel budgets) 1))
                      :memory-pages (long (or (:memory-pages budgets) 1))}
             outcome (future

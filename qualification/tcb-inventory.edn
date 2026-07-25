@@ -6,7 +6,7 @@
   network/database/cryptographic provider boundary."
  :tcb/files
  [{:path "src/kototama/aiueos_adapter.clj" :role :policy-authority-adapter
-   :sha256 "54463660b52cc0b35178be33116b36808389f23f815911dbd4faa3fd5180ac0d"}
+   :sha256 "75012d7a155a303bef3c41d4712494197ee2e84500b0b425d4e4ff83c1430450"}
   {:path "src/kototama/browser.cljc" :role :host-support-admission
    :sha256 "4a2b9339078674632198fd59872bd7bb5e9ba47922a856ef1bc633061be07104"}
   {:path "src/kototama/cli.clj" :role :operator-entrypoint
@@ -14,11 +14,11 @@
   {:path "src/kototama/compatibility.clj" :role :artifact-admission
    :sha256 "789401eb1066a7870371a48f8ccfd4a7c020aaef825ff92e388b0c919154c911"}
   {:path "src/kototama/component_platform.clj" :role :component-world-admission
-   :sha256 "6b7abff232397be1c8ab152da1ff2c26e759051217fec663c53edd5eee6b907c"}
+   :sha256 "25e55f8d2ccbd5e2ac9229bb8ae07a61f0d817dafe1e47546e9856ca9ed3c621"}
   {:path "src/kototama/component_provider.cljc" :role :component-provider-admission
    :sha256 "ba7d53b0062bab1fb44d701334e1ec3cd0f42751fec1f4b81f72c0e82efbd48c"}
   {:path "src/kototama/wasmtime_component.clj" :role :native-component-engine-adapter
-   :sha256 "5459bd3f7a16a51af53d033166c9e30583a148034661a5a826894f065c7740d1"}
+   :sha256 "229741f81231b75d4208fda67cb90a5546142ed4ca57927f7fc354dfecfa7133"}
   {:path "native/wasmtime-component-host/src/main.rs" :role :native-component-engine-host
    :sha256 "eaf24f9de954970f33bcc4c2e5230b575b5d6b16558134b07042067ae52e6e60"}
   {:path "native/wasmtime-component-host/src/v2_bindings.rs" :role :native-component-wit-binding
@@ -56,7 +56,7 @@
   {:path "src/kototama/tcb.clj" :role :tcb-drift-verifier
    :sha256 "9c7c9a9527d6a7c553ea7b4712bbb3a069aff1958874086537c7dba75aeeee18"}
   {:path "src/kototama/tender.clj" :role :wasm-runtime-host-abi
-   :sha256 "bab35e4bd9fd50a9b36692a921708bbe3a8a766a94093cdd36f25634a43fab16"}
+   :sha256 "bf0b9f204b18896a317f184e4632ca49a0422918a9e50c69a9376e60edbc9a3b"}
   {:path "src/kototama/transport_provider.clj" :role :transport-provider-boundary
    :sha256 "e660a3388c15d258d49721212da675ed0bdb503f4c8008d37687e0787784a698"}]
  :tcb/external

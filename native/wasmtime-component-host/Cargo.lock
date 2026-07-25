@@ -367,7 +367,7 @@ checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 [[package]]
 name = "kotoba-abi-wit"
 version = "0.2.0"
-source = "git+https://github.com/kotoba-lang/abi.git?rev=8e0ba2f0cd2f0805cc10be53a1a523dd8a262660#8e0ba2f0cd2f0805cc10be53a1a523dd8a262660"
+source = "git+https://github.com/kotoba-lang/abi.git?rev=6f84a1189a52ecd6be94b4b9863c835fe21e2b92#6f84a1189a52ecd6be94b4b9863c835fe21e2b92"
 
 [[package]]
 name = "kototama-wasmtime-component-host"
