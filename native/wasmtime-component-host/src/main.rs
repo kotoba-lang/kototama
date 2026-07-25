@@ -115,6 +115,13 @@ fn provider_call(state: &mut State, name: &str, ability: &Ability, value: i64) -
         .ok_or_else(|| anyhow!("provider response must contain an i64 value"))
 }
 
+// With Wasmtime's deliberately minimal feature set its error type does not
+// implement `std::error::Error`. Keep that boundary explicit rather than
+// enabling unrelated Wasmtime features merely to use `anyhow` conversion.
+fn wasmtime_result<T>(result: std::result::Result<T, wasmtime::Error>, context: &str) -> Result<T> {
+    result.map_err(|error| anyhow!("{context}: {error}"))
+}
+
 fn run(request: Run, protocol: Arc<Mutex<Protocol>>) -> Result<i64> {
     if request.kind != "run" {
         bail!("first protocol envelope must be a run request");
@@ -130,29 +137,31 @@ fn run(request: Run, protocol: Arc<Mutex<Protocol>>) -> Result<i64> {
     let mut config = Config::new();
     config.wasm_component_model(true);
     config.consume_fuel(true);
-    let engine = Engine::new(&config)?;
-    let component = Component::from_file(&engine, &request.component)
-        .context("cannot compile admitted Component")?;
+    let engine = wasmtime_result(Engine::new(&config), "cannot create Component engine")?;
+    let component = wasmtime_result(Component::from_file(&engine, &request.component),
+                                    "cannot compile admitted Component")?;
     let limits = StoreLimitsBuilder::new()
         .memory_size(request.memory_pages.saturating_mul(65536) as usize)
         .build();
     let mut store = Store::new(&engine, State { protocol, limits });
     store.limiter(|state| &mut state.limits);
-    store.set_fuel(request.fuel)?;
+    wasmtime_result(store.set_fuel(request.fuel), "cannot set Component fuel")?;
 
     let mut linker = Linker::<State>::new(&engine);
     for (name, ability) in imports {
-        linker.root().func_wrap(&name, move |mut cx, (value,): (i64,)| {
-            Ok((provider_call(cx.data_mut(), &name, &ability, value)?,))
-        })?;
+        let import_name = name.clone();
+        wasmtime_result(linker.root().func_wrap(&name, move |mut cx, (value,): (i64,)| {
+            provider_call(cx.data_mut(), &import_name, &ability, value)
+                .map(|result| (result,))
+                .map_err(|error| wasmtime::Error::msg(error.to_string()))
+        }), "cannot bind admitted Component import")?;
     }
-    let instance = linker.instantiate(&mut store, &component)
-        .context("Component imports did not match the admitted bindings")?;
+    let instance = wasmtime_result(linker.instantiate(&mut store, &component),
+                                   "Component imports did not match the admitted bindings")?;
     let function = instance.get_func(&mut store, "main")
         .ok_or_else(|| anyhow!("Component does not export main"))?;
     let mut results = [Val::S64(0)];
-    function.call(&mut store, &[], &mut results)?;
-    function.post_return(&mut store)?;
+    wasmtime_result(function.call(&mut store, &[], &mut results), "Component main failed")?;
     match results.into_iter().next() {
         Some(Val::S64(value)) => Ok(value),
         _ => bail!("Component main must return s64"),
