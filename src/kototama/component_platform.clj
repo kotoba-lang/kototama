@@ -1,7 +1,8 @@
 (ns kototama.component-platform
   "Fail-closed admission for compiler-produced WIT/Component Model worlds."
   (:require [clojure.edn :as edn]
-            [clojure.java.io :as io]))
+            [clojure.java.io :as io]
+            [multiformats.core :as mf]))
 
 (def contract
   (edn/read-string (slurp (io/resource "kototama/component-platform.edn"))))
@@ -9,25 +10,44 @@
 (defn- reject [code message]
   (throw (ex-info message {:phase :component-platform :kototama.component/code code})))
 
-(defn- cid-looking?
-  "The component platform receives identities only after the artifact/package
-  verifier has structurally decoded their CIDs. This envelope gate still
-  rejects blank or non-CID-shaped substitutions before linking; it deliberately
-  does not duplicate the artifact verifier's multibase implementation."
+(defn- read-varint [bs offset]
+  (loop [offset offset value 0 shift 0]
+    (when (>= offset (count bs))
+      (throw (ex-info "truncated CID varint" {:offset offset})))
+    (let [b (bit-and (nth bs offset) 0xff)]
+      (if (< b 0x80)
+        [(bit-or value (bit-shift-left b shift)) (inc offset)]
+        (recur (inc offset) (bit-or value (bit-shift-left (bit-and b 0x7f) shift))
+               (+ shift 7))))))
+
+(defn- cid?
+  "True only for a fully decodable CIDv1 with a well-formed multihash.
+  Component admission is a security boundary, so it must not treat a
+  multibase-looking string as an artifact identity."
   [x]
-  (and (string? x) (.startsWith ^String x "b") (> (count x) 1)))
+  (and (string? x)
+       (.startsWith ^String x "b")
+       (try
+         (let [bs (mf/cid->bytes x)
+               [version off1] (read-varint bs 0)
+               [codec off2] (read-varint bs off1)
+               [hash-fn off3] (read-varint bs off2)
+               [hash-len off4] (read-varint bs off3)]
+           (and (= 1 version) (pos? codec) (pos? hash-fn) (pos? hash-len)
+                (= hash-len (- (count bs) off4))))
+         (catch Exception _ false))))
 
 (defn- validate-identity! [identity]
   (let [required (set (get-in contract [:identity :required]))]
     (when-not (and (map? identity) (= required (set (keys identity))))
       (reject :invalid-identity "component identity binding is not exact"))
-    (when-not (every? cid-looking?
+    (when-not (every? cid?
                       [(:component-cid identity) (:package-lock-cid identity)])
       (reject :invalid-identity "component and package-lock identities must be CIDs"))
     (when-not (and (set? (:definition-cids identity))
                    (seq (:definition-cids identity))
                    (<= (count (:definition-cids identity)) 1024)
-                   (every? cid-looking? (:definition-cids identity)))
+                   (every? cid? (:definition-cids identity)))
       (reject :invalid-identity "definition identities must be a bounded non-empty CID set"))))
 
 (defn validate-world!
