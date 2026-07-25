@@ -46,8 +46,13 @@
   "Stable compiler Component WIT import -> tender import id.  This is a
   closed map: an unknown Component import is never translated to ambient
   WASI or a best-effort host binding."
-  {:aiueos.component/aiueos-clock-now :clock-monotonic
-   :aiueos.component/aiueos-log-append :log-write})
+  {:aiueos.component/aiueos-identity-sign :sign
+   :aiueos.component/aiueos-identity-verify :verify
+   :aiueos.component/aiueos-hash-sha256 :sha256-hex
+   :aiueos.component/aiueos-http-post :http-post
+   :aiueos.component/aiueos-log-read :log-read
+   :aiueos.component/aiueos-log-append :log-write
+   :aiueos.component/aiueos-clock-now :clock-monotonic})
 
 (declare host-caps-for-imports)
 

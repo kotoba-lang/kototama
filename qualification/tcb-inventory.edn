@@ -6,7 +6,7 @@
   network/database/cryptographic provider boundary."
  :tcb/files
  [{:path "src/kototama/aiueos_adapter.clj" :role :policy-authority-adapter
-   :sha256 "d5a099ada9bd6c64833164812df7d3da2b7c962a6dc940b3d48346abe56c325e"}
+   :sha256 "54463660b52cc0b35178be33116b36808389f23f815911dbd4faa3fd5180ac0d"}
   {:path "src/kototama/browser.cljc" :role :host-support-admission
    :sha256 "4a2b9339078674632198fd59872bd7bb5e9ba47922a856ef1bc633061be07104"}
   {:path "src/kototama/cli.clj" :role :operator-entrypoint
@@ -20,7 +20,7 @@
   {:path "src/kototama/wasmtime_component.clj" :role :native-component-engine-adapter
    :sha256 "bffb3e890299c9177e6e0a34240d396a6976afad6f0e61b1615dcc3bf4a3eeff"}
   {:path "native/wasmtime-component-host/src/main.rs" :role :native-component-engine-host
-   :sha256 "dae334cff6981e8a16ec96d593258aef1432e5c85c57325566533eaba1098105"}
+   :sha256 "f351c4fcd8d75415a4d1fc5fe4acf73de45e40cabac791f785984c08ff9df917"}
   {:path "src/kototama/workerd_core.clj" :role :workerd-core-engine-adapter
    :sha256 "447c6b6327285803ce71ea199845255777cd9afa99b2d866cf17ae72ad5de83e"}
   {:path "src/kototama/contract.cljc" :role :authority-schema
@@ -69,7 +69,7 @@
    :git-sha "c83183f7b66afda6a095e690ff617075a39cc0eb"
    :role :shared-security-primitives}
   {:coordinate "io.github.kotoba-lang/aiueos"
-   :git-sha "63c13fd48dc53e0f93fa40f6bfce54e62773c656"
+   :git-sha "f3a44ddb13534d4e47f5e5870183e63606cec3c2"
    :role :policy-kernel}
   {:coordinate "io.github.kotoba-lang/abi"
    :git-sha "7a8a448f44b751fc15c4d428cd37c52db7416699"

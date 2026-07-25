@@ -11,6 +11,11 @@
   (is (thrown? clojure.lang.ExceptionInfo
                (adapter/host-caps-for-component {:capabilities #{:aiueos.component/unknown}}))))
 
+(deftest every-v1-component-import-has-a-closed-kototama-provider-kind
+  (is (= #{:sign :verify :sha256-hex :http-post :log-read :log-write :clock-monotonic}
+         (set (vals adapter/component-import->kototama-import))))
+  (is (= 7 (count adapter/component-import->kototama-import))))
+
 (deftest denied-or-unbound-component-never-reaches-linker
   (let [bytes (.getBytes "component" "UTF-8")
         artifact {:capabilities #{:aiueos.component/aiueos-clock-now}

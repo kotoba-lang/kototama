@@ -65,6 +65,11 @@ struct State {
 
 fn allowed_operation(name: &str) -> Option<&'static str> {
     match name {
+        "aiueos-identity-sign" => Some("identity/sign"),
+        "aiueos-identity-verify" => Some("identity/verify"),
+        "aiueos-hash-sha256" => Some("hash/sha256"),
+        "aiueos-http-post" => Some("http/post"),
+        "aiueos-log-read" => Some("log/read"),
         "aiueos-clock-now" => Some("clock/now"),
         "aiueos-log-append" => Some("log/append"),
         _ => None,

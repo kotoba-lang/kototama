@@ -31,7 +31,7 @@
         ;; repo) has been merged back into kotoba-lang/aiueos.
         io.github.kotoba-lang/aiueos
         {:git/url "https://github.com/kotoba-lang/aiueos.git"
-         :git/sha "32a6f9723ae5d838d0fa2a414d5e16c7877773a5"}}
+         :git/sha "f3a44ddb13534d4e47f5e5870183e63606cec3c2"}}
  :aliases
  {:cli  {:main-opts ["-m" "kototama.cli"]}
   :tcb-check {:main-opts ["-m" "kototama.tcb"]}
