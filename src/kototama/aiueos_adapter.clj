@@ -24,7 +24,8 @@
   (:require [aiueos.cli :as cli]
             [kototama.contract :as contract]
             [kototama.component-platform :as component-platform]
-            [kototama.component-provider :as component-provider]))
+            [kototama.component-provider :as component-provider]
+            [kototama.wasmtime-component :as wasmtime-component]))
 
 (def kototama-import->aiueos-capability
   "kototama.contract import id -> aiueos capability keyword, for the subset
@@ -95,6 +96,17 @@
             :provider-bindings (select-keys providers declared)
             :abilities abilities)
      component-bytes linker!)))
+
+(defn admit-and-run-component-with-aiueos!
+  [artifact world component-bytes providers {:keys [component-host] :as opts}]
+  (admit-component-with-aiueos!
+   artifact world component-bytes
+   (fn [admitted]
+     (wasmtime-component/run-effectful!
+      (assoc admitted :runtime :wasmtime-component
+             :artifact artifact :providers providers
+             :component-host component-host)))
+   providers opts))
 
 (def ^:private aiueos-cli-contract
   (delay (cli/read-contract)))
