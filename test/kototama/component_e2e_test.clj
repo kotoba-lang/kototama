@@ -8,6 +8,7 @@
             [kotoba.abi.contract :as abi]
             [kotoba.compiler.core :as compiler]
             [kototama.aiueos-adapter :as adapter]
+            [kototama.wasmtime-component :as wasmtime]
             [multiformats.core :as mf])
   (:import [java.io File]
            [java.security MessageDigest]))
@@ -30,6 +31,21 @@
    :identity {:component-cid (mf/cidv1-raw bytes)
               :package-lock-cid (mf/cidv1-raw (.getBytes "e2e-lock" "UTF-8"))
               :definition-cids #{(mf/cidv1-raw (.getBytes "e2e-definition" "UTF-8"))}}})
+
+(defn- pure-v2-world [bytes]
+  {:target abi/component-target-v2 :wasi-version abi/wasi-version :profile :sync
+   :imports #{} :exports #{:app/main} :grants #{} :provider-bindings {}
+   :abilities {} :runtime-bindings {} :ambient-wasi abi/ambient-wasi?
+   :budgets {:fuel 100000 :memory-pages 4 :deadline-ms 10000}
+   :identity {:component-cid (mf/cidv1-raw bytes)
+              :package-lock-cid (mf/cidv1-raw (.getBytes "v2-e2e-lock" "UTF-8"))
+              :definition-cids #{(mf/cidv1-raw (.getBytes "v2-e2e-definition" "UTF-8"))}}})
+
+(deftest compiler-component-v2-pure-round-trip
+  (let [artifact (compiler/compile-source "(defn main [] 42)" abi/component-target-v2)]
+    (is (= {:result 42 :runtime :wasmtime-component}
+           (wasmtime/admit-and-run-provider-free!
+            (pure-v2-world (:bytes artifact)) (:bytes artifact))))))
 
 (deftest ^:integration compiler-component-aiueos-provider-round-trip
   (if-let [host-path (System/getenv "KOTOTAMA_COMPONENT_HOST")]
