@@ -69,7 +69,7 @@
    :git-sha "c83183f7b66afda6a095e690ff617075a39cc0eb"
    :role :shared-security-primitives}
   {:coordinate "io.github.kotoba-lang/aiueos"
-   :git-sha "63c13fd48dc53e0f93fa40f6bfce54e62773c656"
+   :git-sha "fc70904b49df13a20b54ab00de99284b02c9a458"
    :role :policy-kernel}
   {:coordinate "io.github.kotoba-lang/abi"
    :git-sha "c389f687bbacd70623970ef908475e8dadec5876"
