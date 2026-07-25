@@ -28,3 +28,23 @@
                  (adapter/admit-component-with-aiueos!
                   artifact world bytes #(reset! linked true) {} {})))
     (is (false? @linked))))
+
+(deftest component-adapter-must-be-explicitly-qualified-before-linking
+  (let [bytes (.getBytes "component" "UTF-8")
+        artifact {:capabilities #{:aiueos.component/aiueos-clock-now}
+                  :component-imports
+                  {:aiueos.component/aiueos-clock-now
+                   {:target "clock://monotonic" :operation :clock/now
+                    :max-bytes 1 :max-items 1 :deadline-ms 10 :audit-id "test"}}}
+        world {:target :wasm-component-kotoba-v1 :wasi-version "0.3.0" :profile :sync
+               :exports #{:app/run} :ambient-wasi false :budgets {:fuel 1 :memory-pages 1}
+               :identity {:component-cid (mf/cidv1-raw bytes)
+                          :package-lock-cid (mf/cidv1-raw (.getBytes "lock" "UTF-8"))
+                          :definition-cids #{(mf/cidv1-raw (.getBytes "def" "UTF-8"))}}
+               :abilities {}}
+        providers {:aiueos.component/aiueos-clock-now :clock-provider}
+        linked (atom false)]
+    (is (thrown? clojure.lang.ExceptionInfo
+                 (adapter/admit-component-with-aiueos!
+                  artifact world bytes #(reset! linked true) providers {:runtime :chicory-core-compat})))
+    (is (false? @linked))))
