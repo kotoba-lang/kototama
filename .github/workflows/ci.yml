@@ -13,9 +13,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - name: Check locked native micro-TCB
+      - name: Build locked native micro-TCB
         working-directory: native/wasmtime-component-host
-        run: cargo check --locked
+        run: cargo build --locked
 
   cljc-contract:
     name: CLJC contract gate
@@ -29,6 +29,10 @@ jobs:
       - uses: DeLaGuardo/setup-clojure@13.0
         with:
           cli: latest
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build native Component host for integration test
+        working-directory: native/wasmtime-component-host
+        run: cargo build --locked
       - name: Install wasm-tools
         # kototama.tender-test shells out to `wasm-tools parse` to assemble
         # its WAT fixtures into real Wasm bytes (Chicory Parser/Instance
@@ -57,6 +61,8 @@ jobs:
             git clone --depth 1 "https://github.com/kotoba-lang/$repo.git" "../$repo"
           done
       - name: Test CLJC contract
+        env:
+          KOTOTAMA_COMPONENT_HOST: ${{ github.workspace }}/native/wasmtime-component-host/target/debug/kototama-wasmtime-component-host
         run: clojure -M:test
       - name: Lint CLJC contract
         run: clojure -M:lint
