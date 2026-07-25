@@ -70,7 +70,7 @@
   "Run an admitted effectful Component through the native Wasmtime micro-TCB.
    The host links no WASI interfaces and every imported WIT function is
    synchronously delegated through the previously admitted provider boundary."
-  [{:keys [runtime component-bytes imports abilities budgets artifact providers
+  [{:keys [runtime component-bytes imports abilities budgets artifact providers lease-authorize?
            component-host component-host-sha256]}]
   (when-not (= :wasmtime-component runtime)
     (reject :runtime-mismatch "Wasmtime Component adapter was not selected"))
@@ -82,7 +82,8 @@
     (reject :ability-mismatch "native Component imports and abilities must be exact"))
   (let [prepared (provider/prepare!
                   {:runtime runtime :component? true :artifact artifact
-                   :grants (set (keys imports)) :providers providers})
+                   :grants (set (keys imports)) :providers providers
+                   :lease-authorize? lease-authorize?})
         executable (host-executable! component-host component-host-sha256)
         deadline-ms (long (or (:deadline-ms budgets) 30000))
         path (Files/createTempFile "kototama-component-" ".wasm"

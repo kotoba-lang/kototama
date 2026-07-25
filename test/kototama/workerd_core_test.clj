@@ -11,7 +11,8 @@
         request {:artifact {:format :wasm/v1 :bytes (byte-array [0 97 115 109])
                             :capabilities #{capability} :component-imports {capability ability}}
                  :grants #{capability}
-                 :providers {capability #(reset! seen %)}}
+                 :providers {capability #(reset! seen %)}
+                 :lease-authorize? (fn [_ _] true)}
         plan (workerd/prepare-core-module! request)]
     (is (= :workerd-core (:runtime plan)))
     (is (false? (:ambient-wasi plan)))

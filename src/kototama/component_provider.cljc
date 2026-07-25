@@ -20,7 +20,7 @@
    selected. Providers are opaque host callbacks/handles, but their keys must
    exactly equal the granted WIT imports. Core-Wasm-only adapters are never
    allowed to claim a Component binary."
-  [{:keys [runtime artifact grants providers component?] :as request}]
+  [{:keys [runtime artifact grants providers component? lease-authorize?] :as request}]
   (when-not (contains? supported-runtimes runtime)
     (throw (ex-info "unsupported Component runtime" {:phase :component-provider :runtime runtime})))
   (let [declared (set (:capabilities artifact))
@@ -47,6 +47,9 @@
     (when (and component? (not= runtime :wasmtime-component))
       (throw (ex-info "selected runtime cannot instantiate a standard Component"
                       {:phase :component-provider :runtime runtime})))
+    (when-not (ifn? lease-authorize?)
+      (throw (ex-info "Component execution requires an Aiueos lease validator"
+                      {:phase :component-provider})))
     request))
 
 (defn invoke!
@@ -57,12 +60,15 @@
    deadline, or audit identity by passing a larger request at call time.
    Engine-specific Wasmtime bindings must call this function (or enforce an
    equivalent check inside the native micro-TCB) for each imported WIT call."
-  [{:keys [artifact providers]} import payload]
+  [{:keys [artifact providers lease-authorize?]} import payload]
   (let [ability (get (:component-imports artifact) import)
         invoke (provider-invoke (get providers import))]
     (when-not (and ability invoke)
       (throw (ex-info "Component import is not admitted for invocation"
                       {:phase :component-provider :import import})))
+    (when-not (lease-authorize? import ability)
+      (throw (ex-info "Aiueos lease denies this Component provider invocation"
+                      {:phase :component-provider :import import :reason :lease-denied})))
     ;; Payload is deliberately the only guest-controlled value.  The
     ;; capability descriptor remains immutable and exact at the host edge.
     (invoke {:import import :ability ability :payload payload})))

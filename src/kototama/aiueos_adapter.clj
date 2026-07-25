@@ -75,11 +75,17 @@
   linker. Aiueos decides; this function only translates a grant into the
   exact WIT bindings and delegates CID/world verification to component-platform.
   A denial, unknown import, or missing provider aborts before LINKER! runs."
-  [artifact world component-bytes linker! providers opts]
+  [artifact world component-bytes linker! providers {:keys [lease-epoch lease-ttl-ms lease-id now-ms] :as opts}]
   (let [declared (set (:capabilities artifact))
         abilities (:component-imports artifact)
         {:keys [host-caps decision]} (host-caps-for-component artifact opts)
-        expected (set (keep component-import->kototama-import declared))]
+        expected (set (keep component-import->kototama-import declared))
+        now (long (or now-ms (System/currentTimeMillis)))
+        lease (component-abi/issue-lease
+               {:decision decision :imports declared :abilities abilities :now now
+                :epoch lease-epoch :ttl-ms lease-ttl-ms :lease-id lease-id})
+        lease-authorize? #(component-abi/lease-authorizes? lease lease-epoch
+                                                            (System/currentTimeMillis) %1 %2)]
     (when-not (= expected (:grants host-caps))
       (throw (ex-info "aiueos did not grant every declared Component import"
                       {:phase :component-grant :decision decision
@@ -97,12 +103,16 @@
     ;; Chicory and workerd remain core-Wasm-only compatibility paths.
     (component-provider/prepare!
      {:runtime (:runtime opts) :component? true :artifact artifact
-      :grants declared :providers (select-keys providers declared)})
+      :grants declared :providers (select-keys providers declared)
+      :lease-authorize? lease-authorize?})
     (component-platform/admit-and-link!
      (assoc world :imports declared :grants declared
             :provider-bindings (select-keys providers declared)
             :abilities abilities)
-     component-bytes linker!)))
+     component-bytes
+     ;; The Component world is a closed, admitted ABI envelope.  Lease state
+     ;; stays host-local and reaches only the effectful provider boundary.
+     #(linker! (assoc % :lease lease :lease-authorize? lease-authorize?)))))
 
 (defn admit-and-run-component-with-aiueos!
   [artifact world component-bytes providers
