@@ -97,10 +97,13 @@
             reader (BufferedReader. (InputStreamReader. (.getInputStream process) "UTF-8"))
             writer (BufferedWriter. (OutputStreamWriter. (.getOutputStream process) "UTF-8"))
             request {:type "run" :component (.toString path)
+                     ;; `imports` is the admitted provider binding map; its
+                     ;; values are opaque callbacks.  The native protocol must
+                     ;; receive the separately admitted ability descriptors.
                      :imports (mapv (fn [[import ability]]
                                       {:name (host-import-name import)
                                        :ability (host-ability ability)})
-                                    imports)
+                                    abilities)
                      :fuel (long (or (:fuel budgets) 1))
                      :memory-pages (long (or (:memory-pages budgets) 1))}
             outcome (future
