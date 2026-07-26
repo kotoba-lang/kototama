@@ -12,4 +12,4 @@ serde_json = "1.0.145"
 # Keep the native TCB small: no WASI, GC, cache, profiling, debugger,
 # component-async, or automatic parallel compilation surfaces.
 wasmtime = { version = "=42.0.1", default-features = false, features = ["component-model", "cranelift", "runtime"] }
-kotoba-abi-wit = { git = "https://github.com/kotoba-lang/abi.git", rev = "0617a60ac8d1179d2de40aef52783954fcb0d1cb" }
+kotoba-abi-wit = { git = "https://github.com/kotoba-lang/abi.git", rev = "2a928bd18eb609851454794651dc40fa1259b0ab" }

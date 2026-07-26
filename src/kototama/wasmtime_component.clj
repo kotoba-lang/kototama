@@ -76,7 +76,8 @@
    The host links no WASI interfaces and every imported WIT function is
    synchronously delegated through the previously admitted provider boundary."
   [{:keys [runtime component-bytes imports abilities budgets artifact providers
-           component-host runtime-bindings lease lease-epoch now-ms audit-sink]}]
+           component-host runtime-bindings lease lease-epoch now-ms audit-sink
+           lease-authorize?]}]
   (when-not (= :wasmtime-component runtime)
     (reject :runtime-mismatch "Wasmtime Component adapter was not selected"))
   (when-not (bytes? component-bytes)
@@ -93,7 +94,8 @@
         prepared (provider/prepare!
                   {:runtime runtime :component? true :artifact artifact
                    :grants (set (keys imports)) :providers providers
-                   :lease lease :lease-epoch lease-epoch :now-ms now-ms})
+                   :lease lease :lease-epoch lease-epoch :now-ms now-ms
+                   :lease-authorize? lease-authorize?})
         executable (host-executable! component-host (:component-host-sha256 runtime-bindings))
         deadline-ms (long (or (:deadline-ms budgets) 30000))
         path (Files/createTempFile "kototama-component-" ".wasm"
