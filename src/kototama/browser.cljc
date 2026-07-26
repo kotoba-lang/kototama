@@ -24,6 +24,9 @@
      developer-controlled proxy URL (llmInferUrl) that itself holds any
      real credential server-side -- see
      test/browser/verify_llm_infer_browser.cljs there.
+   - http-fetch/http-post-headers: real as of wasm-webcomponent PR #15
+     (2026-07-26), using the same injected or SAB+Worker network transport,
+     exact JVM ABI shapes, independent quotas and the shared session authority.
    - kgraph-*: separate surface (kgraph.js), not actor:host"
   (:require [kototama.contract :as contract]
             [kototama.guest :as guest]))
@@ -63,14 +66,8 @@
    ;; called directly with a key embedded in browser-shipped JS/HTML.
    :llm-infer       {:jvm :yes :browser :yes :node :inject
                      :note "browser: Worker-hosted guest + SAME SAB+Atomics bridge as http-post, via a caller-supplied proxy URL (never a provider key embedded client-side); node: opts.llmInfer inject"}
-   ;; ADR-2607230943 second wave: JVM-only so far (kototama.tender), an
-   ;; honest gap -- no wasm-webcomponent actor-host.js port exists yet for
-   ;; any of these 4 (a future SAB+Atomics bridge could reuse http-post's
-   ;; pattern for :http-fetch; cbor-encode/json-encode/json-extract-field
-   ;; are pure computation and don't need one at all, just a JS port of
-   ;; the same flat-pairs parsing + encode/scan logic).
-   :http-fetch          {:jvm :yes :browser :no :node :no
-                         :note "JVM only so far; reuses kotoba-core-contracts' pre-existing http/fetch (id 205) shape"}
+   :http-fetch          {:jvm :yes :browser :yes :node :inject
+                         :note "browser: shared Worker+SAB transport; node: opts.httpFetch inject; independent maxHttpFetches quota"}
    ;; Ported to wasm-webcomponent's actor-host.js as a byte-for-byte JS
    ;; port of tender.clj's flat-pairs -> CBOR/JSON encoders and bounded
    ;; JSON field scan (pure computation, no SAB/Worker bridge needed).
@@ -84,13 +81,8 @@
                          :note "browser: byte-for-byte JS port in wasm-webcomponent actor-host.js (pure computation, no bridge)"}
    :json-extract-field  {:jvm :yes :browser :yes :node :yes
                          :note "browser: byte-for-byte JS port in wasm-webcomponent actor-host.js (pure computation, no bridge)"}
-   ;; Third wave (com-junkawasaki/root, this ADR). JVM only so far, an
-   ;; honest gap same shape as :http-fetch above -- a future SAB+Atomics
-   ;; bridge port could reuse :http-post's own bridge (just widen the
-   ;; message payload with a headers field), same as :http-fetch's note
-   ;; says.
-   :http-post-headers  {:jvm :yes :browser :no :node :no
-                        :note "JVM only so far; reuses http-post's own SSRF/DoS hardening and :max-http-posts budget, one added guest-supplied headers input"}})
+   :http-post-headers  {:jvm :yes :browser :yes :node :inject
+                        :note "browser: shared Worker+SAB transport; exact flat-pair headers ABI and shared maxHttpPosts quota"}})
 
 (defn import-status
   "Status map for one import id under :jvm | :browser | :node."
@@ -226,7 +218,7 @@
   "Aggregate R2 snapshot for CLI doctor."
   []
   {:level :r2
-   :status :advanced-partial
+   :status :qualified
    :title "Browser-native host parity"
    :score (parity-score)
    :matrix (parity-matrix)

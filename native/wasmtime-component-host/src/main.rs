@@ -59,16 +59,16 @@ struct State {
     limits: StoreLimits,
 }
 
-fn allowed_operation(name: &str) -> Option<&'static str> {
+fn allowed_binding(name: &str) -> Option<(&'static str, &'static str, &'static str)> {
     match name {
-        "aiueos-clock-now" => Some("clock/now"),
-        "aiueos-log-append" => Some("log/append"),
+        "aiueos-clock-now" => Some(("kotoba:application/clock@1.0.0", "now", "clock/now")),
+        "aiueos-log-append" => Some(("kotoba:application/log@1.0.0", "append", "log/append")),
         _ => None,
     }
 }
 
 fn validate_ability(name: &str, ability: &Ability) -> Result<()> {
-    let Some(expected_operation) = allowed_operation(name) else {
+    let Some((_, _, expected_operation)) = allowed_binding(name) else {
         bail!("unrecognized aiueos Component import: {name}");
     };
     if ability.operation != expected_operation {
@@ -150,7 +150,11 @@ fn run(request: Run, protocol: Arc<Mutex<Protocol>>) -> Result<i64> {
     let mut linker = Linker::<State>::new(&engine);
     for (name, ability) in imports {
         let import_name = name.clone();
-        wasmtime_result(linker.root().func_wrap(&name, move |mut cx, (value,): (i64,)| {
+        let (interface, function, _) = allowed_binding(&name)
+            .ok_or_else(|| anyhow!("unrecognized aiueos Component import: {name}"))?;
+        let mut instance = wasmtime_result(linker.instance(interface),
+                                           "cannot create admitted Component interface")?;
+        wasmtime_result(instance.func_wrap(function, move |mut cx, (value,): (i64,)| {
             provider_call(cx.data_mut(), &import_name, &ability, value)
                 .map(|result| (result,))
                 .map_err(|error| wasmtime::Error::msg(error.to_string()))

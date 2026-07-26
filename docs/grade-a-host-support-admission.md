@@ -31,7 +31,7 @@ clojure -M:test -n kototama.browser-test -n kototama.tender-test
 ```
 
 The browser and Node execution implementation lives in
-`kotoba-lang/wasm-webcomponent`. T-03 remains `in-progress` until that runtime
+`kotoba-lang/wasm-webcomponent`. T-03 is qualified at 14/14 imports; that runtime
 calls the same admission contract (or a mechanically verified equivalent)
 before `WebAssembly.instantiate`, with an end-to-end negative test for every
 conditional import.

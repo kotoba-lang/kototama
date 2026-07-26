@@ -101,6 +101,12 @@
            execution-identity] :as opts}]
   (let [declared (set (:capabilities artifact))
         abilities (:component-imports artifact)
+        _ (when-not (= (select-keys (:budgets artifact) [:fuel :memory-pages])
+                       (select-keys (:budgets world) [:fuel :memory-pages]))
+            (throw (ex-info "Component executable budgets differ from admitted world"
+                            {:phase :component-grant
+                             :artifact-budgets (:budgets artifact)
+                             :world-budgets (:budgets world)})))
         {:keys [host-caps decision]} (host-caps-for-component artifact opts)
         now-ms (or now-ms #(System/currentTimeMillis))
         issued-at (long (if (ifn? now-ms) (now-ms) now-ms))
@@ -115,11 +121,24 @@
                 :now issued-at :epoch issued-epoch
                 :ttl-ms (or lease-ttl-ms 30000)
                 :lease-id (or lease-id (str "component-" issued-at))})
+        remaining (atom (into {} (map (fn [[import ability]]
+                                        [import (:max-items ability)]))
+                              abilities))
         lease-authorize?
-        #(component-abi/lease-authorizes?
-          lease (current-lease-epoch! epoch-source)
-          (long (if (ifn? now-ms) (now-ms) now-ms))
-          %1 %2)
+        (fn [import ability]
+          (and
+           (component-abi/lease-authorizes?
+            lease (current-lease-epoch! epoch-source)
+            (long (if (ifn? now-ms) (now-ms) now-ms))
+            import ability)
+           (loop []
+             (let [before @remaining
+                   left (long (or (get before import) 0))]
+               (when (pos? left)
+                 (if (compare-and-set! remaining before
+                                       (assoc before import (dec left)))
+                   true
+                   (recur)))))))
         expected (set (keep component-import->kototama-import declared))]
     (when-not (= expected (:grants host-caps))
       (throw (ex-info "aiueos did not grant every declared Component import"
@@ -134,27 +153,64 @@
                       {:phase :component-grant :declared declared
                        :abilities (set (keys abilities))})))
     ;; Engine selection is part of the TCB boundary, never an ambient detail
-    ;; of LINKER!.  Today the sole admitted Component adapter is Wasmtime;
-    ;; Chicory and workerd remain core-Wasm-only compatibility paths.
+    ;; of LINKER!. Wasmtime and pinned jco are independently qualified
+    ;; Component adapters; Chicory/workerd remain core-Wasm compatibility.
     (component-provider/prepare!
      {:runtime (:runtime opts) :component? true :artifact artifact
       :grants declared :providers (select-keys providers declared)
       :lease-authorize? lease-authorize?})
-    (component-platform/admit-and-link!
-     (assoc world :imports declared :grants declared
-            :provider-bindings (select-keys providers declared)
-            :abilities abilities
-            :runtime-bindings
-            {:component-host-sha256 (:component-host-sha256 opts)})
-     execution-identity
-     component-bytes
-     ;; The admitted world remains a closed ABI envelope. Lease state is
-     ;; host-local and reaches only the provider invocation boundary.
-     #(linker! (assoc % :lease lease
-                      :lease-epoch issued-epoch
-                      :lease-epoch-source epoch-source
-                      :now-ms now-ms
-                      :lease-authorize? lease-authorize?)))))
+    (let [outcome
+          (component-platform/admit-and-link!
+           (assoc world :imports declared :grants declared
+                  :provider-bindings (select-keys providers declared)
+                  :abilities abilities
+                  :runtime-bindings
+                  {:component-host-sha256 (:component-host-sha256 opts)})
+           execution-identity
+           component-bytes
+           ;; The admitted world remains a closed ABI envelope. Lease state is
+           ;; host-local and reaches only the provider invocation boundary.
+           #(linker! (assoc % :lease lease
+                            :lease-epoch issued-epoch
+                            :lease-epoch-source epoch-source
+                            :now-ms now-ms
+                            :lease-authorize? lease-authorize?)))
+          receipt
+          {:format :kototama.component-host-receipt/v1
+           :execution-identity execution-identity
+           :decision decision
+           :component-cid (get-in world [:identity :component-cid])
+           :imports declared
+           :abilities abilities
+           :resource-bounds (:budgets world)
+           :lease {:id (:aiueos/lease-id lease)
+                   :epoch issued-epoch
+                   :expires-at (:aiueos/expires-at lease)
+                   :imports (:aiueos/component-imports lease)
+                   :abilities (:aiueos/abilities lease)
+                   :remaining @remaining
+                   :consumed (into {}
+                                   (map (fn [[import ability]]
+                                          [import (- (:max-items ability)
+                                                     (get @remaining import 0))]))
+                                   abilities)}
+           :outcome {:result (:result outcome)}
+           :host {:runtime (:runtime opts)
+                  :sha256 (:component-host-sha256 opts)}}]
+      (assoc outcome :receipt receipt))))
+
+(defn portable-receipt
+  "Host-independent projection used for cross-engine qualification. Host
+   implementation identity remains in the full receipt, while every policy,
+   capability, resource and execution identity fact must compare exactly."
+  [outcome]
+  (-> (:receipt outcome)
+      (dissoc :host)
+      ;; Broker audit timestamps record the two concrete host attempts and
+      ;; therefore legitimately differ. The immutable policy-decision CID in
+      ;; execution-identity binds decision identity; this projection compares
+      ;; the semantic decision fields.
+      (update :decision dissoc :aiueos.broker/audit-entries)))
 
 (defn admit-and-run-component-with-aiueos!
   [artifact world component-bytes providers
@@ -163,7 +219,7 @@
    artifact world component-bytes
    (fn [admitted]
      (wasmtime-component/run-effectful!
-      (assoc admitted :runtime :wasmtime-component
+      (assoc admitted :runtime (:runtime opts)
              :artifact artifact :providers providers
              :component-host component-host
              :execution-identity execution-identity)))

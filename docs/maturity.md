@@ -9,10 +9,10 @@ guest = Wasm component). Not a marketing scorecard.
 |---|---|---|---|
 | **R0** | Contract / dry-run | **stable** | `kototama.contract` HostCaps + import surface; organism membrane refuses live publish |
 | **R1** | Tender execution (JVM/Chicory) | **stable** | `kototama.tender` runs real `.wasm`; fuel + memory limits; aiueos adapter; session report; source lint; host-free + host-import fixtures from `kotoba wasm emit` |
-| **R2** | Browser-native host parity | **advanced-partial** | parity matrix; 12/14 browser-linkable (`http-post` and `llm-infer` real via a Worker-hosted guest + SAB+Atomics bridge, `wasm-webcomponent` PR #8 / #11; the pure-computation codec imports `cbor-encode`/`json-encode`/`json-extract-field` now byte-for-byte ported to `actor-host.js`, byte-parity locked by `test/verify-codec-host.mjs`; only `http-fetch` and `http-post-headers` remain JVM-only, both needing the SAB network bridge); host-free web fixtures |
+| **R2** | Browser-native host parity | **qualified** | parity matrix; 14/14 browser-linkable under one session authority; network imports use explicit inject or the shared Worker+SAB bridge (`wasm-webcomponent` PR #15); host-free web fixtures |
 | **R3** | Fleet multi-tenant tender | **stable** | ops-ready local/shared-store fleet: fence+daemon+CI+staging-smoke (**not Raft**) |
 
-**Current declared level: R3 stable** (R1 stable; R2 advanced-partial underneath).
+**Current declared level: R3 stable** (R1 stable; R2 qualified underneath).
 
 ## R1 acceptance gates
 
@@ -58,17 +58,17 @@ clojure -M:cli parity           # JVM vs browser import matrix
 | llm-infer | yes | **yes** (Worker-hosted, via a caller-supplied proxy URL) | inject |
 | http-post | yes | **yes** (Worker-hosted, cross-origin-isolated) | inject |
 | cbor-encode / json-encode / json-extract-field (ADR-2607230943) | yes | **yes** (byte-for-byte JS port in `actor-host.js`, parity locked by `verify-codec-host.mjs`) | yes |
-| http-fetch (ADR-2607230943) | yes | **no** (needs the SAB network bridge) | no |
-| http-post-headers (com-junkawasaki/root, third wave) | yes | **no** (honest gap -- no wasm-webcomponent port yet) | no |
+| http-fetch (ADR-2607230943) | yes | **yes** (shared SAB network bridge) | inject |
+| http-post-headers (com-junkawasaki/root, third wave) | yes | **yes** (shared SAB network bridge) | inject |
 
-Score today: **12/14** browser-linkable. The three pure-computation codec
+Score today: **14/14** browser-linkable. The three pure-computation codec
 imports (`cbor-encode`/`json-encode`/`json-extract-field`) are now a
 byte-for-byte JS port in `wasm-webcomponent`'s `actor-host.js`, with byte
 parity against the JVM outputs locked by that repo's
-`test/verify-codec-host.mjs` (the R1 fixture values). Only `http-fetch` and
-`http-post-headers` remain JVM-only -- both need the SAB/Worker network
-bridge, not the pure-computation path the codec imports took (history:
-9/9 -> second wave 9/13 -> third wave 9/14 -> codec port 12/14). `http-post`
+`test/verify-codec-host.mjs` (the R1 fixture values). `http-fetch` and
+`http-post-headers` reuse the same SAB/Worker transport as `http-post`
+(`wasm-webcomponent` PR #15; history:
+9/9 -> second wave 9/13 -> third wave 9/14 -> codec port 12/14 -> 14/14). `http-post`
 is real in a browser tab
 as of `wasm-webcomponent` PR #8 (2026-07-16): `http-post-bridge.js`'s
 `createSabHttpPostBridge` (SharedArrayBuffer+`Atomics.wait`, needs COOP/COEP

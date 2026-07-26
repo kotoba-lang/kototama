@@ -7,7 +7,10 @@
   (:require [clojure.set :as set]
             [kotoba.abi.contract :as abi]))
 
-(def supported-runtimes #{:wasmtime-component :chicory-core-compat :workerd-core})
+(def supported-runtimes
+  #{:wasmtime-component :jco-component :chicory-core-compat :workerd-core})
+
+(def component-runtimes #{:wasmtime-component :jco-component})
 
 (defn- provider-invoke [provider]
   (cond
@@ -44,7 +47,7 @@
       (throw (ex-info "Component provider must expose an invocation adapter"
                       {:phase :component-provider
                        :providers (set (keys providers))})))
-    (when (and component? (not= runtime :wasmtime-component))
+    (when (and component? (not (contains? component-runtimes runtime)))
       (throw (ex-info "selected runtime cannot instantiate a standard Component"
                       {:phase :component-provider :runtime runtime})))
     (when-not (ifn? lease-authorize?)

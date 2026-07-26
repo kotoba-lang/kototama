@@ -31,33 +31,110 @@
               :package-lock-cid (mf/cidv1-raw (.getBytes "e2e-lock" "UTF-8"))
               :definition-cids #{(mf/cidv1-raw (.getBytes "e2e-definition" "UTF-8"))}}})
 
+(defn- cid [text]
+  (mf/cidv1-raw (.getBytes ^String text "UTF-8")))
+
+(defn- execution-identity [component-bytes]
+  {:format :kotoba.execution-identity/v1
+   :plan-cid (cid "e2e-plan") :code-closure-cid (cid "e2e-closure")
+   :artifact-cid (cid "e2e-artifact")
+   :compiler-contract (cid "e2e-compiler-contract")
+   :component-cid (mf/cidv1-raw component-bytes)
+   :wit-world-cid (mf/cidv1-raw (.getBytes ^String (abi/world-wit [7]) "UTF-8"))
+   :package-lock-cid (cid "e2e-package-lock")
+   :policy-cid (cid "e2e-policy")
+   :policy-decision-cid (cid "e2e-decision")
+   :db-basis (cid "e2e-basis")
+   :grant-cids [(cid "e2e-grant")]
+   :approval-cids [(cid "e2e-approval")]
+   ;; This identifies the common Component host contract. Concrete host bytes
+   ;; remain separately pinned in each full host receipt.
+   :runtime-identity (cid "kototama-component-host-contract-v1")
+   :input-cid (cid "e2e-input") :outcome-cid (cid "e2e-outcome")
+   :host-receipt-cids [(cid "e2e-host-receipt-set")]})
+
+(defn- run-on-host [artifact host runtime providers opts]
+  (adapter/admit-and-run-component-with-aiueos!
+   artifact (component-world (:bytes artifact)) (:bytes artifact) providers
+   (merge {:runtime runtime
+           :component-host (.getAbsolutePath ^File host)
+           :component-host-sha256 (sha256-file host)
+           :execution-identity (execution-identity (:bytes artifact))
+           :lease-epoch 1 :lease-ttl-ms 10000
+           :lease-id "component-cross-host-lease"
+           :now-ms 1000}
+          opts)))
+
 (deftest ^:integration compiler-component-aiueos-provider-round-trip
   (if-let [host-path (System/getenv "KOTOTAMA_COMPONENT_HOST")]
     (let [host (File. host-path)
+          jco-path (System/getenv "KOTOTAMA_JCO_COMPONENT_HOST")
+          jco-host (when jco-path (File. jco-path))
           ability {:target "clock://monotonic" :operation :clock/now
                    :max-bytes 1 :max-items 1 :deadline-ms 1000 :audit-id "component-e2e"}
-          artifact (compiler/compile-source
+          artifact (compiler/compile-component
                     "(ns app (:capabilities #{:clock/now})) (defn main [] (cap-call :clock/now 7))"
-                    abi/component-target
-                    {:allow #{[:cap/call 7]} :component-abilities {7 ability}})
-          seen (atom nil)
+                    {:allow #{[:cap/call 7]}}
+                    {:component-abilities {7 ability}
+                     :budgets {:fuel 100000 :memory-pages 4}})
+          seen (atom [])
           providers {:aiueos.component/aiueos-clock-now
                      (fn [{:keys [payload] :as request}]
-                       (reset! seen request)
+                       (swap! seen conj request)
                        (+ 100 (:value payload)))}
-          outcome (adapter/admit-and-run-component-with-aiueos!
-                   artifact (component-world (:bytes artifact)) (:bytes artifact) providers
-                   {:runtime :wasmtime-component
-                    :component-host (.getAbsolutePath host)
-                    :component-host-sha256 (sha256-file host)
-                    :lease-epoch 1
-                    :lease-ttl-ms 10000
-                    :lease-id "component-e2e-lease"})]
+          wasmtime (run-on-host artifact host :wasmtime-component providers {})
+          jco (when jco-host
+                (run-on-host artifact jco-host :jco-component providers {}))]
       (testing "only the admitted named WIT import crosses the native host"
-        (is (= {:result 107 :runtime :wasmtime-component} outcome))
+        (is (= {:result 107 :runtime :wasmtime-component}
+               (select-keys wasmtime [:result :runtime])))
         (is (= {:import :aiueos.component/aiueos-clock-now
                 :ability ability :payload {:value 7}}
-               @seen))))
+               (first @seen))))
+      (when jco
+        (testing "the same effectful Component and authority run in independent hosts"
+          (is (= {:result 107 :runtime :jco-component}
+                 (select-keys jco [:result :runtime])))
+          (is (= (adapter/portable-receipt wasmtime)
+                 (adapter/portable-receipt jco)))
+          (is (= (execution-identity (:bytes artifact))
+                 (:execution-identity jco)
+                 (:execution-identity wasmtime)))
+          (is (not= (get-in wasmtime [:receipt :host])
+                    (get-in jco [:receipt :host])))
+          (is (= {:aiueos.component/aiueos-clock-now 1}
+                 (get-in jco [:receipt :lease :consumed])))
+          (is (= {:fuel 100000 :memory-pages 4 :deadline-ms 10000}
+                 (get-in jco [:receipt :resource-bounds]))))
+        (testing "live epoch revocation denies both engines before provider execution"
+          (doseq [[runtime engine] [[:wasmtime-component host]
+                                    [:jco-component jco-host]]]
+            (let [calls (atom 0)
+                  epoch-source #(if (= 1 (swap! calls inc)) 1 2)]
+              (is (thrown-with-msg?
+                   clojure.lang.ExceptionInfo #"lease denies"
+                   (run-on-host artifact engine runtime providers
+                                {:lease-epoch-source epoch-source}))))))
+        (testing "deny-by-default policy is engine-independent"
+          (doseq [[runtime engine] [[:wasmtime-component host]
+                                    [:jco-component jco-host]]]
+            (is (thrown? clojure.lang.ExceptionInfo
+                         (run-on-host artifact engine runtime providers
+                                      {:policy-overlay
+                                       {:aiueos/require-signed true}})))))
+        (testing "one-shot capability exhaustion is identical across engines"
+          (let [twice (compiler/compile-component
+                       "(ns app (:capabilities #{:clock/now}))
+                        (defn main [] (do (cap-call :clock/now 7)
+                                          (cap-call :clock/now 8)))"
+                       {:allow #{[:cap/call 7]}}
+                       {:component-abilities {7 ability}
+                        :budgets {:fuel 100000 :memory-pages 4}})]
+            (doseq [[runtime engine] [[:wasmtime-component host]
+                                      [:jco-component jco-host]]]
+              (is (thrown-with-msg?
+                   clojure.lang.ExceptionInfo #"lease denies"
+                   (run-on-host twice engine runtime providers {}))))))))
     ;; The executable is a deliberately separate native TCB.  Unit-test
     ;; invocations do not build it implicitly; CI sets this variable after
     ;; `cargo build --locked` and therefore cannot skip the integration path.
