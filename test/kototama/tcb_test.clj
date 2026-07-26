@@ -8,9 +8,6 @@
     "src/kototama/browser.cljc"
     "src/kototama/component_platform.clj"
     "src/kototama/component_provider.cljc"
-    "src/kototama/wasmtime_component.clj"
-    "native/wasmtime-component-host/src/main.rs"
-    "native/jco-component-host.mjs"
     "src/kototama/workerd_core.clj"
     "workerd/kototama-core-host.mjs"
     "src/kototama/compatibility.clj"
@@ -22,11 +19,10 @@
     "src/kototama/network_authority.clj"
     "src/kototama/release_evidence.clj"
     "src/kototama/signer_lifecycle.clj"
-    "src/kototama/transport_provider.clj"
     "src/kototama/tcb.clj"})
 
 (deftest checked-in-tcb-has-no-drift
-  (is (= {:valid? true :files 27 :external 10 :errors []}
+  (is (= {:valid? true :files 23 :external 8 :errors []}
          (tcb/validate))))
 
 (deftest authority-and-runtime-boundaries-cannot-disappear-silently

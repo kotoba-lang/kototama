@@ -7,16 +7,6 @@ on:
       - main
 
 jobs:
-  wasmtime-component-host:
-    name: native Wasmtime Component host
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Build locked native micro-TCB
-        working-directory: native/wasmtime-component-host
-        run: cargo build --locked
-
   cljc-contract:
     name: CLJC contract gate
     runs-on: ubuntu-latest
@@ -32,14 +22,6 @@ jobs:
       - uses: DeLaGuardo/setup-clojure@13.0
         with:
           cli: latest
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Build native Component host for integration test
-        working-directory: native/wasmtime-component-host
-        run: cargo build --locked
-      - name: Install pinned independent jco Component host
-        run: |
-          npm ci --no-audit --no-fund
-          chmod +x native/jco-component-host.mjs
       - name: Install wasm-tools
         # kototama.tender-test shells out to `wasm-tools parse` to assemble
         # its WAT fixtures into real Wasm bytes (Chicory Parser/Instance
@@ -79,9 +61,6 @@ jobs:
           git -C ../compiler fetch origin main
           git -C ../compiler checkout --detach 4e4056e35b1118ced1f92144ccb891e0c12eb075
       - name: Test CLJC contract
-        env:
-          KOTOTAMA_COMPONENT_HOST: ${{ github.workspace }}/native/wasmtime-component-host/target/debug/kototama-wasmtime-component-host
-          KOTOTAMA_JCO_COMPONENT_HOST: ${{ github.workspace }}/native/jco-component-host.mjs
         run: clojure -M:test
       - name: Lint CLJC contract
         run: clojure -M:lint

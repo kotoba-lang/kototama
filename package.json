@@ -5,9 +5,6 @@
   "scripts": {
     "test:workerd": "bash workerd/verify-e2e.sh"
   },
-  "dependencies": {
-    "@bytecodealliance/jco": "1.25.2"
-  },
   "devDependencies": {
     "workerd": "1.20260723.1"
   }

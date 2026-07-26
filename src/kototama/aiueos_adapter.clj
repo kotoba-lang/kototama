@@ -26,7 +26,6 @@
             [kototama.contract :as contract]
             [kototama.component-platform :as component-platform]
             [kototama.component-provider :as component-provider]
-            [kototama.wasmtime-component :as wasmtime-component]
             [kototama.linear-journal :as linear-journal]))
 
 (def kototama-import->aiueos-capability
@@ -224,19 +223,6 @@
       ;; execution-identity binds decision identity; this projection compares
       ;; the semantic decision fields.
       (update :decision dissoc :aiueos.broker/audit-entries)))
-
-(defn admit-and-run-component-with-aiueos!
-  [artifact world component-bytes providers
-   {:keys [component-host execution-identity] :as opts}]
-  (admit-component-with-aiueos!
-   artifact world component-bytes
-   (fn [admitted]
-     (wasmtime-component/run-effectful!
-      (assoc admitted :runtime (:runtime opts)
-             :artifact artifact :providers providers
-             :component-host component-host
-             :execution-identity execution-identity)))
-   providers opts))
 
 (def ^:private aiueos-cli-contract
   (delay (cli/read-contract)))
