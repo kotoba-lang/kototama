@@ -1,5 +1,5 @@
 {:tcb/version 1
- :tcb/as-of "2026-07-23"
+ :tcb/as-of "2026-07-26"
  :tcb/scope
  "Code whose compromise can grant actor:host authority, bypass production
   admission or resource containment, falsify fleet fencing, or cross a
@@ -28,7 +28,9 @@
   {:path "native/wasmtime-component-host/src/main.rs" :role :native-component-engine-host
    :sha256 "35040d40d954b754b22f53b5a00fff29e9fc1531ca5695c4cdbaf01ecc20437f"}
   {:path "src/kototama/workerd_core.clj" :role :workerd-core-engine-adapter
-   :sha256 "447c6b6327285803ce71ea199845255777cd9afa99b2d866cf17ae72ad5de83e"}
+   :sha256 "979253bc9bd5414b7a044090c0c066d5784add9985e290ea0213567479329c28"}
+  {:path "workerd/kototama-core-host.mjs" :role :workerd-provider-host-boundary
+   :sha256 "cf511d788b9ed70afa2099a26089007fc7c7b8a27b5f9960421ec132a9d861f0"}
   {:path "src/kototama/contract.cljc" :role :authority-schema
    :sha256 "5e66a857349ec7aa6bcc36a710bb25cf0489e2a0999e4ff46fea7952d2f62337"}
   {:path "src/kototama/fleet.cljc" :role :lease-authority
@@ -83,6 +85,9 @@
   {:coordinate "wasmtime"
    :version "42.0.1"
    :role :native-component-engine}
+  {:coordinate "workerd"
+   :version "1.20260723.1"
+   :role :core-wasm-isolate-engine}
   {:coordinate "java.base" :minimum-version 21
    :role :process-crypto-network-concurrency-runtime}]
  :tcb/native-unsafe

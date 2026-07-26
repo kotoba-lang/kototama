@@ -8,6 +8,17 @@
    the JavaScript host integration; it deliberately contains no ambient WASI."
   (:require [kototama.component-provider :as provider]))
 
+(defn- manifest-import [capability ability]
+  (let [module (namespace capability)
+        import-name (name capability)]
+    (when-not (and (keyword? capability) module (seq import-name))
+      (throw (ex-info "workerd capability must name an exact WIT import"
+                      {:phase :workerd-core :capability capability})))
+    {:module module
+     :name import-name
+     :capability (subs (str capability) 1)
+     :ability ability}))
+
 (defn prepare-core-module!
   "Return the exact JavaScript import plan for a Core-Wasm artifact.
 
@@ -22,10 +33,16 @@
     (throw (ex-info "workerd Core-Wasm artifact requires bytes"
                     {:phase :workerd-core})))
   (let [prepared (provider/prepare! (assoc request :runtime :workerd-core
-                                                   :component? false))]
+                                                   :component? false))
+        abilities (:component-imports artifact)
+        capabilities (sort-by str (keys abilities))]
     {:runtime :workerd-core
      :ambient-wasi false
      :module-bytes (:bytes artifact)
      :imports (:providers prepared)
-     :abilities (:component-imports artifact)
+     :abilities abilities
+     :manifest {:format "kototama.workerd-core/v1"
+                :imports (mapv #(manifest-import % (get abilities %))
+                               capabilities)
+                :grants (mapv #(subs (str %) 1) capabilities)}
      :invoke (fn [import payload] (provider/invoke! prepared import payload))}))

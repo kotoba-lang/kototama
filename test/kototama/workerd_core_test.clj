@@ -16,6 +16,13 @@
         plan (workerd/prepare-core-module! request)]
     (is (= :workerd-core (:runtime plan)))
     (is (false? (:ambient-wasi plan)))
+    (is (= {:format "kototama.workerd-core/v1"
+            :imports [{:module "aiueos.component"
+                       :name "aiueos-clock-now"
+                       :capability "aiueos.component/aiueos-clock-now"
+                       :ability ability}]
+            :grants ["aiueos.component/aiueos-clock-now"]}
+           (:manifest plan)))
     ((:invoke plan) capability {:value 1})
     (is (= {:import capability :ability ability :payload {:value 1}} @seen))
     (is (thrown? clojure.lang.ExceptionInfo

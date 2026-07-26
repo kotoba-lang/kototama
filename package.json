@@ -1,0 +1,10 @@
+{
+  "name": "kototama-workerd-conformance",
+  "private": true,
+  "scripts": {
+    "test:workerd": "bash workerd/verify-e2e.sh"
+  },
+  "devDependencies": {
+    "workerd": "1.20260723.1"
+  }
+}
