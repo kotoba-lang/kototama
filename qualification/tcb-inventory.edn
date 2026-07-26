@@ -51,8 +51,6 @@
    :sha256 "6cf53a05c9a7329f220cb062464007060c83ea357ed27f9c1776dc592e905641"}
   {:path "src/kototama/network_authority.clj" :role :network-provider-authority
    :sha256 "d679c1615880d95f16481775490aea086978124feae413e488f352b97e6793cd"}
-  {:path "src/kototama/postgresql_pool_provider.clj" :role :database-provider-boundary
-   :sha256 "9147ffee055e43bf5c9fb8ed149b07a2e71e43de606c225b0f50f92e0871b965"}
   {:path "src/kototama/release_evidence.clj" :role :release-attestation-builder
    :sha256 "5f1f0cb60ea2f1eb5d05d5d86722f8365575c5b6c8178ef015de05875d0d08c3"}
   {:path "src/kototama/signal_crypto.clj" :role :signal-cryptography
