@@ -76,8 +76,8 @@ jobs:
           done
           # Pin the compiler change that emits effectful source as a real
           # named-import Component. Update to its squash commit after merge.
-          git -C ../compiler fetch origin agent/effectful-component-source
-          git -C ../compiler checkout --detach a21b95f
+          git -C ../compiler fetch origin main
+          git -C ../compiler checkout --detach 2b2874e33180e544cb03f9b50f282769fe517660
       - name: Test CLJC contract
         env:
           KOTOTAMA_COMPONENT_HOST: ${{ github.workspace }}/native/wasmtime-component-host/target/debug/kototama-wasmtime-component-host
