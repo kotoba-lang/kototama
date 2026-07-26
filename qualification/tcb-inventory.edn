@@ -10,7 +10,9 @@
   {:path "src/kototama/component_authority.clj" :role :component-epoch-consumer
    :sha256 "e7470553e392db8dd71fa78c78f665bc097be216ca8ebb491367eb0b469d6c32"}
   {:path "src/kototama/component_authority_http.clj" :role :component-authority-transport
-   :sha256 "f149ecb9abd6fe27604f30bcd640c516e56ecd2e5931df41597cc9435b4a92bd"}
+   :sha256 "3d947faeb854c41ced55f9b95ce3edab03ff8a2512a0964727f832afb2614645"}
+  {:path "src/kototama/component_authority_daemon.clj" :role :component-authority-daemon
+   :sha256 "fd399b2f2e0c7dbd5ed51ea1d3cd2151a144c173b3cba6f7aa16cb590b006834"}
   {:path "src/kototama/browser.cljc" :role :host-support-admission
    :sha256 "c7ee94f63c95c85a515074e291edbe9ccbfbef697e076dcda9687b7b517384ac"}
   {:path "src/kototama/cli.clj" :role :operator-entrypoint

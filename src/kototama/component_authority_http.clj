@@ -2,10 +2,12 @@
   "Bounded HTTP receiver for signed Murakumo Component authority envelopes."
   (:require [clojure.edn :as edn]
             [kototama.component-authority :as authority])
-  (:import [com.sun.net.httpserver HttpExchange HttpHandler HttpServer]
+  (:import [com.sun.net.httpserver HttpExchange HttpHandler HttpServer
+            HttpsConfigurator HttpsServer]
            [java.net InetSocketAddress]
            [java.nio.charset StandardCharsets]
-           [java.util.concurrent Executors]))
+           [java.util.concurrent Executors]
+           [javax.net.ssl SSLContext]))
 
 (def default-path "/v1/component-authority")
 (def max-request-bytes (* 1024 1024))
@@ -75,17 +77,20 @@
 (defn start!
   "Start a real JDK HTTP receiver and return {:server :port :stop!}.
   Remote binding requires explicit :allow-remote? true."
-  [{:keys [bind-host port path state trust allow-remote?]
+  [{:keys [bind-host port path state trust allow-remote? tls-context]
     :or {bind-host "127.0.0.1" port 0 path default-path}}]
   (when-not (and state (map? trust))
     (throw (ex-info "Authority receiver requires state and trust configuration"
                     {:reason :missing-configuration})))
   (when (and (not (contains? #{"127.0.0.1" "::1" "localhost"} bind-host))
-             (not allow-remote?))
-    (throw (ex-info "Remote authority receiver binding requires explicit opt-in"
+             (not (and allow-remote? (instance? SSLContext tls-context))))
+    (throw (ex-info "Remote authority receiver requires explicit opt-in and TLS"
                     {:reason :remote-bind-not-authorized :bind-host bind-host})))
-  (let [server (HttpServer/create
-                (InetSocketAddress. ^String bind-host (int port)) 0)
+  (let [address (InetSocketAddress. ^String bind-host (int port))
+        server (if tls-context
+                 (doto (HttpsServer/create address 0)
+                   (.setHttpsConfigurator (HttpsConfigurator. tls-context)))
+                 (HttpServer/create address 0))
         executor (Executors/newVirtualThreadPerTaskExecutor)]
     (.createContext server path (handler state trust))
     (.setExecutor server executor)

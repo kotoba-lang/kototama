@@ -34,6 +34,7 @@
          :git/sha "fc70904b49df13a20b54ab00de99284b02c9a458"}}
  :aliases
  {:cli  {:main-opts ["-m" "kototama.cli"]}
+  :authority-daemon {:main-opts ["-m" "kototama.component-authority-daemon"]}
   :tcb-check {:main-opts ["-m" "kototama.tcb"]}
   :release-evidence {:main-opts ["-m" "kototama.release-evidence"]}
   :postgresql-interop

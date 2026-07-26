@@ -38,3 +38,13 @@ clojure -M:cli fleet-daemon path/to/guest.wasm --interval-ms 200 --max-passes 2
 Multiple hosts may share `KOTOTAMA_FLEET_ROOT` (NFS) or B2. Lease fencing is
 pure data in `kototama.fleet-fence` (epoch + owner). It is **not** Raft —
 see `docs/maturity.md`.
+## Component authority receiver
+
+Install `deploy/bin/kototama-authority-daemon`,
+`deploy/systemd/kototama-authority-daemon.service`, and an edited copy of
+`component-authority.edn.example`. Store the PKCS#12 password only in
+`/etc/kototama/component-authority.secret` with mode `0600`.
+
+Key rotation is overlap-first: add the next trusted key, deploy and restart all
+receivers, switch Murakumo signing to the next key, then remove the old key.
+The envelope audience must equal the node-specific `:audience`.
