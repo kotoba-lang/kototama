@@ -15,6 +15,7 @@
     "src/kototama/aiueos_adapter.clj"
     "src/kototama/component_authority.clj"
     "src/kototama/component_authority_http.clj"
+    "src/kototama/component_authority_daemon.clj"
     "src/kototama/fleet_exec.clj"
     "src/kototama/network_authority.clj"
     "src/kototama/release_evidence.clj"
@@ -23,7 +24,7 @@
     "src/kototama/tcb.clj"})
 
 (deftest checked-in-tcb-has-no-drift
-  (is (= {:valid? true :files 28 :external 8 :errors []}
+  (is (= {:valid? true :files 29 :external 8 :errors []}
          (tcb/validate))))
 
 (deftest authority-and-runtime-boundaries-cannot-disappear-silently
