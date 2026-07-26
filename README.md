@@ -70,6 +70,15 @@ kotoba wasm AOT  >  clojurewasm  >  ClojureScript  >  nbb
 | **ClojureScript host wire** | when native WASM + CLJS host imports | e.g. portable `kotoba.kami-host` |
 | **`kototama.tender` (JVM/Chicory)** | **demoted compat / CI** | landed historically (ADR-2607022900 / 2607062330); keep for bit-exact fixtures, not the design premise |
 
+The workerd path is intentionally a Core-Wasm compatibility adapter because
+workerd does not instantiate Component Model binaries directly. The production
+JavaScript boundary in `workerd/kototama-core-host.mjs` compares the module's
+actual imports with the exact admitted manifest, exposes no ambient WASI, and
+rechecks authorization on every named provider call. `npm run test:workerd`
+runs that boundary and a real provider call inside a pinned workerd binary.
+This reuses the ABI's capability semantics; it does not claim that a Component
+binary and a Core module are the same artifact.
+
 ### Compat tender (Chicory) — still present, not primary
 
 `src/kototama/tender.clj` wires every `kototama.contract` `actor:host` import

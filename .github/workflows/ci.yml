@@ -106,7 +106,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+      - uses: bytecodealliance/actions/wasm-tools/setup@7ee36389ead2e51422087f820a7e17e39811b05f
+        with:
+          version: "1.252.0"
       - run: node web/verify.mjs
+      - name: Real workerd Core-Wasm provider E2E
+        run: |
+          npm ci
+          npm run test:workerd
       - run: node web/verify-kgraph.mjs
       - run: node web/verify-actor-host.mjs
       - run: node web/verify-host-free.mjs

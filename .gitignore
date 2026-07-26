@@ -2,3 +2,5 @@
 .cpcache/
 **/.cpcache/
 tmp/
+node_modules/
+workerd/fixtures/guest.wasm
