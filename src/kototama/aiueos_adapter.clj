@@ -137,11 +137,24 @@
     ;; Chicory and workerd remain core-Wasm-only compatibility paths.
     (component-provider/prepare!
      {:runtime (:runtime opts) :component? true :artifact artifact
-      :grants declared :providers (select-keys providers declared)})
+      :grants declared :providers (select-keys providers declared)
+      ;; Admission itself must use the same lease predicate that gates each
+      ;; provider call.  Otherwise a malformed or already-revoked lease could
+      ;; reach the native linker before the first operation is rejected.
+      :lease-authorize? lease-authorize?})
     (component-platform/admit-and-link!
      (assoc world :imports declared :grants declared
             :provider-bindings (select-keys providers declared)
-            :abilities abilities)
+            :abilities abilities
+            ;; The native executable is part of the authority boundary, so
+            ;; bind its digest during admission rather than trusting a caller
+            ;; supplied world envelope to have done so.  A previously
+            ;; admitted world may already carry that exact binding; retain it
+            ;; for replay of a signed admission envelope.
+            :runtime-bindings {:component-host-sha256
+                               (or (get-in world [:runtime-bindings
+                                                 :component-host-sha256])
+                                   (:component-host-sha256 opts))})
      execution-identity
      component-bytes
      #(linker! (assoc % :lease lease :lease-epoch issued-epoch

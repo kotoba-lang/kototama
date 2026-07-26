@@ -6,7 +6,7 @@
   network/database/cryptographic provider boundary."
  :tcb/files
  [{:path "src/kototama/aiueos_adapter.clj" :role :policy-authority-adapter
-   :sha256 "ffb16005a386eb83e38974dc237c1bd52679dbf1ce377f077a1db68a0d5a2d8c"}
+   :sha256 "afaf93587c5e4e09be5b70b2193b829bbbd62e042c4bdbd539694c7485451c11"}
   {:path "src/kototama/component_authority.clj" :role :component-epoch-consumer
    :sha256 "e7470553e392db8dd71fa78c78f665bc097be216ca8ebb491367eb0b469d6c32"}
   {:path "src/kototama/component_authority_http.clj" :role :component-authority-transport
@@ -77,10 +77,10 @@
    :git-sha "c83183f7b66afda6a095e690ff617075a39cc0eb"
    :role :shared-security-primitives}
   {:coordinate "io.github.kotoba-lang/aiueos"
-   :git-sha "fc70904b49df13a20b54ab00de99284b02c9a458"
+   :git-sha "45065207eae258039bb682060d868aca09e206ee"
    :role :policy-kernel}
   {:coordinate "io.github.kotoba-lang/abi"
-   :git-sha "57ecc60694bc6bd3dd799db02a092f14fc10cd3e"
+   :git-sha "2a928bd18eb609851454794651dc40fa1259b0ab"
    :role :component-admission-contract}
   {:coordinate "wasmtime"
    :version "42.0.1"
