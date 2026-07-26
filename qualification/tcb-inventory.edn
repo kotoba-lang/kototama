@@ -20,7 +20,7 @@
   {:path "src/kototama/wasmtime_component.clj" :role :native-component-engine-adapter
    :sha256 "af0dd39c9ebd5bd6e21aa2865991a9323fedfe0f1ad8caa69defb650c6153ea0"}
   {:path "native/wasmtime-component-host/src/main.rs" :role :native-component-engine-host
-   :sha256 "824a4b774e2ea120a3558ffb4dc7d555cbb0f0a15b74f9fe2b006d5cf106ebdb"}
+   :sha256 "47838745d8861be7f876cac3e599d611bb4b8718e306a2a2c42549841749e237"}
   {:path "native/wasmtime-component-host/src/v2_bindings.rs" :role :native-component-wit-binding
    :sha256 "beac30237d5419e44f96696c084b633a8234e3fe23f69316e2b8225e6f66d0a6"}
   {:path "src/kototama/workerd_core.clj" :role :workerd-core-engine-adapter
@@ -44,7 +44,7 @@
   {:path "src/kototama/postgresql_pool_provider.clj" :role :database-provider-boundary
    :sha256 "9147ffee055e43bf5c9fb8ed149b07a2e71e43de606c225b0f50f92e0871b965"}
   {:path "src/kototama/release_evidence.clj" :role :release-attestation-builder
-   :sha256 "5f1f0cb60ea2f1eb5d05d5d86722f8365575c5b6c8178ef015de05875d0d08c3"}
+   :sha256 "ad4f9de8e7134c575949d594ff59a64d919e7a1bb2407cbaefc5393048dc3442"}
   {:path "src/kototama/signal/signal_crypto.cljc" :role :signal-cryptography
    :sha256 "7363be549024730967c2a471dc817ae5d01cc89934d899254add8e66d8e8b388"}
   {:path "src/kototama/signal/signal_protocol.cljc" :role :signal-authentication

@@ -4,7 +4,8 @@
             [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojure.string :as str]
-            [ed25519.core :as ed])
+            [ed25519.core :as ed]
+            [kotoba.abi.contract :as abi])
   (:import [java.io FileOutputStream]
            [java.security MessageDigest]
            [java.util.jar JarEntry JarOutputStream]))
@@ -83,6 +84,28 @@
          (sort-by #(get % "name"))
          vec)))
 
+(defn component-conformance-coordinates
+  "Resolve the exact ABI/compiler/native-WIT revision set shipped by this
+   checkout. Release CI rejects a mixed ABI revision or a stale Rust bridge
+   version before producing evidence."
+  []
+  (let [deps (:deps (edn/read-string (slurp "deps.edn")))
+        abi-sha (get-in deps ['io.github.kotoba-lang/abi :git/sha])
+        compiler-sha (get-in deps ['io.github.kotoba-lang/compiler :git/sha])
+        lock (slurp "native/wasmtime-component-host/Cargo.lock")
+        [_ native-version native-abi-sha]
+        (re-find #"(?s)name = \"kotoba-abi-wit\"\s+version = \"([^\"]+)\"\s+source = \"[^\"]+#([0-9a-f]{40})\"" lock)
+        coordinates {:abi-sha abi-sha :compiler-sha compiler-sha
+                     :native-abi-sha native-abi-sha
+                     :native-wit-version native-version
+                     :component-world abi/typed-capability-world-v3}]
+    (assoc coordinates :valid?
+           (and (re-matches #"[0-9a-f]{40}" (or compiler-sha ""))
+                (= abi-sha native-abi-sha)
+                (= "0.3.0" native-version)
+                (= "aiueos:capability/application@0.3.0"
+                   (:component-world coordinates))))))
+
 (defn git-value [& args]
   (let [process (-> (ProcessBuilder. (into-array String (cons "git" args)))
                     (.redirectErrorStream true)
@@ -116,7 +139,8 @@
                     "predicate"
                     {"buildDefinition"
                      {"buildType" "kototama/deterministic-jar-v1"
-                      "externalParameters" {}
+                      "externalParameters"
+                      {"componentConformance" (component-conformance-coordinates)}
                       "resolvedDependencies"
                       [{"uri" "git+workspace"
                         "digest" {"gitCommit" (or (git-value "rev-parse" "HEAD")

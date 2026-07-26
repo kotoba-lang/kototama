@@ -27,6 +27,14 @@
                                 (release/verify-evidence first-build))))))))
       (finally (delete-tree! root)))))
 
+(deftest release-pins-one-typed-component-abi-revision
+  (let [coordinates (release/component-conformance-coordinates)]
+    (is (:valid? coordinates))
+    (is (= (:abi-sha coordinates) (:native-abi-sha coordinates)))
+    (is (= "0.3.0" (:native-wit-version coordinates)))
+    (is (= "aiueos:capability/application@0.3.0"
+           (:component-world coordinates)))))
+
 (deftest artifact-tampering-invalidates-release
   (let [root (str "tmp/release-tamper-" (System/currentTimeMillis))
         seed (byte-array (repeat 32 (unchecked-byte 7)))]
