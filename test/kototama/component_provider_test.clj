@@ -56,4 +56,4 @@
                    :grants #{import} :providers {import (constantly 42)}
                    :lease lease :lease-epoch (constantly 8) :now-ms (constantly 105)})]
     (is (thrown-with-msg? clojure.lang.ExceptionInfo #"lease is expired, revoked"
-                          #(provider/invoke! prepared import {:value 0})))))
+                          (provider/invoke! prepared import {:value 0})))))

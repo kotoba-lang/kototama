@@ -194,7 +194,11 @@
     (try
       (Files/write path component-bytes (make-array java.nio.file.OpenOption 0))
       (let [process (.start (doto (ProcessBuilder.
-                                   (into-array String ["wasmtime" "run" "--invoke" "main"
+                                   ;; Recent Wasmtime CLI releases parse `--invoke` as a
+                                   ;; function-call expression, not just an export name.
+                                   ;; Keep the empty argument list explicit: the Component
+                                   ;; export is a closed `main() -> s64` entrypoint.
+                                   (into-array String ["wasmtime" "run" "--invoke" "main()"
                                                        (.toString path)]))
                              (.redirectInput java.lang.ProcessBuilder$Redirect/PIPE)
                              (.redirectError java.lang.ProcessBuilder$Redirect/PIPE)
