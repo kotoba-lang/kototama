@@ -6,7 +6,7 @@
   network/database/cryptographic provider boundary."
  :tcb/files
  [{:path "src/kototama/aiueos_adapter.clj" :role :policy-authority-adapter
-   :sha256 "5536e482bef0e71d0f416b224b976d7662b1c6a987729d1b9f904e19edee616c"}
+   :sha256 "43f41ba84ab571953b8ffb0c501883097eb2c9c74af48214e5f149113bcc3892"}
   {:path "src/kototama/browser.cljc" :role :host-support-admission
    :sha256 "4a2b9339078674632198fd59872bd7bb5e9ba47922a856ef1bc633061be07104"}
   {:path "src/kototama/cli.clj" :role :operator-entrypoint

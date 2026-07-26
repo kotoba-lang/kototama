@@ -29,16 +29,16 @@
             [kototama.wasmtime-component :as wasmtime-component]))
 
 (def kototama-import->aiueos-capability
-  "kototama.contract import id -> aiueos capability keyword, for the subset
-  both actor:host and aiueos's own vocabulary recognize (aiueos's default
-  kernel capabilities, `aiueos.policy/default-kernel-caps`) -- these are
-  the ones a manifest can ask for and have aiueos's OWN default policy
-  grant with no overlay at all. `:gen-keypair`/`:sign`/`:verify`/
-  `:sha256-hex`/`:http-post`/`:log-read` are actor:host-only (no aiueos
-  kernel-capability counterpart) and are not translatable through this
-  adapter -- a caller needing those still supplies HostCaps directly, same
-  as before this adapter existed."
-  {:log-write :log/write
+  "kototama.contract import id -> stable Aiueos policy capability. Only
+  log/write, clock/monotonic, and random/bytes belong to Aiueos's default
+  kernel set. The other typed Component operations therefore remain denied
+  unless an explicit deployment policy overlay grants their exact keyword."
+  {:sign :identity/sign
+   :verify :identity/verify
+   :sha256-hex :hash/sha256
+   :http-post :http/post
+   :log-read :log/read
+   :log-write :log/write
    :clock-monotonic :clock/monotonic
    :random-bytes :random/bytes})
 
