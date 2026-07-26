@@ -1148,6 +1148,30 @@
       (is (thrown? clojure.lang.ExceptionInfo
                    (tender/session-call-main session))))))
 
+(deftest every-actor-host-import-obeys-the-session-authority-chokepoint
+  (let [import-ids (set (keys contract/import-by-id))]
+    (is (= import-ids
+           (set (map :import/id (:abi/imports contract/import-surface))))
+        "the table is derived from the authoritative actor:host surface")
+    (doseq [import-id import-ids]
+      (let [authority-state (atom {:active #{import-id}
+                                   :revoked #{}
+                                   :dropped #{}
+                                   :consumed #{}
+                                   :remaining {}
+                                   :uses {}})
+            caps {:grants #{import-id}
+                  :authority-state authority-state}
+            session {:authority-state authority-state}]
+        (#'tender/ensure-granted! caps import-id)
+        (is (= 1 (get-in @authority-state [:uses import-id]))
+            (str import-id " accounts its call atomically"))
+        (tender/revoke-import! session import-id :qualification-revocation)
+        (is (thrown-with-msg?
+             clojure.lang.ExceptionInfo #"host import denied"
+             (#'tender/ensure-granted! caps import-id))
+            (str import-id " cannot retain linked authority after revocation"))))))
+
 (deftest capability-lease-use-budget-is-consumed-atomically
   (let [wasm (wat->wasm clock-monotonic-wat)
         caps (contract/host-caps {:grants [:clock-monotonic]})
@@ -1212,7 +1236,7 @@
                                         :execution-identity-cid "bafy-execution"
                                         :lease-now-ms #(deref clock)})]
       (is (pos? (tender/session-call-main session)))
-      (reset! clock 2000000000000)
+      (reset! clock 5000000000000)
       (is (thrown? clojure.lang.ExceptionInfo (tender/session-call-main session)))
       (is (contains? (:expired (tender/authority-snapshot session)) :clock-monotonic)))))
 
