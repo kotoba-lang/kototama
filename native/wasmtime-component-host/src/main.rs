@@ -49,6 +49,16 @@ struct Run {
     fuel: u64,
     #[serde(rename = "memory-pages")]
     memory_pages: u64,
+    lease: Option<Lease>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct Lease {
+    epoch: u64,
+    #[serde(rename = "not-before")]
+    not_before: u64,
+    #[serde(rename = "expires-at")]
+    expires_at: u64,
 }
 
 struct Protocol {
@@ -69,6 +79,7 @@ struct State {
     // A WIT v2 acquisition request is mapped to this exact admitted import;
     // the guest can name an operation but cannot create or widen a grant.
     admitted_imports: BTreeMap<String, Ability>,
+    lease: Option<Lease>,
 }
 
 #[derive(Debug, Clone)]
@@ -224,6 +235,30 @@ fn provider_call_typed(
         || response.get("import") != Some(&Value::String(name.into()))
     {
         bail!("provider response does not match typed request");
+    }
+    let lease = state
+        .lease
+        .as_ref()
+        .ok_or_else(|| anyhow!("typed provider response requires an admitted lease"))?;
+    let proof = response
+        .get("lease-proof")
+        .ok_or_else(|| anyhow!("typed provider response is missing lease proof"))?;
+    let epoch = proof.get("epoch").and_then(Value::as_u64);
+    let observed_at = proof.get("observed-at").and_then(Value::as_u64);
+    let expires_at = proof.get("expires-at").and_then(Value::as_u64);
+    if epoch != Some(lease.epoch)
+        || expires_at != Some(lease.expires_at)
+        || !observed_at.is_some_and(|now| lease.not_before <= now && now < lease.expires_at)
+    {
+        bail!("typed provider lease proof is expired, revoked, or mismatched");
+    }
+    if response.get("audit-id") != Some(&Value::String(ability.audit_id.clone()))
+        || !response
+            .get("audit-receipt")
+            .and_then(Value::as_str)
+            .is_some_and(|receipt| !receipt.is_empty())
+    {
+        bail!("typed provider success requires a matching persisted audit receipt");
     }
     response
         .get("payload")
@@ -500,6 +535,7 @@ fn run(request: Run, protocol: Arc<Mutex<Protocol>>) -> Result<i64> {
             grants: ResourceTable::new(),
             calls: BTreeMap::new(),
             admitted_imports: imports.clone(),
+            lease: request.lease,
         },
     );
     store.limiter(|state| &mut state.limits);
@@ -611,6 +647,7 @@ mod tests {
             grants: ResourceTable::new(),
             calls: BTreeMap::new(),
             admitted_imports: BTreeMap::new(),
+            lease: None,
         };
         let ability = bounded_ability();
         let grant = issue_grant(&mut state, "aiueos-clock-now", &ability).unwrap();
@@ -631,6 +668,7 @@ mod tests {
             grants: ResourceTable::new(),
             calls: BTreeMap::new(),
             admitted_imports: BTreeMap::from([("aiueos-clock-now".into(), ability.clone())]),
+            lease: None,
         };
         let grant = <State as v2_capability::Host>::acquire(
             &mut state,

@@ -7,6 +7,7 @@
   authority escape hatch."
   (:require [clojure.string :as str]
             [clojure.data.json :as json]
+            [kotoba.abi.contract :as abi]
             [kototama.component-platform :as platform]
             [kototama.component-provider :as provider])
   (:import [java.io BufferedReader BufferedWriter File InputStreamReader OutputStreamWriter]
@@ -75,7 +76,7 @@
    The host links no WASI interfaces and every imported WIT function is
    synchronously delegated through the previously admitted provider boundary."
   [{:keys [runtime component-bytes imports abilities budgets artifact providers
-           component-host runtime-bindings lease lease-epoch now-ms]}]
+           component-host runtime-bindings lease lease-epoch now-ms audit-sink]}]
   (when-not (= :wasmtime-component runtime)
     (reject :runtime-mismatch "Wasmtime Component adapter was not selected"))
   (when-not (bytes? component-bytes)
@@ -84,7 +85,12 @@
     (reject :provider-free-component "effectful runner requires an admitted import"))
   (when-not (= (set (keys imports)) (set (keys abilities)))
     (reject :ability-mismatch "native Component imports and abilities must be exact"))
-  (let [prepared (provider/prepare!
+  (let [typed-v3? (= abi/typed-capability-world-v3 (:component-world artifact))
+        _ (when (and typed-v3?
+                     (not (and (map? lease) (ifn? audit-sink))))
+            (reject :typed-proof-required
+                    "typed v3 execution requires an admitted lease and persistent audit sink"))
+        prepared (provider/prepare!
                   {:runtime runtime :component? true :artifact artifact
                    :grants (set (keys imports)) :providers providers
                    :lease lease :lease-epoch lease-epoch :now-ms now-ms})
@@ -106,7 +112,11 @@
                                        :ability (host-ability (get abilities import))})
                                     (keys imports))
                      :fuel (long (or (:fuel budgets) 1))
-                     :memory-pages (long (or (:memory-pages budgets) 1))}
+                     :memory-pages (long (or (:memory-pages budgets) 1))
+                     :lease (when typed-v3?
+                              {:epoch (:aiueos/epoch lease)
+                               :not-before (:aiueos/not-before lease)
+                               :expires-at (:aiueos/expires-at lease)})}
             outcome (future
                       (write-json-line! writer request)
                       (loop []
@@ -118,7 +128,18 @@
                             (let [import (keyword "aiueos.component" (:import message))
                                   payload (:payload message)
                                   legacy-scalar? (contains? payload :value)
-                                  result (provider/invoke! prepared import payload)]
+                                  result (provider/invoke! prepared import payload)
+                                  observed-at (long (if (ifn? now-ms) (now-ms) now-ms))
+                                  current-epoch (long (if (ifn? lease-epoch)
+                                                        (lease-epoch) lease-epoch))
+                                  audit-receipt
+                                  (when typed-v3?
+                                    (audit-sink {:audit-id (get-in abilities [import :audit-id])
+                                                 :import import :ability (get abilities import)
+                                                 :payload payload :result result
+                                                 :lease-id (:aiueos/lease-id lease)
+                                                 :epoch current-epoch
+                                                 :observed-at observed-at}))]
                               (when-not (= (host-ability (get abilities import))
                                            (:ability message))
                                 (reject :ability-mismatch "native host changed an ability descriptor"))
@@ -128,7 +149,14 @@
                                                 (cond-> {:type "provider-result"
                                                          :import (:import message)}
                                                   legacy-scalar? (assoc :value (long result))
-                                                  (not legacy-scalar?) (assoc :payload result)))
+                                                  (not legacy-scalar?)
+                                                  (assoc :payload result
+                                                         :audit-id (get-in abilities [import :audit-id])
+                                                         :audit-receipt audit-receipt
+                                                         :lease-proof
+                                                         {:epoch current-epoch
+                                                          :observed-at observed-at
+                                                          :expires-at (:aiueos/expires-at lease)})))
                               (recur))
                             "result" {:result (long (:value message)) :runtime runtime}
                             "error" (reject :engine-failed

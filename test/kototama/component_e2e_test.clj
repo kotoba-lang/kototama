@@ -93,6 +93,7 @@
                     abi/component-target-v2
                     {:allow #{[:cap/call 7]} :component-abilities {7 ability}})
           seen (atom nil)
+          audited (atom nil)
           providers {:aiueos.component/aiueos-clock-now
                      (fn [{:keys [payload] :as request}]
                        (reset! seen request)
@@ -103,8 +104,21 @@
                    artifact (effectful-v3-world (:bytes artifact) host-sha256)
                    (:bytes artifact) providers
                    {:runtime :wasmtime-component
-                    :component-host (.getAbsolutePath host)})]
+                    :component-host (.getAbsolutePath host)
+                    :audit-sink (fn [record]
+                                  (reset! audited record)
+                                  "persisted-component-v3-e2e")})]
       (is (= "aiueos:capability/application@0.3.0" (:component-world artifact)))
       (is (= {:result 4242 :runtime :wasmtime-component} outcome))
-      (is (= ability (:ability @seen))))
+      (is (= ability (:ability @seen)))
+      (is (= "component-v3-e2e" (:audit-id @audited)))
+      (testing "typed success is denied without a persisted audit receipt"
+        (is (thrown?
+             java.util.concurrent.ExecutionException
+             (adapter/admit-and-run-component-with-aiueos!
+              artifact (effectful-v3-world (:bytes artifact) host-sha256)
+              (:bytes artifact) providers
+              {:runtime :wasmtime-component
+               :component-host (.getAbsolutePath host)
+               :audit-sink (constantly nil)})))))
     (is true "KOTOTAMA_COMPONENT_HOST is not set; native integration test is CI-gated")))

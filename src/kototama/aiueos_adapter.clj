@@ -118,7 +118,8 @@
             :abilities abilities)
      execution-identity
      component-bytes
-     #(linker! (assoc % :lease lease :lease-epoch lease-epoch :now-ms now-ms)))))
+     #(linker! (assoc % :lease lease :lease-epoch lease-epoch :now-ms now-ms
+                       :audit-sink (:audit-sink opts))))))
 
 (defn admit-and-run-component-with-aiueos!
   [artifact world component-bytes providers
