@@ -1148,6 +1148,98 @@
       (is (thrown? clojure.lang.ExceptionInfo
                    (tender/session-call-main session))))))
 
+(deftest every-actor-host-import-obeys-the-session-authority-chokepoint
+  (let [import-ids (set (keys contract/import-by-id))]
+    (is (= import-ids
+           (set (map :import/id (:abi/imports contract/import-surface))))
+        "the table is derived from the authoritative actor:host surface")
+    (doseq [import-id import-ids]
+      (let [authority-state (atom {:active #{import-id}
+                                   :revoked #{}
+                                   :dropped #{}
+                                   :consumed #{}
+                                   :remaining {}
+                                   :uses {}})
+            caps {:grants #{import-id}
+                  :authority-state authority-state}
+            session {:authority-state authority-state}]
+        (#'tender/ensure-granted! caps import-id)
+        (is (= 1 (get-in @authority-state [:uses import-id]))
+            (str import-id " accounts its call atomically"))
+        (tender/revoke-import! session import-id :qualification-revocation)
+        (is (thrown-with-msg?
+             clojure.lang.ExceptionInfo #"host import denied"
+             (#'tender/ensure-granted! caps import-id))
+            (str import-id " cannot retain linked authority after revocation"))))))
+
+(deftest capability-lease-use-budget-is-consumed-atomically
+  (let [wasm (wat->wasm clock-monotonic-wat)
+        caps (contract/host-caps {:grants [:clock-monotonic]})
+        execution-identity {:format :kotoba.execution-identity/v1
+                            :plan-cid "bafy-plan" :code-closure-cid "bafy-closure"
+                            :artifact-cid "bafy-artifact" :compiler-contract "bafy-compiler"
+                            :component-cid "bafy-component" :wit-world-cid "bafy-world"
+                            :package-lock-cid "bafy-lock" :policy-cid "bafy-policy"
+                            :policy-decision-cid "bafy-decision" :db-basis "bafy-basis"
+                            :grant-cids ["bafy-grant"] :approval-cids []
+                            :runtime-identity "bafy-runtime" :input-cid "bafy-input"
+                            :outcome-cid "bafy-outcome" :host-receipt-cids []}
+        lease {:format :kotoba.capability-lease/v1
+               :capability-cid "bafy-lease" :execution-identity-cid "bafy-execution"
+               :component-cid "bafy-component" :resource-cid "bafy-clock"
+               :purpose :clock/monotonic :expires-at "2099-07-25T00:01:00Z"
+               :uses 1 :transfer :non-transferable :delegation-depth 0}
+        session (tender/open-session wasm [:clock-monotonic] caps
+                                     {:capability-leases {:clock-monotonic lease}
+                                      :execution-identity execution-identity
+                                      :execution-identity-cid "bafy-execution"
+                                      :lease-now-ms 0})]
+    (is (pos? (tender/session-call-main session)))
+    (is (zero? (get-in (tender/authority-snapshot session) [:remaining :clock-monotonic])))
+    (is (contains? (:consumed (tender/authority-snapshot session)) :clock-monotonic))
+    (is (thrown? clojure.lang.ExceptionInfo (tender/session-call-main session)))))
+
+(deftest capability-leases-bind-the-session-to-identity-component-and-expiry
+  (let [wasm (wat->wasm clock-monotonic-wat)
+        caps (contract/host-caps {:grants [:clock-monotonic]})
+        identity {:format :kotoba.execution-identity/v1
+                  :plan-cid "bafy-plan" :code-closure-cid "bafy-closure"
+                  :artifact-cid "bafy-artifact" :compiler-contract "bafy-compiler"
+                  :component-cid "bafy-component" :wit-world-cid "bafy-world"
+                  :package-lock-cid "bafy-lock" :policy-cid "bafy-policy"
+                  :policy-decision-cid "bafy-decision" :db-basis "bafy-basis"
+                  :grant-cids ["bafy-grant"] :approval-cids []
+                  :runtime-identity "bafy-runtime" :input-cid "bafy-input"
+                  :outcome-cid "bafy-outcome" :host-receipt-cids []}
+        lease {:format :kotoba.capability-lease/v1
+               :capability-cid "bafy-lease" :execution-identity-cid "bafy-execution"
+               :component-cid "bafy-component" :resource-cid "bafy-clock"
+               :purpose :clock/monotonic :expires-at "2099-07-25T00:01:00Z"
+               :uses 1 :transfer :non-transferable :delegation-depth 0}]
+    (is (thrown? clojure.lang.ExceptionInfo
+                 (tender/open-session wasm [:clock-monotonic] caps
+                                      {:capability-leases {:clock-monotonic lease}
+                                       :execution-identity identity
+                                       :execution-identity-cid "bafy-other"
+                                       :lease-now-ms 0})))
+    (is (thrown? clojure.lang.ExceptionInfo
+                 (tender/open-session wasm [:clock-monotonic] caps
+                                      {:capability-leases {:clock-monotonic
+                                                           (assoc lease :expires-at "2020-01-01T00:00:00Z")}
+                                       :execution-identity identity
+                                       :execution-identity-cid "bafy-execution"
+                                       :lease-now-ms 2000000000000})))
+    (let [clock (atom 0)
+          session (tender/open-session wasm [:clock-monotonic] caps
+                                       {:capability-leases {:clock-monotonic (assoc lease :uses 2)}
+                                        :execution-identity identity
+                                        :execution-identity-cid "bafy-execution"
+                                        :lease-now-ms #(deref clock)})]
+      (is (pos? (tender/session-call-main session)))
+      (reset! clock 5000000000000)
+      (is (thrown? clojure.lang.ExceptionInfo (tender/session-call-main session)))
+      (is (contains? (:expired (tender/authority-snapshot session)) :clock-monotonic)))))
+
 (deftest log-write-byte-limit-denies-once-exceeded
   (let [wasm (wat->wasm log-write-thrice-wat)
         caps (contract/host-caps {:grants [:log-write]

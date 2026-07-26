@@ -58,7 +58,7 @@
   {:path "src/kototama/tcb.clj" :role :tcb-drift-verifier
    :sha256 "9c7c9a9527d6a7c553ea7b4712bbb3a069aff1958874086537c7dba75aeeee18"}
   {:path "src/kototama/tender.clj" :role :wasm-runtime-host-abi
-   :sha256 "a387166b632b05c6295c1ea83f403e8fa85ce0ccac000b8bafe17dbf2758bb34"}
+   :sha256 "f6e4ba7baf3412bebec5af157fb2aaf755162e665bbae82defeaf7f72e03acf3"}
   {:path "src/kototama/transport_provider.clj" :role :transport-provider-boundary
    :sha256 "e660a3388c15d258d49721212da675ed0bdb503f4c8008d37687e0787784a698"}]
  :tcb/external
@@ -76,7 +76,7 @@
    :git-sha "fc70904b49df13a20b54ab00de99284b02c9a458"
    :role :policy-kernel}
   {:coordinate "io.github.kotoba-lang/abi"
-   :git-sha "848c035f7d1ac850ddc2391baa70a2f15e6c4401"
+   :git-sha "57ecc60694bc6bd3dd799db02a092f14fc10cd3e"
    :role :component-admission-contract}
   {:coordinate "wasmtime"
    :version "42.0.1"
