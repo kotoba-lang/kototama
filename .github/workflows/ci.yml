@@ -48,9 +48,9 @@ jobs:
         # one static binary).
         run: |
           curl -sSL -o wasm-tools.tar.gz \
-            https://github.com/bytecodealliance/wasm-tools/releases/download/v1.252.0/wasm-tools-1.252.0-x86_64-linux.tar.gz
+            https://github.com/bytecodealliance/wasm-tools/releases/download/v1.243.0/wasm-tools-1.243.0-x86_64-linux.tar.gz
           tar xzf wasm-tools.tar.gz
-          sudo mv wasm-tools-1.252.0-x86_64-linux/wasm-tools /usr/local/bin/wasm-tools
+          sudo mv wasm-tools-1.243.0-x86_64-linux/wasm-tools /usr/local/bin/wasm-tools
           wasm-tools --version
       - name: Install pinned Wasmtime CLI for runtime conformance
         run: |
@@ -113,7 +113,7 @@ jobs:
           node-version: "22"
       - uses: bytecodealliance/actions/wasm-tools/setup@7ee36389ead2e51422087f820a7e17e39811b05f
         with:
-          version: "1.252.0"
+          version: "1.243.0"
       - run: node web/verify.mjs
       - name: Real workerd Core-Wasm provider E2E
         run: |
