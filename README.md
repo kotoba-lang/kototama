@@ -11,6 +11,7 @@ abi             = WIT, manifest, identity, and conformance contract
 kototama        = runtime / engine (validate, compile, link, run)
 aiueos          = authority (decides grants; supplies named providers)
 murakumo        = cluster control plane (places and observes, never grants)
+fleet           = reusable T6 placement loop (leases/checkpoints/fencing)
 ```
 
 Stack vocabulary: [ADR-2607022400](https://github.com/com-junkawasaki/root/blob/main/90-docs/adr/2607022400-kototama-unikernel-tender-runtime-vocabulary.md).
@@ -144,7 +145,9 @@ Wasm interpreter". Hosting library:
 
 ## Maturity
 
-**Current level: R3 stable** (shared-store fleet ops; R1 stable; R2 advanced-partial).
+**Current tender level: R2 advanced-partial** (R1 stable). The former R3
+shared-store placement implementation and its stable gate now live in
+[`kotoba-lang/fleet`](https://github.com/kotoba-lang/fleet).
 Ladder and gates: [`docs/maturity.md`](docs/maturity.md).
 
 | Level | Status |
@@ -152,16 +155,12 @@ Ladder and gates: [`docs/maturity.md`](docs/maturity.md).
 | R0 contract / dry-run | stable |
 | R1 tender (compat: JVM/Chicory) | stable as **compat suite** — session report, host-free guests, emit lint, CLI (not the first path) |
 | **R2 browser / native WASM host** | **first product path** (advanced-partial) — AOT `.wasm` via wasm-webcomponent; 9/9 linkable (`http-post` and `llm-infer` both real via a Worker-hosted SAB+Atomics bridge, needs COOP/COEP; `llm-infer` additionally needs a caller-supplied proxy URL); host-free web fixtures |
-| **R3 fleet multi-tenant** | **stable** — ops-ready local/shared-store fleet (fence+daemon+CI+staging-smoke; **not Raft**) |
+| T6 fleet placement | external — stable gate owned by `kotoba-lang/fleet` |
 
 ```bash
-clojure -M:doctor                                    # R0–R3 snapshot
+clojure -M:doctor                                    # tender/browser snapshot
 clojure -M:cli parity                                # R2 import matrix
-clojure -M:cli fleet-gate                            # R3 acceptance harness (CI)
-bash deploy/validate-packaging.sh                    # systemd oneshot+timer static gate
-bash deploy/staging-smoke.sh                         # non-root staging substitute
-clojure -M:cli fleet-demo                            # R3 pure loop demo
-clojure -M:cli fleet-run path/to/guest.wasm          # tender execute + disk checkpoint
+bash deploy/validate-packaging.sh                    # authority receiver packaging
 clojure -M:cli lint  path/to/guest.kotoba            # lint only — compile with kotoba
 clojure -M:cli run     path/to/guest.wasm            # RUNTIME: run AOT guest
 node web/verify-host-free.mjs                        # R2 host-free under browser Wasm

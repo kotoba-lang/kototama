@@ -322,7 +322,7 @@
 ;;
 ;; `http-post-host-fn`'s URL is entirely guest-controlled (read straight out
 ;; of guest linear memory) and lease/tick execution
-;; (`kototama.fleet`/`kototama.fleet-exec`'s `run-loop-step`/`run-daemon!`/
+;; (`fleet.core`/`fleet.exec`'s `run-loop-step`/`run-daemon!`/
 ;; `recovery-pass!`) is fully synchronous and single-threaded per tick -- a
 ;; guest granted `:http-post` that points the POST at a slow-loris /
 ;; non-responding endpoint could otherwise block the host thread
@@ -383,7 +383,7 @@
 
 (defn- timed-http-client
   "A fresh `HttpClient` with a connect timeout wired in (same shape
-  `kototama.fleet-store/http-client` already establishes for the B2 native
+  `fleet.store/http-client` already establishes for the B2 native
   API calls elsewhere in this repo, `.connectTimeout` on the builder).
   CONNECT-TIMEOUT-MS defaults to `default-http-timeout-ms` (the previous
   hardcoded behavior) when omitted."

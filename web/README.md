@@ -99,7 +99,8 @@ node web/verify-host-free.mjs
   load (emit-time policy only). `actor-host.js` **does** re-verify grants.
 - Wider kotoba imports (`kse`/`auth`/`evm`/…) — not ported here.
 - This is not a multi-tenant sandboxed fleet host (that's R3 skeleton+persist on
-  JVM: `kototama.fleet` + disk/B2 store + `fleet-exec` tender bridge).
+  JVM: `fleet.core` + disk/B2 store + `fleet.exec` tender bridge in
+  `kotoba-lang/fleet`).
 
 ## History
 

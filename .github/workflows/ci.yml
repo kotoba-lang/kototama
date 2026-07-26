@@ -72,7 +72,7 @@ jobs:
         run: |
           for repo in kotoba compiler kotoba-lang kotoba-core-contracts \
                       kotoba-selfhost-contracts org-chainagnostic-cacao datom org-w3-did; do
-            git clone --depth 1 "https://github.com/kotoba-lang/$repo.git" "../$repo"
+            git clone "https://github.com/kotoba-lang/$repo.git" "../$repo"
           done
           # Pin the compiler change that emits effectful source as a real
           # named-import Component. Update to its squash commit after merge.
@@ -85,23 +85,8 @@ jobs:
         run: clojure -M:test
       - name: Lint CLJC contract
         run: clojure -M:lint
-      - name: R3 fleet-gate (acceptance harness)
-        run: clojure -M:cli fleet-gate
-      - name: R3 fleet daemon dry-run (systemd wrapper path)
-        run: |
-          chmod +x deploy/bin/kototama-fleet-daemon
-          deploy/bin/kototama-fleet-daemon \
-            --wasm test/kototama/fixtures/kotoba-compiled-fact.wasm \
-            --root /tmp/kototama-fleet-ci \
-            --interval-ms 0 \
-            --max-passes 1 \
-            --max-ticks 1
-      - name: R3 packaging static check
+      - name: Component-authority packaging static check
         run: bash deploy/validate-packaging.sh
-      - name: R3 staging-smoke (non-root)
-        run: |
-          chmod +x deploy/staging-smoke.sh
-          bash deploy/staging-smoke.sh
 
   web:
     name: browser WASM AOT demo gate
@@ -128,7 +113,7 @@ jobs:
           npm run test:workerd
       - name: Compile the same portable Component boundary for Chromium
         run: |
-          git clone --depth 1 https://github.com/kotoba-lang/compiler.git ../compiler
+          git clone https://github.com/kotoba-lang/compiler.git ../compiler
           git -C ../compiler fetch origin main
           git -C ../compiler checkout --detach 4e4056e35b1118ced1f92144ccb891e0c12eb075
           (
