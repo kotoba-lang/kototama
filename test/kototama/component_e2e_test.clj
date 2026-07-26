@@ -123,3 +123,61 @@
                :component-host (.getAbsolutePath host)
                :audit-sink (constantly nil)})))))
     (is true "KOTOTAMA_COMPONENT_HOST is not set; native integration test is CI-gated")))
+
+(deftest ^:integration compiler-component-v3-all-typed-operations-round-trip
+  (if-let [host-path (System/getenv "KOTOTAMA_COMPONENT_HOST")]
+    (let [host (File. host-path)
+          host-sha256 (sha256-file host)
+          cases
+          [{:id 2 :operation :identity/verify :import :aiueos.component/aiueos-identity-verify
+            :provider-result true :expected 1}
+           {:id 1 :operation :identity/sign :import :aiueos.component/aiueos-identity-sign
+            :provider-result {:bytes [11 0 0 0 0 0 0 0]} :expected 11}
+           {:id 3 :operation :hash/sha256 :import :aiueos.component/aiueos-hash-sha256
+            :provider-result {:bytes [33 0 0 0 0 0 0 0]} :expected 33}
+           {:id 4 :operation :http/post :import :aiueos.component/aiueos-http-post
+            :provider-result {:status 201 :headers [] :body []} :expected 201}
+           {:id 5 :operation :log/read :import :aiueos.component/aiueos-log-read
+            :provider-result {:next-cursor 43 :bytes []} :expected 43}
+           {:id 6 :operation :log/append :import :aiueos.component/aiueos-log-append
+            :provider-result nil :expected 0}
+           {:id 7 :operation :clock/now :import :aiueos.component/aiueos-clock-now
+            :provider-result 44 :expected 44}]]
+      (doseq [{:keys [id operation import provider-result expected]} cases]
+        (testing (str operation)
+          (let [ability {:target (str "test://" (name operation))
+                         :operation operation :max-bytes 256 :max-items 1
+                         :deadline-ms 1000 :audit-id (str "component-v3-all-" id)}
+                source (format
+                        "(ns app (:capabilities #{:%s})) (defn main [] (cap-call :%s 42))"
+                        (subs (str operation) 1) (subs (str operation) 1))
+                artifact (compiler/compile-source
+                          source abi/component-target-v2
+                          {:allow #{[:cap/call id]}
+                           :component-abilities {id ability}})
+                seen (atom nil)
+                outcome
+                (adapter/admit-and-run-component-with-aiueos!
+                 artifact (effectful-v3-world (:bytes artifact) host-sha256)
+                 (:bytes artifact)
+                 {import (fn [{:keys [payload]}]
+                           (reset! seen payload)
+                           provider-result)}
+                 {:runtime :wasmtime-component
+                  :component-host (.getAbsolutePath host)
+                  :policy-overlay
+                  {:aiueos/kernel-caps
+                   #{(get adapter/kototama-import->aiueos-capability
+                          (get adapter/component-import->kototama-import import))}}
+                  :audit-sink (constantly (str "persisted-v3-" id))})]
+            (is (= {:result expected :runtime :wasmtime-component} outcome))
+            (cond
+              (contains? #{1 2 3 6} id)
+              (is (= [42 0 0 0 0 0 0 0] (:bytes @seen)))
+              (= 4 id)
+              (is (= {:path "" :headers [] :body [42 0 0 0 0 0 0 0]} @seen))
+              (= 5 id)
+              (is (= {:cursor 42 :max-bytes 8} @seen))
+              (= 7 id)
+              (is (nil? @seen)))))))
+    (is true "KOTOTAMA_COMPONENT_HOST is not set; native integration test is CI-gated")))

@@ -46,6 +46,22 @@
       (is (seq (:aiueos.broker/audit-entries decision))
           "aiueos's own broker really audited this grant"))))
 
+(deftest typed-component-operations-require-an-explicit-aiueos-policy-grant
+  (let [imports #{:sign :verify :sha256-hex :http-post :log-read}
+        manifest (adapter/manifest-for-imports imports)
+        denied (adapter/decide manifest)
+        granted (adapter/decide
+                 manifest
+                 {:aiueos/kernel-caps
+                  #{:identity/sign :identity/verify :hash/sha256
+                    :http/post :log/read}})]
+    (is (= #{:identity/sign :identity/verify :hash/sha256
+             :http/post :log/read}
+           (:aiueos/imports manifest)))
+    (is (= :deny (:aiueos/decision denied)))
+    (is (= :grant (:aiueos/decision granted)))
+    (is (= (:aiueos/imports manifest) (:aiueos/capabilities granted)))))
+
 (deftest aiueos-denies-an-unsigned-component-under-a-require-signed-policy
   (testing "a real denial, not just the grant path"
     (let [decision (adapter/decide (adapter/manifest-for-imports #{:log-write})
