@@ -10,9 +10,10 @@ guest = Wasm component). Not a marketing scorecard.
 | **R0** | Contract / dry-run | **stable** | `kototama.contract` HostCaps + import surface; organism membrane refuses live publish |
 | **R1** | Tender execution (JVM/Chicory) | **stable** | `kototama.tender` runs real `.wasm`; fuel + memory limits; aiueos adapter; session report; source lint; host-free + host-import fixtures from `kotoba wasm emit` |
 | **R2** | Browser-native host parity | **qualified** | parity matrix; 14/14 browser-linkable under one session authority; network imports use explicit inject or the shared Worker+SAB bridge (`wasm-webcomponent` PR #15); host-free web fixtures |
-| **R3** | Fleet multi-tenant tender | **stable** | ops-ready local/shared-store fleet: fence+daemon+CI+staging-smoke (**not Raft**) |
+| T6 placement | `kotoba-lang/fleet` | **external** | stable shared-store gate consumes this tender |
 
-**Current declared level: R3 stable** (R1 stable; R2 qualified underneath).
+**Current tender level: R2 qualified** (R1 stable underneath). Fleet placement
+is independently versioned and gated in `kotoba-lang/fleet`.
 
 ## R1 acceptance gates
 
@@ -202,49 +203,20 @@ same as `cbor-encode`/`json-encode` already are) -- just a JS port of
 `build-nested-tree`'s tree-building logic alongside the existing flat-pairs
 parsing.
 
-## R3 stable gates (shared-store fleet ops — not Raft)
+## T6 placement integration
+
+The independent [`kotoba-lang/fleet`](https://github.com/kotoba-lang/fleet)
+package owns leases, budgets, checkpoints, recovery, audit, epoch fencing,
+the ten fleet CLI commands, and systemd packaging. It depends on this repo in
+one direction and calls `kototama.tender`; kototama does not depend on fleet.
+
+Run its acceptance gate from that repository:
 
 ```bash
-# Full non-root staging substitute (preferred)
-bash deploy/staging-smoke.sh
-
-# Pieces
+clojure -M:test
 clojure -M:cli fleet-gate
-bash deploy/validate-packaging.sh
-clojure -M:cli fleet-status
-clojure -M:cli fleet-audit
-
-# Manual drill
-clojure -M:cli fleet-demo
-clojure -M:cli fleet-run test/kototama/fixtures/kotoba-compiled-fact.wasm
-clojure -M:cli fleet-list
-clojure -M:cli fleet-resume <checkpoint-key> test/kototama/fixtures/kotoba-compiled-fact.wasm
-clojure -M:cli fleet-recover test/kototama/fixtures/kotoba-compiled-fact.wasm
-clojure -M:cli fleet-daemon test/kototama/fixtures/kotoba-compiled-fact.wasm \
-  --interval-ms 200 --max-passes 3
+bash deploy/staging-smoke.sh
 ```
-
-| Landed | Not yet (deliberate) |
-|---|---|
-| lease / budget / tick / governor | Raft/Paxos multi-node consensus |
-| checkpoint/restore EDN v1 | full aiueos fleet broker |
-| disk store + optional B2 | |
-| tender execute (`fleet-exec`) | |
-| resume + recovery-pass | |
-| bounded recovery daemon | |
-| optional aiueos grants + GRANT/DENY E2E | |
-| epoch fencing + fence-gated tender | |
-| systemd oneshot+timer + packaging validate | |
-| tick audit + fleet-status / fleet-audit | |
-| fleet-gate + CI (gate, daemon dry-run, packaging) | |
-| **deploy/staging-smoke.sh** (non-root staging) | |
-
-Fencing is **not** distributed consensus — higher epoch wins on a shared store.
-`bootstrap` / `resume` / `recovery-pass` call `claim-before-run` so only the
-holding node executes tender. See `deploy/systemd/README.md` for install.
-
-**Status meaning:** `stable` = **ops-ready local/shared-store fleet** under automated
-gates + staging-smoke. Multi-datacenter consensus remains out of scope.
 
 ## Guest source rules (emit subset)
 

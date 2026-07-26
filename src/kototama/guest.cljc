@@ -112,8 +112,8 @@
         json-extract-field -- and the third wave -- http-post-headers --
         are JVM-only so far, an honest gap, not yet ported to
         wasm-webcomponent's actor-host.js)
-   :r3  fleet lease/budget/tick/governor/checkpoint + disk/B2 + fence-gated
-        tender + daemon + systemd + CI gates (not Raft consensus)"
+   Fleet placement maturity is reported by the independent kotoba-lang/fleet
+   repository; it consumes this tender rather than being part of it."
   {:r0 {:id :r0
         :title "Contract / dry-run"
         :status :stable
@@ -125,11 +125,7 @@
    :r2 {:id :r2
         :title "Browser-native host parity"
         :status :advanced-partial
-        :note "9/14 linkable; http-post and llm-infer both real via Worker-hosted SAB+Atomics bridge (needs COOP/COEP; llm-infer additionally needs a caller-supplied proxy URL); the ADR-2607230943 second wave (http-fetch/cbor-encode/json-encode/json-extract-field) and third wave (http-post-headers) are JVM-only so far; see kototama.browser."}
-   :r3 {:id :r3
-        :title "Fleet multi-tenant tender"
-        :status :stable
-        :note "ops-ready local/shared-store fleet: fence+daemon+CI+staging-smoke — not Raft."}})
+        :note "9/14 linkable; http-post and llm-infer both real via Worker-hosted SAB+Atomics bridge (needs COOP/COEP; llm-infer additionally needs a caller-supplied proxy URL); the ADR-2607230943 second wave (http-fetch/cbor-encode/json-encode/json-extract-field) and third wave (http-post-headers) are JVM-only so far; see kototama.browser."}})
 
 (defn host-free?
   "True when the guest requests no host imports (pure compute)."
@@ -157,18 +153,17 @@
       :write? (boolean (some #{:write} effects))})))
 
 (defn maturity-report
-  "Aggregate maturity snapshot for CLI doctor / CI.
-   R2/R3 detail lives in kototama.browser/r2-report and kototama.fleet/r3-report
-   (loaded optionally by CLI to keep this ns free of those requires)."
+  "Aggregate tender maturity snapshot for CLI doctor / CI.
+   Placement detail lives in kotoba-lang/fleet."
   []
-  {:current :r3
-   :current-note "R1 stable + R2 advanced-partial + R3 stable (shared-store fleet; not Raft)"
+  {:current :r2
+   :current-note "R1 stable + R2 advanced-partial; T6 placement is external"
    :levels maturity-levels
    :import-surface (mapv :import/id (:abi/imports contract/import-surface))
    :wasm-fields wasm-field-by-import-id
    :notes ["R1 gate: clojure -M:test (tender + contract + aiueos + guest + maturity)"
            "R2 gate: node web/verify*.mjs (+ verify-host-free.mjs)"
-           "R3 gate: clojure -M:cli fleet-gate + deploy/staging-smoke.sh"
+           "T6 placement gate: kotoba-lang/fleet `clojure -M:cli fleet-gate`"
            "Host-free pure guests: empty requested-imports + empty grants"
            "Emit path: kotoba-lang/kotoba `wasm emit` → .wasm → tender/run-report"
            "Lint .kotoba with kototama.guest/lint-kotoba-source before emit"]})

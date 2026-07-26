@@ -19,7 +19,6 @@
     "src/kototama/component_authority.clj"
     "src/kototama/component_authority_http.clj"
     "src/kototama/component_authority_daemon.clj"
-    "src/kototama/fleet_exec.clj"
     "src/kototama/network_authority.clj"
     "src/kototama/release_evidence.clj"
     "src/kototama/signer_lifecycle.clj"
@@ -27,7 +26,7 @@
     "src/kototama/tcb.clj"})
 
 (deftest checked-in-tcb-has-no-drift
-  (is (= {:valid? true :files 31 :external 10 :errors []}
+  (is (= {:valid? true :files 27 :external 10 :errors []}
          (tcb/validate))))
 
 (deftest authority-and-runtime-boundaries-cannot-disappear-silently

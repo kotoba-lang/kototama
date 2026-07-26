@@ -13,14 +13,14 @@ forged root updates fail closed.
 `kototama.tender/open-session` makes this check mandatory for
 `:profile :production`, verifies that the signed manifest's SHA-256 is the
 exact Wasm byte sequence being parsed, and performs the check before
-compatibility parsing or instantiation. `kototama.fleet-exec/make-execute`
+compatibility parsing or instantiation. `fleet.exec/make-execute`
 propagates the production signer inputs into the bounded runner. Missing
 signing configuration is a denial, never a development fallback.
 
 Verification:
 
 ```sh
-clojure -M:test -n kototama.fleet-store-test \
+clojure -M:test -n fleet.store-test \
   -n kototama.signer-lifecycle-test \
   -n kototama.tender-test
 ```
