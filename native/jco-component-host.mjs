@@ -34,6 +34,9 @@ const supported = Object.freeze({
     operation: 'clock/now',
     specifier: 'kotoba:application/clock',
     exportName: 'now',
+    resourceClass: 'NowCapability',
+    issueName: 'issueNow',
+    executeName: 'executeNow',
   },
 });
 
@@ -50,7 +53,35 @@ function validateAbility(name, ability) {
   return binding;
 }
 
-function providerSource(name, ability, exportName) {
+function providerSource(name, ability, binding, linear) {
+  const exportName = binding.exportName;
+  if (linear) return `
+import { readSync, writeSync } from 'node:fs';
+let buffered = '';
+function line() {
+  for (;;) {
+    const n = buffered.indexOf('\\n');
+    if (n >= 0) { const out = buffered.slice(0, n); buffered = buffered.slice(n + 1); return out; }
+    const b = Buffer.alloc(4096);
+    const count = readSync(0, b, 0, b.length, null);
+    if (count === 0) throw new Error('provider closed protocol before responding');
+    buffered += b.subarray(0, count).toString('utf8');
+  }
+}
+export class ${binding.resourceClass} {}
+export function ${binding.issueName}() { return new ${binding.resourceClass}(); }
+export function ${binding.executeName}(cap, value) {
+  if (!(cap instanceof ${binding.resourceClass})) throw new Error('invalid linear capability resource');
+  writeSync(1, JSON.stringify({
+    type: 'provider-call', import: ${JSON.stringify(name)},
+    ability: ${JSON.stringify(ability)}, payload: { value: Number(value) }
+  }) + '\\n');
+  const response = JSON.parse(line());
+  if (response.type !== 'provider-result' || response.import !== ${JSON.stringify(name)} ||
+      !Number.isSafeInteger(response.value)) throw new Error('invalid provider-result response');
+  return BigInt(response.value);
+}
+`;
   return `
 import { readSync, writeSync } from 'node:fs';
 let buffered = '';
@@ -96,7 +127,9 @@ async function run(request) {
       seen.add(item.name);
       const binding = validateAbility(item.name, item.ability);
       const provider = `provider-${item.name}.js`;
-      writeFileSync(join(dir, provider), providerSource(item.name, item.ability, binding.exportName));
+      writeFileSync(join(dir, provider),
+                      providerSource(item.name, item.ability, binding,
+                                     request['capability-mode'] === 'linear-resource'));
       mappings.push(`${binding.specifier}=./${provider}`);
     }
     const jco = resolve(new URL('../node_modules/.bin/jco', import.meta.url).pathname);

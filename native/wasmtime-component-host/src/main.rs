@@ -15,7 +15,7 @@ use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::io::{self, BufRead, BufReader, BufWriter, Write};
 use std::sync::{Arc, Mutex};
-use wasmtime::component::{Component, Linker, Val};
+use wasmtime::component::{Component, Linker, Resource, ResourceType, Val};
 use wasmtime::{Config, Engine, Store, StoreLimits, StoreLimitsBuilder};
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -43,11 +43,15 @@ struct Run {
     #[serde(rename = "type")]
     kind: String,
     component: String,
+    #[serde(rename = "capability-mode", default = "default_capability_mode")]
+    capability_mode: String,
     imports: Vec<Import>,
     fuel: u64,
     #[serde(rename = "memory-pages")]
     memory_pages: u64,
 }
+
+fn default_capability_mode() -> String { "function".into() }
 
 struct Protocol {
     input: BufReader<io::Stdin>,
@@ -154,11 +158,35 @@ fn run(request: Run, protocol: Arc<Mutex<Protocol>>) -> Result<i64> {
             .ok_or_else(|| anyhow!("unrecognized aiueos Component import: {name}"))?;
         let mut instance = wasmtime_result(linker.instance(interface),
                                            "cannot create admitted Component interface")?;
-        wasmtime_result(instance.func_wrap(function, move |mut cx, (value,): (i64,)| {
-            provider_call(cx.data_mut(), &import_name, &ability, value)
-                .map(|result| (result,))
-                .map_err(|error| wasmtime::Error::msg(error.to_string()))
-        }), "cannot bind admitted Component import")?;
+        if request.capability_mode == "linear-resource" {
+            let resource_name = format!("{function}-capability");
+            wasmtime_result(
+                instance.resource(&resource_name, ResourceType::host::<()>(), |_, _| Ok(())),
+                "cannot bind linear capability resource",
+            )?;
+            let issue_name = format!("issue-{function}");
+            wasmtime_result(
+                instance.func_wrap(&issue_name, move |_cx, (): ()| {
+                    Ok((Resource::<()>::new_own(1),))
+                }),
+                "cannot bind linear capability issuer",
+            )?;
+            let execute_name = format!("execute-{function}");
+            wasmtime_result(instance.func_wrap(
+                &execute_name,
+                move |mut cx, (_cap, value): (Resource<()>, i64)| {
+                    provider_call(cx.data_mut(), &import_name, &ability, value)
+                        .map(|result| (result,))
+                        .map_err(|error| wasmtime::Error::msg(error.to_string()))
+                },
+            ), "cannot bind linear capability consumer")?;
+        } else {
+            wasmtime_result(instance.func_wrap(function, move |mut cx, (value,): (i64,)| {
+                provider_call(cx.data_mut(), &import_name, &ability, value)
+                    .map(|result| (result,))
+                    .map_err(|error| wasmtime::Error::msg(error.to_string()))
+            }), "cannot bind admitted Component import")?;
+        }
     }
     let instance = wasmtime_result(linker.instantiate(&mut store, &component),
                                    "Component imports did not match the admitted bindings")?;

@@ -26,7 +26,8 @@
             [kototama.contract :as contract]
             [kototama.component-platform :as component-platform]
             [kototama.component-provider :as component-provider]
-            [kototama.wasmtime-component :as wasmtime-component]))
+            [kototama.wasmtime-component :as wasmtime-component]
+            [kototama.linear-journal :as linear-journal]))
 
 (def kototama-import->aiueos-capability
   "kototama.contract import id -> aiueos capability keyword, for the subset
@@ -98,7 +99,7 @@
   A denial, unknown import, or missing provider aborts before LINKER! runs."
   [artifact world component-bytes linker! providers
    {:keys [lease-id lease-epoch lease-epoch-source lease-ttl-ms now-ms
-           execution-identity] :as opts}]
+           linear-journal-path execution-identity] :as opts}]
   (let [declared (set (:capabilities artifact))
         abilities (:component-imports artifact)
         _ (when-not (= (select-keys (:budgets artifact) [:fuel :memory-pages])
@@ -121,8 +122,14 @@
                 :now issued-at :epoch issued-epoch
                 :ttl-ms (or lease-ttl-ms 30000)
                 :lease-id (or lease-id (str "component-" issued-at))})
+        journal (when linear-journal-path (linear-journal/open! linear-journal-path))
         remaining (atom (into {} (map (fn [[import ability]]
-                                        [import (:max-items ability)]))
+                                        [import (max 0
+                                                     (- (:max-items ability)
+                                                        (if journal
+                                                          (linear-journal/consumed
+                                                           journal (:aiueos/lease-id lease) import)
+                                                          0)))]))
                               abilities))
         lease-authorize?
         (fn [import ability]
@@ -131,14 +138,19 @@
             lease (current-lease-epoch! epoch-source)
             (long (if (ifn? now-ms) (now-ms) now-ms))
             import ability)
-           (loop []
-             (let [before @remaining
-                   left (long (or (get before import) 0))]
-               (when (pos? left)
-                 (if (compare-and-set! remaining before
-                                       (assoc before import (dec left)))
-                   true
-                   (recur)))))))
+           (if journal
+             (when (linear-journal/claim! journal (:aiueos/lease-id lease)
+                                          import (:max-items ability))
+               (swap! remaining update import dec)
+               true)
+             (loop []
+               (let [before @remaining
+                     left (long (or (get before import) 0))]
+                 (when (pos? left)
+                   (if (compare-and-set! remaining before
+                                         (assoc before import (dec left)))
+                     true
+                     (recur))))))))
         expected (set (keep component-import->kototama-import declared))]
     (when-not (= expected (:grants host-caps))
       (throw (ex-info "aiueos did not grant every declared Component import"
@@ -180,6 +192,7 @@
            :execution-identity execution-identity
            :decision decision
            :component-cid (get-in world [:identity :component-cid])
+           :capability-mode (or (:capability-mode artifact) :function)
            :imports declared
            :abilities abilities
            :resource-bounds (:budgets world)
