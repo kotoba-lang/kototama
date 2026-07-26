@@ -6,7 +6,7 @@
   network/database/cryptographic provider boundary."
  :tcb/files
  [{:path "src/kototama/aiueos_adapter.clj" :role :policy-authority-adapter
-   :sha256 "c321f7abbebcfc18416707c4c2bbae9829ecc18bd79e8d203c0d918ce6e9cbaf"}
+   :sha256 "30f3a1818cb432e1d27b6654fc864123b59a38ecc6b6129a40437966233e1d18"}
   {:path "src/kototama/linear_journal.clj" :role :durable-linear-authority
    :sha256 "8926e85ee26aded77a0bf54e95d2900a8938fc2a2fb443dc3018c2c44b596653"}
   {:path "src/kototama/component_authority.clj" :role :component-epoch-consumer
@@ -25,12 +25,6 @@
    :sha256 "25e55f8d2ccbd5e2ac9229bb8ae07a61f0d817dafe1e47546e9856ca9ed3c621"}
   {:path "src/kototama/component_provider.cljc" :role :component-provider-admission
    :sha256 "f1157fd7960bc8eb9cf0dd09183b4f3caa0a304d97b0d7a9ae6db128cfcc4346"}
-  {:path "src/kototama/wasmtime_component.clj" :role :native-component-engine-adapter
-   :sha256 "a394a1b81ba1b9affc4917f8bf14099048d30ec6554b646f0a12133be898a2db"}
-  {:path "native/wasmtime-component-host/src/main.rs" :role :native-component-engine-host
-   :sha256 "0fdf4e3d212de0182b350b4bf672e62dc35bee1239951e770929d24e6837905c"}
-  {:path "native/jco-component-host.mjs" :role :independent-component-engine-host
-   :sha256 "7b60743e0cf851c545f3e03ce160c059178a94c8e64b476bca051abdefaf73ff"}
   {:path "src/kototama/workerd_core.clj" :role :workerd-core-engine-adapter
    :sha256 "979253bc9bd5414b7a044090c0c066d5784add9985e290ea0213567479329c28"}
   {:path "workerd/kototama-core-host.mjs" :role :workerd-provider-host-boundary
@@ -56,9 +50,7 @@
   {:path "src/kototama/tcb.clj" :role :tcb-drift-verifier
    :sha256 "9c7c9a9527d6a7c553ea7b4712bbb3a069aff1958874086537c7dba75aeeee18"}
   {:path "src/kototama/tender.clj" :role :wasm-runtime-host-abi
-   :sha256 "7d062cce7c06438d8cc4fdedaedcb8e61d3b2450f19b09bf6366aa429bfeb052"}
-  {:path "src/kototama/transport_provider.clj" :role :transport-provider-boundary
-   :sha256 "e660a3388c15d258d49721212da675ed0bdb503f4c8008d37687e0787784a698"}]
+   :sha256 "7d062cce7c06438d8cc4fdedaedcb8e61d3b2450f19b09bf6366aa429bfeb052"}]
  :tcb/external
  [{:coordinate "com.dylibso.chicory/wasm" :version "1.4.0"
    :role :wasm-parser}
@@ -76,15 +68,9 @@
   {:coordinate "io.github.kotoba-lang/abi"
    :git-sha "57ecc60694bc6bd3dd799db02a092f14fc10cd3e"
    :role :component-admission-contract}
-  {:coordinate "wasmtime"
-   :version "42.0.1"
-   :role :native-component-engine}
   {:coordinate "workerd"
    :version "1.20260723.1"
    :role :core-wasm-isolate-engine}
-  {:coordinate "@bytecodealliance/jco"
-   :version "1.25.2"
-   :role :independent-component-engine}
   {:coordinate "java.base" :minimum-version 21
    :role :process-crypto-network-concurrency-runtime}]
  :tcb/native-unsafe
