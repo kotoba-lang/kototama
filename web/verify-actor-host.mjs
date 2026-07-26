@@ -17,7 +17,7 @@ import path from 'node:path';
 // handles the relative imports exactly like a real checkout would. Pinned to
 // the same commit index.html loads from jsdelivr -- bump both together,
 // don't float on @main.
-const WASM_WEBCOMPONENT_COMMIT = '154b09102d55b06ef10d0885504d02d91d347da9';
+const WASM_WEBCOMPONENT_COMMIT = '1ebb54c8f5d60a8a5e8940c9ea7bf0ccb3104892';
 const SRC_FILES = [
   'src/actor-host.js',
   'src/vendor/curves/ed25519.js',
@@ -42,7 +42,7 @@ for (const filePath of SRC_FILES) {
   await mkdir(path.dirname(dest), { recursive: true });
   await writeFile(dest, src);
 }
-const { actorHostImports, hostCaps, inMemoryStore } = await import(
+const { actorHostImports, hostCaps, inMemoryStore, sessionAuthority } = await import(
   pathToFileURL(path.join(tmpRoot, 'src', 'actor-host.js'))
 );
 
@@ -80,6 +80,19 @@ check(
   `guest-computed sha256("hello") matches the known digest (got ${resultText})`
 );
 check(logged === 'hello', `log_write recorded the guest's 5-byte payload (got ${JSON.stringify(logged)})`);
+
+const liveAuthority = sessionAuthority(['clock-monotonic']);
+const liveClock = actorHostImports(
+  ['clock-monotonic'],
+  hostCaps({ grants: ['clock-monotonic'] }),
+  {},
+  { authority: liveAuthority }
+);
+check(typeof liveClock.clock_monotonic() === 'bigint', 'browser session authority initially permits the linked clock');
+liveAuthority.revoke('clock-monotonic');
+let revoked = false;
+try { liveClock.clock_monotonic(); } catch (_) { revoked = true; }
+check(revoked, 'browser session revocation reaches an already-linked import');
 
 await rm(tmpRoot, { recursive: true, force: true });
 
