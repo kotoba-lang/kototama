@@ -3,7 +3,7 @@
                    :wasm-tools "1.243.0"
                    :wasmtime "42.0.1"
                    :jco "1.25.2"
-                   :compiler-commit "de7709af57d7293a7383a00cd60df9c3bed3587f"}
+                   :compiler-commit "4e4056e35b1118ced1f92144ccb891e0c12eb075"}
  :required-surfaces #{:wasmtime-native :jco-node :jco-chromium}
  :required-negative-cases #{:policy-denial :epoch-revocation
                             :one-shot-exhaustion :crash-recovery}

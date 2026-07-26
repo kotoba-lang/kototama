@@ -77,7 +77,7 @@ jobs:
           # Pin the compiler change that emits effectful source as a real
           # named-import Component. Update to its squash commit after merge.
           git -C ../compiler fetch origin main
-          git -C ../compiler checkout --detach de7709af57d7293a7383a00cd60df9c3bed3587f
+          git -C ../compiler checkout --detach 4e4056e35b1118ced1f92144ccb891e0c12eb075
       - name: Test CLJC contract
         env:
           KOTOTAMA_COMPONENT_HOST: ${{ github.workspace }}/native/wasmtime-component-host/target/debug/kototama-wasmtime-component-host
@@ -130,7 +130,7 @@ jobs:
         run: |
           git clone --depth 1 https://github.com/kotoba-lang/compiler.git ../compiler
           git -C ../compiler fetch origin main
-          git -C ../compiler checkout --detach de7709af57d7293a7383a00cd60df9c3bed3587f
+          git -C ../compiler checkout --detach 4e4056e35b1118ced1f92144ccb891e0c12eb075
           (
             cd ../compiler
             clojure -M -m kotoba.compiler.cli compile \
