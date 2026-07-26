@@ -149,6 +149,23 @@ fn validate_ability(name: &str, ability: &Ability) -> Result<()> {
     Ok(())
 }
 
+fn validate_component_import_names<'a>(names: impl IntoIterator<Item = &'a str>) -> Result<()> {
+    for name in names {
+        if name.starts_with("wasi:") {
+            bail!("ambient WASI Component import is forbidden: {name}");
+        }
+        if name.starts_with("aiueos:capability/") {
+            if name.ends_with("@0.2.0") {
+                bail!("typed capability Component ABI @0.2.0 is explicitly unsupported");
+            }
+            if !name.ends_with("@0.3.0") {
+                bail!("unsupported typed capability Component ABI version: {name}");
+            }
+        }
+    }
+    Ok(())
+}
+
 fn send(protocol: &mut Protocol, value: &Value) -> Result<()> {
     serde_json::to_writer(&mut protocol.output, value)?;
     protocol.output.write_all(b"\n")?;
@@ -524,6 +541,12 @@ fn run(request: Run, protocol: Arc<Mutex<Protocol>>) -> Result<i64> {
         Component::from_file(&engine, &request.component),
         "cannot compile admitted Component",
     )?;
+    validate_component_import_names(
+        component
+            .component_type()
+            .imports(&engine)
+            .map(|(name, _)| name),
+    )?;
     let limits = StoreLimitsBuilder::new()
         .memory_size(request.memory_pages.saturating_mul(65536) as usize)
         .build();
@@ -685,5 +708,24 @@ mod tests {
             .unwrap()
             .is_err()
         );
+    }
+
+    #[test]
+    fn old_typed_component_abi_is_rejected_explicitly() {
+        assert!(
+            validate_component_import_names([
+                "aiueos:capability/capability@0.3.0",
+                "aiueos:capability/clock@0.3.0",
+            ])
+            .is_ok()
+        );
+        let error =
+            validate_component_import_names(["aiueos:capability/capability@0.2.0"]).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("@0.2.0 is explicitly unsupported")
+        );
+        assert!(validate_component_import_names(["wasi:cli/environment@0.2.0"]).is_err());
     }
 }
