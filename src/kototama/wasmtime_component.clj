@@ -106,6 +106,7 @@
             reader (BufferedReader. (InputStreamReader. (.getInputStream process) "UTF-8"))
             writer (BufferedWriter. (OutputStreamWriter. (.getOutputStream process) "UTF-8"))
             request {:type "run" :component (.toString path)
+                     :capability-mode (name (or (:capability-mode artifact) :function))
                      ;; `imports` is the admitted provider binding map; its
                      ;; values are opaque callbacks.  The native protocol must
                      ;; receive the separately admitted ability descriptors.

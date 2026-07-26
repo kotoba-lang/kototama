@@ -75,7 +75,8 @@
           artifact (compiler/compile-component
                     "(ns app (:capabilities #{:clock/now})) (defn main [] (cap-call :clock/now 7))"
                     {:allow #{[:cap/call 7]}}
-                    {:component-abilities {7 ability}
+                    {:capability-mode :linear-resource
+                     :component-abilities {7 ability}
                      :budgets {:fuel 100000 :memory-pages 4}})
           seen (atom [])
           providers {:aiueos.component/aiueos-clock-now
@@ -86,6 +87,7 @@
           jco (when jco-host
                 (run-on-host artifact jco-host :jco-component providers {}))]
       (testing "only the admitted named WIT import crosses the native host"
+        (is (= :linear-resource (:capability-mode artifact)))
         (is (= {:result 107 :runtime :wasmtime-component}
                (select-keys wasmtime [:result :runtime])))
         (is (= {:import :aiueos.component/aiueos-clock-now
@@ -104,6 +106,9 @@
                     (get-in jco [:receipt :host])))
           (is (= {:aiueos.component/aiueos-clock-now 1}
                  (get-in jco [:receipt :lease :consumed])))
+          (is (= :linear-resource
+                 (get-in jco [:receipt :capability-mode])
+                 (get-in wasmtime [:receipt :capability-mode])))
           (is (= {:fuel 100000 :memory-pages 4 :deadline-ms 10000}
                  (get-in jco [:receipt :resource-bounds]))))
         (testing "live epoch revocation denies both engines before provider execution"
