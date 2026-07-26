@@ -1,11 +1,11 @@
 (ns kototama.component-authority
   "Fail-closed consumer for Murakumo Component placement epochs.
 
-  Transport authentication happens before this boundary and supplies the
-  authenticated issuer identity. This namespace validates the shared wire ABI,
-  trusted issuer, replay order, and monotonic epoch before updating the live
-  source consulted at every provider call."
-  (:require [kotoba.abi.contract :as abi]))
+  This namespace verifies the shared signed wire ABI, trusted issuer key,
+  audience, freshness, replay order, and monotonic epoch before updating the
+  live source consulted at every provider call."
+  (:require [ed25519.core :as ed]
+            [kotoba.abi.contract :as abi]))
 
 (defn initial-state []
   {:epochs {} :sequences {}})
@@ -13,28 +13,20 @@
 (defn- reject [reason message data]
   (throw (ex-info message (assoc data :kototama.component-authority/reason reason))))
 
-(defn apply-event!
-  "Consume one transport-authenticated Murakumo event.
-
+(defn- apply-verified-event!
+  "Apply one already signature-verified Murakumo event.
   Sequence is tracked per issuer because one host can subscribe to independent
   control planes. Events may skip sequence numbers (unrelated Components), but
   may never repeat or move backwards. Revocation must strictly advance epoch;
   placement can add a replica at the current epoch."
-  [state-atom event {:keys [authenticated-issuer trusted-issuer]}]
-  (when-not (and (string? authenticated-issuer)
-                 (= trusted-issuer authenticated-issuer))
-    (reject :untrusted-issuer "Component authority event issuer is not trusted"
-            {:authenticated-issuer authenticated-issuer}))
-  (when-not (abi/valid-component-authority-event? event)
-    (reject :invalid-event "Component authority event does not match the shared ABI"
-            {:event event}))
+  [state-atom issuer event]
   (let [cid (:murakumo.component/component-cid event)
         epoch (:murakumo.component/epoch event)
         sequence (:murakumo.component/sequence event)
         kind (:murakumo.component/event event)]
     (swap! state-atom
            (fn [state]
-             (let [previous-sequence (get-in state [:sequences authenticated-issuer] 0)
+             (let [previous-sequence (get-in state [:sequences issuer] 0)
                    previous-epoch (get-in state [:epochs cid] 0)]
                (when-not (> sequence previous-sequence)
                  (reject :replayed-event "Component authority event is replayed or out of order"
@@ -45,9 +37,55 @@
                  (reject :stale-epoch "Component authority epoch moved backwards"
                          {:epoch epoch :previous-epoch previous-epoch :event kind}))
                (-> state
-                   (assoc-in [:sequences authenticated-issuer] sequence)
+                   (assoc-in [:sequences issuer] sequence)
                    (assoc-in [:epochs cid] epoch)))))
     event))
+
+(defn- unhex [value]
+  (when (and (string? value) (= 128 (count value))
+             (re-matches #"[0-9a-f]{128}" value))
+    (byte-array
+     (map (fn [[a b]]
+            (unchecked-byte (Integer/parseInt (str a b) 16)))
+          (partition 2 value)))))
+
+(defn apply-envelope!
+  "Verify and consume one signed Murakumo authority envelope.
+
+  TRUSTED-KEYS maps key-id to {:issuer string :public-key 32-byte-array}.
+  The public key is receiver configuration, never data asserted by ENVELOPE."
+  [state-atom envelope
+   {:keys [trusted-keys audience now-ms max-age-ms max-future-skew-ms]
+    :or {max-age-ms 60000 max-future-skew-ms 5000}}]
+  (when-not (abi/valid-component-authority-envelope? envelope)
+    (reject :invalid-envelope "Component authority envelope does not match the shared ABI"
+            {}))
+  (let [{:keys [key-id issuer issued-at-ms event signature]} envelope
+        trusted (get trusted-keys key-id)
+        now (long (if (ifn? now-ms) (now-ms) now-ms))
+        public-key (:public-key trusted)
+        signature-bytes (unhex signature)]
+    (when-not (and trusted
+                   (= issuer (:issuer trusted))
+                   (= audience (:audience envelope))
+                   (= 32 (count public-key)))
+      (reject :untrusted-envelope
+              "Component authority key, issuer, or audience is not trusted"
+              {:key-id key-id :issuer issuer :audience (:audience envelope)}))
+    (when-not (and (<= (- now max-age-ms) issued-at-ms)
+                   (<= issued-at-ms (+ now max-future-skew-ms)))
+      (reject :stale-envelope "Component authority envelope is outside its freshness window"
+              {:issued-at-ms issued-at-ms :now-ms now}))
+    (let [payload (.getBytes
+                   ^String (abi/component-authority-signing-payload envelope)
+                   "UTF-8")]
+      (when-not (and signature-bytes
+                     (try
+                       (ed/verify public-key payload signature-bytes)
+                       (catch Exception _ false)))
+        (reject :invalid-signature "Component authority signature is invalid"
+                {:key-id key-id})))
+    (apply-verified-event! state-atom issuer event)))
 
 (defn epoch-source
   "Return the live callable used by aiueos-adapter provider authorization."

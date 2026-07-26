@@ -17,7 +17,7 @@
         io.github.kotoba-lang/security {:git/url "https://github.com/kotoba-lang/security.git"
                                         :git/sha "23d2e0b6b521318adb43230a5a5c21c76adb738c"}
         io.github.kotoba-lang/abi {:git/url "https://github.com/kotoba-lang/abi.git"
-                                   :git/sha "d1fed65e0fe17e660ae1f18fcb1a1346813ed7b8"}
+                                   :git/sha "848c035f7d1ac850ddc2391baa70a2f15e6c4401"}
         ;; Component admission verifies identity CIDs structurally before
         ;; linking; a leading `b` is not evidence of content addressing.
         io.github.kotoba-lang/io-multiformats
