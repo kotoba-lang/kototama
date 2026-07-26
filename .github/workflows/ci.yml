@@ -72,7 +72,7 @@ jobs:
         run: |
           for repo in kotoba compiler kotoba-lang kotoba-core-contracts \
                       kotoba-selfhost-contracts org-chainagnostic-cacao datom org-w3-did; do
-            git clone --depth 1 "https://github.com/kotoba-lang/$repo.git" "../$repo"
+            git clone "https://github.com/kotoba-lang/$repo.git" "../$repo"
           done
           # Pin the compiler change that emits effectful source as a real
           # named-import Component. Update to its squash commit after merge.
@@ -113,7 +113,7 @@ jobs:
           npm run test:workerd
       - name: Compile the same portable Component boundary for Chromium
         run: |
-          git clone --depth 1 https://github.com/kotoba-lang/compiler.git ../compiler
+          git clone https://github.com/kotoba-lang/compiler.git ../compiler
           git -C ../compiler fetch origin main
           git -C ../compiler checkout --detach 4e4056e35b1118ced1f92144ccb891e0c12eb075
           (
