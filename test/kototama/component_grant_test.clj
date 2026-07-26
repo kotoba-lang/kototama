@@ -55,6 +55,7 @@
         ability {:target "clock://monotonic" :operation :clock/now
                  :max-bytes 1 :max-items 1 :deadline-ms 10 :audit-id "epoch-test"}
         artifact {:capabilities #{import}
+                  :budgets {:fuel 1 :memory-pages 1}
                   :component-imports {import ability}}
         world {:target :wasm-component-kotoba-v1 :wasi-version "0.3.0" :profile :sync
                :exports #{:app/run} :ambient-wasi false

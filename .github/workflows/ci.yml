@@ -26,6 +26,9 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
       - uses: DeLaGuardo/setup-clojure@13.0
         with:
           cli: latest
@@ -33,6 +36,10 @@ jobs:
       - name: Build native Component host for integration test
         working-directory: native/wasmtime-component-host
         run: cargo build --locked
+      - name: Install pinned independent jco Component host
+        run: |
+          npm ci --no-audit --no-fund
+          chmod +x native/jco-component-host.mjs
       - name: Install wasm-tools
         # kototama.tender-test shells out to `wasm-tools parse` to assemble
         # its WAT fixtures into real Wasm bytes (Chicory Parser/Instance
@@ -41,9 +48,9 @@ jobs:
         # one static binary).
         run: |
           curl -sSL -o wasm-tools.tar.gz \
-            https://github.com/bytecodealliance/wasm-tools/releases/download/v1.252.0/wasm-tools-1.252.0-x86_64-linux.tar.gz
+            https://github.com/bytecodealliance/wasm-tools/releases/download/v1.243.0/wasm-tools-1.243.0-x86_64-linux.tar.gz
           tar xzf wasm-tools.tar.gz
-          sudo mv wasm-tools-1.252.0-x86_64-linux/wasm-tools /usr/local/bin/wasm-tools
+          sudo mv wasm-tools-1.243.0-x86_64-linux/wasm-tools /usr/local/bin/wasm-tools
           wasm-tools --version
       - name: Install pinned Wasmtime CLI for runtime conformance
         run: |
@@ -67,16 +74,14 @@ jobs:
                       kotoba-selfhost-contracts org-chainagnostic-cacao datom org-w3-did; do
             git clone --depth 1 "https://github.com/kotoba-lang/$repo.git" "../$repo"
           done
-          # The Component E2E targets the published compiler Component ABI,
-          # rather than whatever happens to be at compiler/main.
-          # The commit is carried by the published feature branch; fetching
-          # the named ref (rather than an abbreviated object ID) works from a
-          # fresh, shallow GitHub Actions clone.
-          git -C ../compiler fetch origin agent/nested-record-ref-v1
-          git -C ../compiler checkout --detach e228eae
+          # Pin the compiler change that emits effectful source as a real
+          # named-import Component. Update to its squash commit after merge.
+          git -C ../compiler fetch origin main
+          git -C ../compiler checkout --detach 2b2874e33180e544cb03f9b50f282769fe517660
       - name: Test CLJC contract
         env:
           KOTOTAMA_COMPONENT_HOST: ${{ github.workspace }}/native/wasmtime-component-host/target/debug/kototama-wasmtime-component-host
+          KOTOTAMA_JCO_COMPONENT_HOST: ${{ github.workspace }}/native/jco-component-host.mjs
         run: clojure -M:test
       - name: Lint CLJC contract
         run: clojure -M:lint
@@ -108,7 +113,7 @@ jobs:
           node-version: "22"
       - uses: bytecodealliance/actions/wasm-tools/setup@7ee36389ead2e51422087f820a7e17e39811b05f
         with:
-          version: "1.252.0"
+          version: "1.243.0"
       - run: node web/verify.mjs
       - name: Real workerd Core-Wasm provider E2E
         run: |

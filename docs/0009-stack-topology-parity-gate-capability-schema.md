@@ -40,8 +40,9 @@ a same-PR `docs/maturity.md` parity-table update marking the gap. The parity
 score in `clojure -M:cli parity` is the machine check; CI should fail a
 contract change that does not update the parity matrix.
 
-The existing 5-import backlog (`http-fetch`/`cbor-encode`/`json-encode`/
-`json-extract-field`/`http-post-headers`) is acknowledged debt to be burned
+The former 5-import backlog (`http-fetch`/`cbor-encode`/`json-encode`/
+`json-extract-field`/`http-post-headers`) was closed by the codec port and
+`wasm-webcomponent` PR #15; 14/14 is now the enforced baseline. Any future debt must be burned
 down under this rule, not grandfathered forever.
 
 ## Decision 2 — `HostCaps` and grant vocabulary derive from one canonical schema

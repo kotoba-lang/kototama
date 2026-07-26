@@ -23,7 +23,10 @@
     ;; Linkable as of wasm-webcomponent PR #11 (2026-07-16): reuses the SAME
     ;; bridge as http-post, through a caller-supplied proxy URL (see
     ;; test/browser/verify_llm_infer_browser.cljs there).
-    (is (contains? yes :llm-infer) "llm-infer is real via the same Worker-hosted SAB+Atomics bridge, through a caller-supplied proxy URL")))
+    (is (contains? yes :llm-infer) "llm-infer is real via the same Worker-hosted SAB+Atomics bridge, through a caller-supplied proxy URL")
+    (is (contains? yes :http-fetch))
+    (is (contains? yes :http-post-headers))
+    (is (= 14 (count yes)))))
 
 (deftest every-import-declares-explicit-parity-and-gaps-carry-notes
   ;; ADR-0009 Decision 1 (docs/0009-stack-topology-parity-gate-capability-
@@ -54,18 +57,17 @@
     ;; cbor-encode/json-encode/json-extract-field (ADR-2607230943's pure-
     ;; computation second-wave imports) are now byte-for-byte ported to
     ;; wasm-webcomponent's actor-host.js (test/verify-codec-host.mjs locks
-    ;; the JVM byte parity), moving browser-yes 9 -> 12. The remaining 2
-    ;; JVM-only imports are http-fetch and http-post-headers -- both need
-    ;; the SAB/Worker network bridge, not yet ported.
+    ;; the JVM byte parity). wasm-webcomponent PR #15 closes the final two
+    ;; network imports through the shared SAB/Worker bridge.
     (is (= 14 (:total s)))
-    (is (= 12 (:browser-yes s)))
-    (is (= 2 (:browser-no s)))
-    (is (= (/ 12.0 14) (:ratio s)))))
+    (is (= 14 (:browser-yes s)))
+    (is (= 0 (:browser-no s)))
+    (is (= 1.0 (:ratio s)))))
 
 (deftest r2-report-shape
   (let [r (browser/r2-report)]
     (is (= :r2 (:level r)))
-    (is (= :advanced-partial (:status r)))
+    (is (= :qualified (:status r)))
     (is (seq (:verify r)))))
 
 (deftest production-host-admission-fails-closed

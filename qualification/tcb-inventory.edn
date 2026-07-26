@@ -6,7 +6,7 @@
   network/database/cryptographic provider boundary."
  :tcb/files
  [{:path "src/kototama/aiueos_adapter.clj" :role :policy-authority-adapter
-   :sha256 "9e3fdb2e52aca8d017ad94d2d5bedd760039ed68357bade3a3fda033680fb6b9"}
+   :sha256 "fc24e47315ddc5f80d8808686901c2a3cf28573f427420789fcd51493005a357"}
   {:path "src/kototama/component_authority.clj" :role :component-epoch-consumer
    :sha256 "e7470553e392db8dd71fa78c78f665bc097be216ca8ebb491367eb0b469d6c32"}
   {:path "src/kototama/component_authority_http.clj" :role :component-authority-transport
@@ -14,7 +14,7 @@
   {:path "src/kototama/component_authority_daemon.clj" :role :component-authority-daemon
    :sha256 "fd399b2f2e0c7dbd5ed51ea1d3cd2151a144c173b3cba6f7aa16cb590b006834"}
   {:path "src/kototama/browser.cljc" :role :host-support-admission
-   :sha256 "c7ee94f63c95c85a515074e291edbe9ccbfbef697e076dcda9687b7b517384ac"}
+   :sha256 "33d8b93862e6693ebb2e8794cd996012a1f798d2a76044eefa0771f44d284ae3"}
   {:path "src/kototama/cli.clj" :role :operator-entrypoint
    :sha256 "247f683e22b80c0a7a74cf3e963dbadf4f2e487c035e93a1bbb782da9f72782d"}
   {:path "src/kototama/compatibility.clj" :role :artifact-admission
@@ -22,11 +22,13 @@
   {:path "src/kototama/component_platform.clj" :role :component-world-admission
    :sha256 "25e55f8d2ccbd5e2ac9229bb8ae07a61f0d817dafe1e47546e9856ca9ed3c621"}
   {:path "src/kototama/component_provider.cljc" :role :component-provider-admission
-   :sha256 "e71639e8c64d4af7c90847e258bc87af85b22be09e410551e36634096e852d54"}
+   :sha256 "f1157fd7960bc8eb9cf0dd09183b4f3caa0a304d97b0d7a9ae6db128cfcc4346"}
   {:path "src/kototama/wasmtime_component.clj" :role :native-component-engine-adapter
-   :sha256 "b78f844e7beb3437e49f0ef7e84b47141ec9e84449b999a52d5005acd2e904c2"}
+   :sha256 "69516971ab0a5672e201c505e85b37275bec728be46073a9f0918e29fb6ad469"}
   {:path "native/wasmtime-component-host/src/main.rs" :role :native-component-engine-host
-   :sha256 "35040d40d954b754b22f53b5a00fff29e9fc1531ca5695c4cdbaf01ecc20437f"}
+   :sha256 "8f461796e3548bf1a74da0973a7d8f466c80c059c9d2fa7253df01c414a02323"}
+  {:path "native/jco-component-host.mjs" :role :independent-component-engine-host
+   :sha256 "ed19f1631ecb04966f1674b970f6cc06b47a23b1b8a7adc6e8e19328ed39b4fb"}
   {:path "src/kototama/workerd_core.clj" :role :workerd-core-engine-adapter
    :sha256 "979253bc9bd5414b7a044090c0c066d5784add9985e290ea0213567479329c28"}
   {:path "workerd/kototama-core-host.mjs" :role :workerd-provider-host-boundary
@@ -88,6 +90,9 @@
   {:coordinate "workerd"
    :version "1.20260723.1"
    :role :core-wasm-isolate-engine}
+  {:coordinate "@bytecodealliance/jco"
+   :version "1.25.2"
+   :role :independent-component-engine}
   {:coordinate "java.base" :minimum-version 21
    :role :process-crypto-network-concurrency-runtime}]
  :tcb/native-unsafe

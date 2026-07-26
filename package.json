@@ -1,8 +1,12 @@
 {
-  "name": "kototama-workerd-conformance",
+  "name": "kototama-component-qualification",
   "private": true,
+  "type": "module",
   "scripts": {
     "test:workerd": "bash workerd/verify-e2e.sh"
+  },
+  "dependencies": {
+    "@bytecodealliance/jco": "1.25.2"
   },
   "devDependencies": {
     "workerd": "1.20260723.1"

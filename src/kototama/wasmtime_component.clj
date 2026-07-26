@@ -72,14 +72,16 @@
             (str (namespace operation) "/" (name operation)))))
 
 (defn run-effectful!
-  "Run an admitted effectful Component through the native Wasmtime micro-TCB.
+  "Run an admitted effectful Component through a pinned JSON-protocol
+   Component host. Wasmtime and jco are independent engines behind the same
+   fail-closed provider protocol.
    The host links no WASI interfaces and every imported WIT function is
    synchronously delegated through the previously admitted provider boundary."
   [{:keys [runtime component-bytes imports abilities budgets artifact providers
            component-host runtime-bindings lease lease-epoch now-ms
-           lease-authorize?]}]
-  (when-not (= :wasmtime-component runtime)
-    (reject :runtime-mismatch "Wasmtime Component adapter was not selected"))
+           lease-authorize? execution-identity]}]
+  (when-not (contains? provider/component-runtimes runtime)
+    (reject :runtime-mismatch "a qualified Component adapter was not selected"))
   (when-not (bytes? component-bytes)
     (reject :invalid-component "Component bytes are required"))
   (when (empty? imports)
@@ -132,13 +134,20 @@
                                                         :import (:import message)
                                                         :value (long result)})
                               (recur))
-                            "result" {:result (long (:value message)) :runtime runtime}
+                            "result" (cond-> {:result (long (:value message))
+                                             :runtime runtime}
+                                       execution-identity
+                                       (assoc :execution-identity execution-identity))
                             "error" (reject :engine-failed
                                             (str "native Component host rejected execution: "
                                                  (:message message)))
                             (reject :invalid-engine-output
                                     "native Component host emitted an unknown envelope")))))
-            result (deref outcome deadline-ms ::deadline)]
+            result (try
+                     (deref outcome deadline-ms ::deadline)
+                     (catch java.util.concurrent.ExecutionException error
+                       (.destroyForcibly process)
+                       (throw (.getCause error))))]
         (when (= ::deadline result)
           (.destroyForcibly process)
           (reject :deadline-exceeded "Component exceeded its execution deadline"))
