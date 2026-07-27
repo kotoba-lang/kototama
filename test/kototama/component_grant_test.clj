@@ -118,6 +118,7 @@
                           :package-lock-cid (mf/cidv1-raw (.getBytes "lock" "UTF-8"))
                           :definition-cids #{(mf/cidv1-raw (.getBytes "def" "UTF-8"))}}}
         admitted (atom nil)
+        audit-sink (fn [_] "persisted")
         outcome
         (adapter/admit-component-with-aiueos!
          artifact world bytes
@@ -128,11 +129,13 @@
          {:runtime :wasmtime-component
           :component-host-sha256 (apply str (repeat 64 "a"))
           :ability-policy {import ceiling}
+          :audit-sink audit-sink
           :lease-epoch 7 :now-ms (constantly 1000)
           :lease-ttl-ms 10000})]
     (is (= {import effective} (:abilities @admitted)))
     (is (= {import effective} (:component-imports (:artifact @admitted))))
     (is (= {import effective} (get-in @admitted [:lease :aiueos/abilities])))
+    (is (identical? audit-sink (:audit-sink @admitted)))
     (is (= {import effective} (get-in outcome [:receipt :abilities])))
     (is (true? ((:lease-authorize? @admitted) import effective)))
     (is (false? ((:lease-authorize? @admitted) import requested)))))

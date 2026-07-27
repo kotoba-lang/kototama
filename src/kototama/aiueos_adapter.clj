@@ -197,6 +197,7 @@
                             :lease-epoch issued-epoch
                             :lease-epoch-source epoch-source
                             :now-ms now-ms
+                            :audit-sink (:audit-sink opts)
                             :lease-authorize? lease-authorize?)))
           receipt
           {:format :kototama.component-host-receipt/v1
