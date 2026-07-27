@@ -20,7 +20,8 @@
         (adapter/host-caps-for-component
          {:capabilities imports}
          {:policy-overlay
-          {:aiueos/grants
+          {:aiueos/surface :cloud
+           :aiueos/grants
            {:kototama/guest
             #{:http/get-stream :object/get-stream :object/put-block
               :object/compare-and-set-ref}}}
@@ -29,6 +30,26 @@
     (is (= #{:http-get-stream :object-get-stream :object-put-block
              :object-compare-and-set-ref}
            (:grants host-caps)))))
+
+(deftest bounded-provider-authority-needs-grant-and-surface
+  (let [artifact {:capabilities
+                  #{:aiueos.component/aiueos-http-get-stream}}
+        grant {:aiueos/grants
+               {:kototama/guest #{:http/get-stream}}}]
+    (doseq [overlay [grant
+                     {:aiueos/surface :cloud}
+                     (assoc grant :aiueos/surface :robot)]]
+      (is (thrown-with-msg?
+           clojure.lang.ExceptionInfo
+           #"does not cover every Component import"
+           (adapter/host-caps-for-component
+            artifact {:policy-overlay overlay}))))
+    (let [{:keys [host-caps decision]}
+          (adapter/host-caps-for-component
+           artifact
+           {:policy-overlay (assoc grant :aiueos/surface :cloud)})]
+      (is (= :grant (:aiueos/decision decision)))
+      (is (= #{:http-get-stream} (:grants host-caps))))))
 
 (deftest denied-or-unbound-component-never-reaches-linker
   (let [bytes (.getBytes "component" "UTF-8")
