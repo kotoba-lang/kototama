@@ -86,7 +86,26 @@
     {:import/id :http-post-headers
      :import/name "http-post-headers"
      :import/category :network
-     :import/effects #{:network}}]})
+     :import/effects #{:network}}
+    ;; Component-only linear resources. Core-Wasm tenders do not bind these
+    ;; names; they are present in HostCaps so the Component adapter can carry
+    ;; Aiueos decisions to individual WIT providers without an ambient escape.
+    {:import/id :http-get-stream
+     :import/name "http-get-stream"
+     :import/category :network
+     :import/effects #{:network}}
+    {:import/id :object-get-stream
+     :import/name "object-get-stream"
+     :import/category :storage
+     :import/effects #{:storage}}
+    {:import/id :object-put-block
+     :import/name "object-put-block"
+     :import/category :storage
+     :import/effects #{:storage :write}}
+    {:import/id :object-compare-and-set-ref
+     :import/name "object-compare-and-set-ref"
+     :import/category :storage
+     :import/effects #{:storage :write}}]})
 
 (def import-by-id
   (into {} (map (juxt :import/id identity) (:abi/imports import-surface))))

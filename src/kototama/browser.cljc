@@ -82,7 +82,16 @@
    :json-extract-field  {:jvm :yes :browser :yes :node :yes
                          :note "browser: byte-for-byte JS port in wasm-webcomponent actor-host.js (pure computation, no bridge)"}
    :http-post-headers  {:jvm :yes :browser :yes :node :inject
-                        :note "browser: shared Worker+SAB transport; exact flat-pair headers ABI and shared maxHttpPosts quota"}})
+                        :note "browser: shared Worker+SAB transport; exact flat-pair headers ABI and shared maxHttpPosts quota"}
+   :http-get-stream {:jvm :yes :browser :inject :node :inject
+                     :note "linear Component provider; browser/node require an injected bounded stream adapter"}
+   :object-get-stream {:jvm :yes :browser :inject :node :inject
+                       :note "linear Component provider; browser/node require an injected object store"}
+   :object-put-block {:jvm :yes :browser :inject :node :inject
+                      :note "linear Component provider; browser/node require an injected object store"}
+   :object-compare-and-set-ref
+   {:jvm :yes :browser :inject :node :inject
+    :note "linear Component provider; browser/node require an injected object store"}})
 
 (defn import-status
   "Status map for one import id under :jvm | :browser | :node."
@@ -107,7 +116,11 @@
    :browser {:http-post #{:cross-origin-isolated :worker :http-bridge}
              :llm-infer #{:cross-origin-isolated :worker :llm-proxy}}
    :node {:http-post #{:http-post-provider}
-          :llm-infer #{:llm-provider}}})
+          :llm-infer #{:llm-provider}
+          :http-get-stream #{:bounded-stream-provider}
+          :object-get-stream #{:object-store-provider}
+          :object-put-block #{:object-store-provider}
+          :object-compare-and-set-ref #{:object-store-provider}}})
 
 (defn host-admission
   "Machine-enforced host support admission for REQUESTED imports.

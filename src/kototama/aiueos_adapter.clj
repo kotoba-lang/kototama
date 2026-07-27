@@ -29,17 +29,20 @@
             [kototama.linear-journal :as linear-journal]))
 
 (def kototama-import->aiueos-capability
-  "kototama.contract import id -> aiueos capability keyword, for the subset
-  both actor:host and aiueos's own vocabulary recognize (aiueos's default
-  kernel capabilities, `aiueos.policy/default-kernel-caps`) -- these are
-  the ones a manifest can ask for and have aiueos's OWN default policy
-  grant with no overlay at all. `:gen-keypair`/`:sign`/`:verify`/
-  `:sha256-hex`/`:http-post`/`:log-read` are actor:host-only (no aiueos
-  kernel-capability counterpart) and are not translatable through this
-  adapter -- a caller needing those still supplies HostCaps directly, same
-  as before this adapter existed."
-  {:log-write :log/write
+  "Tender import id -> Aiueos authority keyword. Non-kernel operations still
+  require an explicit deployment grant; naming them here never supplies a
+  provider or ambient authority."
+  {:sign :identity/sign
+   :verify :identity/verify
+   :sha256-hex :hash/sha256
+   :http-post :http/post
+   :log-read :log/read
+   :log-write :log/write
    :clock-monotonic :clock/monotonic
+   :http-get-stream :http/get-stream
+   :object-get-stream :object/get-stream
+   :object-put-block :object/put-block
+   :object-compare-and-set-ref :object/compare-and-set-ref
    :random-bytes :random/bytes})
 
 (def component-import->kototama-import
@@ -52,7 +55,12 @@
    :aiueos.component/aiueos-http-post :http-post
    :aiueos.component/aiueos-log-read :log-read
    :aiueos.component/aiueos-log-append :log-write
-   :aiueos.component/aiueos-clock-now :clock-monotonic})
+   :aiueos.component/aiueos-clock-now :clock-monotonic
+   :aiueos.component/aiueos-http-get-stream :http-get-stream
+   :aiueos.component/aiueos-object-get-stream :object-get-stream
+   :aiueos.component/aiueos-object-put-block :object-put-block
+   :aiueos.component/aiueos-object-compare-and-set-ref
+   :object-compare-and-set-ref})
 
 (declare host-caps-for-imports)
 
@@ -98,7 +106,7 @@
   A denial, unknown import, or missing provider aborts before LINKER! runs."
   [artifact world component-bytes linker! providers
    {:keys [lease-id lease-epoch lease-epoch-source lease-ttl-ms now-ms
-           linear-journal-path execution-identity] :as opts}]
+           linear-journal-path execution-identity ability-policy] :as opts}]
   (let [declared (set (:capabilities artifact))
         abilities (:component-imports artifact)
         _ (when-not (= (select-keys (:budgets artifact) [:fuel :memory-pages])
@@ -118,9 +126,12 @@
         issued-epoch (current-lease-epoch! epoch-source)
         lease (component-abi/issue-lease
                {:decision decision :imports declared :abilities abilities
+                :ability-policy ability-policy
                 :now issued-at :epoch issued-epoch
                 :ttl-ms (or lease-ttl-ms 30000)
                 :lease-id (or lease-id (str "component-" issued-at))})
+        effective-abilities (:aiueos/abilities lease)
+        effective-artifact (assoc artifact :component-imports effective-abilities)
         journal (when linear-journal-path (linear-journal/open! linear-journal-path))
         remaining (atom (into {} (map (fn [[import ability]]
                                         [import (max 0
@@ -129,7 +140,7 @@
                                                           (linear-journal/consumed
                                                            journal (:aiueos/lease-id lease) import)
                                                           0)))]))
-                              abilities))
+                              effective-abilities))
         lease-authorize?
         (fn [import ability]
           (and
@@ -167,14 +178,14 @@
     ;; of LINKER!. Wasmtime and pinned jco are independently qualified
     ;; Component adapters; Chicory/workerd remain core-Wasm compatibility.
     (component-provider/prepare!
-     {:runtime (:runtime opts) :component? true :artifact artifact
+     {:runtime (:runtime opts) :component? true :artifact effective-artifact
       :grants declared :providers (select-keys providers declared)
       :lease-authorize? lease-authorize?})
     (let [outcome
           (component-platform/admit-and-link!
            (assoc world :imports declared :grants declared
                   :provider-bindings (select-keys providers declared)
-                  :abilities abilities
+                  :abilities effective-abilities
                   :runtime-bindings
                   {:component-host-sha256 (:component-host-sha256 opts)})
            execution-identity
@@ -182,6 +193,7 @@
            ;; The admitted world remains a closed ABI envelope. Lease state is
            ;; host-local and reaches only the provider invocation boundary.
            #(linker! (assoc % :lease lease
+                            :artifact effective-artifact
                             :lease-epoch issued-epoch
                             :lease-epoch-source epoch-source
                             :now-ms now-ms
@@ -193,7 +205,7 @@
            :component-cid (get-in world [:identity :component-cid])
            :capability-mode (or (:capability-mode artifact) :function)
            :imports declared
-           :abilities abilities
+           :abilities effective-abilities
            :resource-bounds (:budgets world)
            :lease {:id (:aiueos/lease-id lease)
                    :epoch issued-epoch
@@ -205,7 +217,7 @@
                                    (map (fn [[import ability]]
                                           [import (- (:max-items ability)
                                                      (get @remaining import 0))]))
-                                   abilities)}
+                                   effective-abilities)}
            :outcome {:result (:result outcome)}
            :host {:runtime (:runtime opts)
                   :sha256 (:component-host-sha256 opts)}}]
