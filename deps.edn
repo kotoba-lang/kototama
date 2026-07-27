@@ -17,7 +17,7 @@
         io.github.kotoba-lang/security {:git/url "https://github.com/kotoba-lang/security.git"
                                         :git/sha "f409dbade106df076cefe640781b12db558f4135"}
         io.github.kotoba-lang/abi {:git/url "https://github.com/kotoba-lang/abi.git"
-                                   :git/sha "129b0b2fe26ddd1a3917132515bf1b903c7b763d"}
+                                   :git/sha "6b2e5185ff98aa9cfec3f371a019e75b4c089aae"}
         ;; Component admission verifies identity CIDs structurally before
         ;; linking; a leading `b` is not evidence of content addressing.
         io.github.kotoba-lang/io-multiformats
@@ -31,7 +31,7 @@
         ;; repo) has been merged back into kotoba-lang/aiueos.
         io.github.kotoba-lang/aiueos
         {:git/url "https://github.com/kotoba-lang/aiueos.git"
-         :git/sha "97578d31047aeb7e25d618c217210eb9154d5c7d"}}
+         :git/sha "c1d0a9bb6f2e4ecb6d9a1616f5a39bed6511d481"}}
  :aliases
  {:cli  {:main-opts ["-m" "kototama.cli"]}
   :authority-daemon {:main-opts ["-m" "kototama.component-authority-daemon"]}
