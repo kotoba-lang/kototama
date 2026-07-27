@@ -37,7 +37,11 @@
    ;; from :http-post's own "http_post" -- see contract.cljc's
    ;; :http-post-headers comment for why this couldn't just widen
    ;; http-post's own arity.
-   :http-post-headers "http_post_headers"})
+   :http-post-headers "http_post_headers"
+   :http-get-stream "http_get_stream"
+   :object-get-stream "object_get_stream"
+   :object-put-block "object_put_block"
+   :object-compare-and-set-ref "object_compare_and_set_ref"})
 
 (defn wasm-field-name
   "Canonical Wasm import field for a contract import id, or nil."

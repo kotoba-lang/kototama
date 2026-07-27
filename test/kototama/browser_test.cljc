@@ -26,7 +26,7 @@
     (is (contains? yes :llm-infer) "llm-infer is real via the same Worker-hosted SAB+Atomics bridge, through a caller-supplied proxy URL")
     (is (contains? yes :http-fetch))
     (is (contains? yes :http-post-headers))
-    (is (= 14 (count yes)))))
+    (is (= 18 (count yes)))))
 
 (deftest every-import-declares-explicit-parity-and-gaps-carry-notes
   ;; ADR-0009 Decision 1 (docs/0009-stack-topology-parity-gate-capability-
@@ -59,8 +59,8 @@
     ;; wasm-webcomponent's actor-host.js (test/verify-codec-host.mjs locks
     ;; the JVM byte parity). wasm-webcomponent PR #15 closes the final two
     ;; network imports through the shared SAB/Worker bridge.
-    (is (= 14 (:total s)))
-    (is (= 14 (:browser-yes s)))
+    (is (= 18 (:total s)))
+    (is (= 18 (:browser-yes s)))
     (is (= 0 (:browser-no s)))
     (is (= 1.0 (:ratio s)))))
 
