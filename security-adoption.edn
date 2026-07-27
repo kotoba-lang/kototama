@@ -7,7 +7,8 @@
   kototama.tender [kotoba.security.effect]
   kototama.signal-crypto [kotoba.security.hkdf kotoba.security.aead kotoba.security.ed25519]
   kototama.signal-protocol [kotoba.security.hkdf kotoba.security.x25519 kotoba.security.ed25519]
-  kototama.signal-request [kotoba.security.ed25519 kotoba.security.sha256 kotoba.security.hkdf]}
+  kototama.signal-request [kotoba.security.ed25519 kotoba.security.sha256 kotoba.security.hkdf]
+  kototama.transport-provider [kotoba.security.abac kotoba.security.approval kotoba.security.crypto-policy kotoba.security.hardware kotoba.security.information-flow]}
  :sensitive-operations
  {kototama.network-authority/authorize-request! [kotoba.security.abac kotoba.security.effect]
   kototama.signer-lifecycle/authorize-manifest! [kotoba.security.ed25519 kotoba.security.effect]

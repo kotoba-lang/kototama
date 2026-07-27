@@ -20,10 +20,6 @@
                                    :git/sha "6b2e5185ff98aa9cfec3f371a019e75b4c089aae"}
         ;; Component admission verifies identity CIDs structurally before
         ;; linking; a leading `b` is not evidence of content addressing.
-        ;; Non-exportable key handles + lifecycle registry for kototama.kagi-adapter.
-        io.github.kotoba-lang/kagi
-        {:git/url "https://github.com/kotoba-lang/kagi.git"
-         :git/sha "6c19009932b42324e37f364635ebf8a803b29824"}
         io.github.kotoba-lang/io-multiformats
         {:git/url "https://github.com/kotoba-lang/io-multiformats.git"
          :git/sha "310724803db65840f00d2d98d7887f2b6a512bd3"}
