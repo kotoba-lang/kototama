@@ -1,5 +1,6 @@
 (ns kototama.tamaki-contract-test
   (:require [clojure.test :refer [deftest is]]
+            [kotoba.core.capability-repository :as repository]
             [kototama.tamaki-contract :as tamaki-contract]))
 
 (def heartbeat-envelope
@@ -10,6 +11,9 @@
    :tamaki.capability/abi {:namespace "actor:host" :version 0}
    :tamaki.capability/imports
    #{:clock-monotonic :sha256-hex :log-write}
+   :tamaki.capability/repositories
+   (repository/repository-refs-for-imports
+    #{:clock-monotonic :sha256-hex :log-write})
    :tamaki.capability/grants
    #{:clock-monotonic :sha256-hex :log-write}
    :tamaki.capability/limits
@@ -35,10 +39,19 @@
     (is (false? (:ok? (tamaki-contract/admit unknown))))
     (is (false? (:ok? (tamaki-contract/admit under-granted))))))
 
+(deftest independently-rejects-capability-repository-drift
+  (let [drifted (update heartbeat-envelope
+                        :tamaki.capability/repositories pop)
+        problems (set (map :problem
+                           (:errors (tamaki-contract/admit drifted))))]
+    (is (contains? problems :capability-repository-set-mismatch))))
+
 (deftest independently-rejects-unbounded-autonomous-egress
   (let [envelope
         (assoc heartbeat-envelope
                :tamaki.capability/imports #{:http-post}
+               :tamaki.capability/repositories
+               (repository/repository-refs-for-imports #{:http-post})
                :tamaki.capability/grants #{:http-post}
                :tamaki.capability/limits
                {:max-http-posts 1 :allowed-url-prefixes nil}

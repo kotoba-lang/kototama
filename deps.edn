@@ -18,7 +18,7 @@
                                         :git/sha "f409dbade106df076cefe640781b12db558f4135"}
         io.github.kotoba-lang/kotoba-core-contracts
         {:git/url "https://github.com/kotoba-lang/kotoba-core-contracts.git"
-         :git/sha "58c01efd8666dc0f789cba1fadc456d1949ee26e"}
+         :git/sha "4da2efa3ce84a8fa8fdd82c8bfa98b9bc2a808d5"}
         io.github.kotoba-lang/abi {:git/url "https://github.com/kotoba-lang/abi.git"
                                    :git/sha "6b2e5185ff98aa9cfec3f371a019e75b4c089aae"}
         ;; Component admission verifies identity CIDs structurally before

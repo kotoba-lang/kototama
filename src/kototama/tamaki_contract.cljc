@@ -5,6 +5,7 @@
   shape, and host-neutral validation. Kototama adds the concrete HostCaps and
   actor:host import-surface checks immediately before execution."
   (:require [kotoba.core.actor-capability :as actor-capability]
+            [kotoba.core.capability-repository :as repository]
             [kototama.contract :as contract]))
 
 (def envelope-version actor-capability/envelope-version)
@@ -15,6 +16,8 @@
   "Return {:ok? true :host-caps ...} or a fail-closed error report."
   [envelope]
   (let [shared-report (actor-capability/validate-envelope envelope)
+        repository-errors
+        (repository/validate-envelope-repositories envelope)
         imports (:imports shared-report)
         grants (:grants shared-report)
         limits (:limits shared-report)
@@ -25,6 +28,7 @@
                  :abi/imports (vec imports)}
         host-report (contract/validate-import-surface surface caps)
         errors (vec (concat (:errors shared-report)
+                            repository-errors
                             (:errors host-report)))]
     (cond-> (assoc shared-report
                    :ok? (empty? errors)
