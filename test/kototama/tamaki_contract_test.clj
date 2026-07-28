@@ -46,6 +46,18 @@
                            (:errors (tamaki-contract/admit drifted))))]
     (is (contains? problems :capability-repository-set-mismatch))))
 
+(deftest independently-rejects-capability-definition-cid-drift
+  (let [drifted
+        (update-in heartbeat-envelope
+                   [:tamaki.capability/repositories 0]
+                   assoc :capability/definition-cid
+                   (:capability/hash-contract-cid
+                    (first (:tamaki.capability/repositories
+                            heartbeat-envelope))))
+        problems (set (map :problem
+                           (:errors (tamaki-contract/admit drifted))))]
+    (is (contains? problems :capability-repository-set-mismatch))))
+
 (deftest independently-rejects-unbounded-autonomous-egress
   (let [envelope
         (assoc heartbeat-envelope
