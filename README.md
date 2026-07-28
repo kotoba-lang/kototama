@@ -99,6 +99,10 @@ are not considered duplicated work to consolidate.
 - `src/kototama/contract.cljc` defines the `actor:host` import surface,
   `HostCaps`, `RuntimeLimits`, grant normalization, and import validation
   (pure data, zero-dep, no execution — see `kototama.tender` for that).
+- `src/kototama/tamaki_contract.cljc` independently admits Tamaki's versioned
+  capability envelope before `HostCaps` construction. Business capabilities
+  are not authority: imports, grants, limits, effect policy, ABI version, and
+  network allowlists are rechecked at this boundary.
 - `src/kototama/tender.clj` is the Chicory-based execution runtime (see
   above). `:clj`-only, matching `com.dylibso.chicory`'s own JVM-only
   nature; pulls in `com.dylibso.chicory/{wasm,runtime}` and
