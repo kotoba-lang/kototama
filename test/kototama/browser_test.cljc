@@ -55,15 +55,13 @@
 
 (deftest parity-score-ratio
   (let [s (browser/parity-score)]
-    ;; cbor-encode/json-encode/json-extract-field (ADR-2607230943's pure-
-    ;; computation second-wave imports) are now byte-for-byte ported to
-    ;; wasm-webcomponent's actor-host.js (test/verify-codec-host.mjs locks
-    ;; the JVM byte parity). wasm-webcomponent PR #15 closes the final two
-    ;; network imports through the shared SAB/Worker bridge.
-    (is (= 19 (:total s)))
+    ;; Browser-linkable stays at 19 (crypto/log/http/codec/llm/stream).
+    ;; Transport/TLS (6 imports) are intentional browser :no native boundary
+    ;; — JVM inject via transport-provider / :provider-host-functions (T8.4).
+    (is (= 25 (:total s)))
     (is (= 19 (:browser-yes s)))
-    (is (= 0 (:browser-no s)))
-    (is (= 1.0 (:ratio s)))))
+    (is (= 6 (:browser-no s)))
+    (is (= (/ 19.0 25.0) (:ratio s)))))
 
 (deftest r2-report-shape
   (let [r (browser/r2-report)]
