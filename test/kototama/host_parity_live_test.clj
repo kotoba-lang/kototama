@@ -8,15 +8,20 @@
     (doseq [id [:sha256-hex-all-available
                 :clock-monotonic-all
                 :log-write-all-available
-                :gen-keypair-all-available]]
+                :log-read-all-available
+                :gen-keypair-all-available
+                :sign-all-available
+                :verify-all-available
+                :cbor-encode-jvm-live
+                :json-encode-jvm-live]]
       (is (contains? ids id) (str id)))))
 
 (deftest run-jvm-live-proves-all-corpus-entries
   (let [r (live/run-jvm-live)]
     (is (true? (:ok? r))
         (str "live failures: " (pr-str (:failed r))))
-    (is (= 4 (:total r)))
-    (is (= 4 (:passed r)))
+    (is (= 9 (:total r)))
+    (is (= 9 (:passed r)))
     (is (empty? (:failed r)))
     (doseq [row (:results r)]
       (testing (str (:id row))
@@ -26,5 +31,5 @@
 
 (deftest report-shape
   (let [rep (live/report)]
-    (is (= :jvm-live-first (:t84-slice rep)))
+    (is (= :jvm-live-expand (:t84-slice rep)))
     (is (true? (get-in rep [:live :ok?])))))
