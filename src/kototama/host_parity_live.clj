@@ -709,6 +709,136 @@
       (finally
         ((:close! provider))))))
 
+(defn- pg-pool-query-wat
+  "pg_pool_query on unknown lease → -1 (write-effect import)."
+  []
+  "(module
+     (import \"kotoba\" \"pg_pool_query\"
+       (func $q (param i32 i32 i32 i32 i32 i32 i32) (result i32)))
+     (memory (export \"memory\") 1)
+     (data (i32.const 0) \"SELECT 1\")
+     (func (export \"main\") (result i64)
+       (i64.extend_i32_s
+         (call $q
+           (i32.const 99)          ;; lease
+           (i32.const 0) (i32.const 8)  ;; sql
+           (i32.const 64) (i32.const 0) ;; params
+           (i32.const 128) (i32.const 256)))))") ;; out
+
+(defn- prove-pg-pool-query-jvm
+  "Live-prove :pg-pool-query inject fail-closed (no lease → -1)."
+  []
+  (let [wasm (wat->wasm (pg-pool-query-wat))
+        caps {:grants #{:pg-pool-query}
+              :limits {:allow-write-imports? true}}
+        provider (pg-pool/fail-closed-inject-provider)]
+    (try
+      (let [n (tender/run-main wasm [:pg-pool-query] caps
+                               {:provider-host-functions
+                                (:host-functions provider)})]
+        {:ok? (= -1 n)
+         :id :pg-pool-query-jvm-inject-available
+         :import :pg-pool-query
+         :imports [:pg-pool-query]
+         :host :jvm
+         :result n
+         :live? true
+         :note "inject pool fail-closed provider; query without lease → -1"})
+      (finally
+        ((:close! provider))))))
+
+(defn- pg-pool-release-wat
+  "pg_pool_release on unknown lease → -1."
+  []
+  "(module
+     (import \"kotoba\" \"pg_pool_release\" (func $r (param i32) (result i32)))
+     (func (export \"main\") (result i64)
+       (i64.extend_i32_s (call $r (i32.const 99)))))")
+
+(defn- prove-pg-pool-release-jvm
+  "Live-prove :pg-pool-release inject fail-closed (unknown lease → -1)."
+  []
+  (let [wasm (wat->wasm (pg-pool-release-wat))
+        caps {:grants #{:pg-pool-release}
+              :limits {}}
+        provider (pg-pool/fail-closed-inject-provider)]
+    (try
+      (let [n (tender/run-main wasm [:pg-pool-release] caps
+                               {:provider-host-functions
+                                (:host-functions provider)})]
+        {:ok? (= -1 n)
+         :id :pg-pool-release-jvm-inject-available
+         :import :pg-pool-release
+         :imports [:pg-pool-release]
+         :host :jvm
+         :result n
+         :live? true
+         :note "inject pool fail-closed provider; unknown lease → -1"})
+      (finally
+        ((:close! provider))))))
+
+(defn- pg-pool-stats-wat
+  "pg_pool_stats on unknown pool → -1."
+  []
+  "(module
+     (import \"kotoba\" \"pg_pool_stats\" (func $s (param i32 i32 i32) (result i32)))
+     (memory (export \"memory\") 1)
+     (func (export \"main\") (result i64)
+       (i64.extend_i32_s
+         (call $s (i32.const 99) (i32.const 0) (i32.const 64)))))")
+
+(defn- prove-pg-pool-stats-jvm
+  "Live-prove :pg-pool-stats inject fail-closed (unknown pool → -1)."
+  []
+  (let [wasm (wat->wasm (pg-pool-stats-wat))
+        caps {:grants #{:pg-pool-stats}
+              :limits {}}
+        provider (pg-pool/fail-closed-inject-provider)]
+    (try
+      (let [n (tender/run-main wasm [:pg-pool-stats] caps
+                               {:provider-host-functions
+                                (:host-functions provider)})]
+        {:ok? (= -1 n)
+         :id :pg-pool-stats-jvm-inject-available
+         :import :pg-pool-stats
+         :imports [:pg-pool-stats]
+         :host :jvm
+         :result n
+         :live? true
+         :note "inject pool fail-closed provider; unknown pool → -1"})
+      (finally
+        ((:close! provider))))))
+
+(defn- pg-pool-drain-wat
+  "pg_pool_drain on unknown pool → -1."
+  []
+  "(module
+     (import \"kotoba\" \"pg_pool_drain\" (func $d (param i32) (result i32)))
+     (func (export \"main\") (result i64)
+       (i64.extend_i32_s (call $d (i32.const 99)))))")
+
+(defn- prove-pg-pool-drain-jvm
+  "Live-prove :pg-pool-drain inject fail-closed (unknown pool → -1)."
+  []
+  (let [wasm (wat->wasm (pg-pool-drain-wat))
+        caps {:grants #{:pg-pool-drain}
+              :limits {}}
+        provider (pg-pool/fail-closed-inject-provider)]
+    (try
+      (let [n (tender/run-main wasm [:pg-pool-drain] caps
+                               {:provider-host-functions
+                                (:host-functions provider)})]
+        {:ok? (= -1 n)
+         :id :pg-pool-drain-jvm-inject-available
+         :import :pg-pool-drain
+         :imports [:pg-pool-drain]
+         :host :jvm
+         :result n
+         :live? true
+         :note "inject pool fail-closed provider; unknown pool → -1"})
+      (finally
+        ((:close! provider))))))
+
 (def jvm-live-corpus
   "Host-parity case ids that this runner can live-prove on JVM tender.
   Ids match lang/host-parity.edn :conformance :cases where listed;
@@ -816,7 +946,19 @@
     :prove prove-pg-pool-health-jvm}
    {:id :pg-pool-close-jvm-inject-available
     :import :pg-pool-close
-    :prove prove-pg-pool-close-jvm}])
+    :prove prove-pg-pool-close-jvm}
+   {:id :pg-pool-query-jvm-inject-available
+    :import :pg-pool-query
+    :prove prove-pg-pool-query-jvm}
+   {:id :pg-pool-release-jvm-inject-available
+    :import :pg-pool-release
+    :prove prove-pg-pool-release-jvm}
+   {:id :pg-pool-stats-jvm-inject-available
+    :import :pg-pool-stats
+    :prove prove-pg-pool-stats-jvm}
+   {:id :pg-pool-drain-jvm-inject-available
+    :import :pg-pool-drain
+    :prove prove-pg-pool-drain-jvm}])
 
 (defn prove-import
   "Live-run one corpus entry on JVM tender. Returns
