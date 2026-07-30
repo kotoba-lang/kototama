@@ -85,6 +85,8 @@
                          :note "browser: byte-for-byte JS port in wasm-webcomponent actor-host.js (pure computation, no bridge)"}
    :http-post-headers  {:jvm :yes :browser :yes :node :inject
                         :note "browser: shared Worker+SAB transport; exact flat-pair headers ABI and shared maxHttpPosts quota"}
+   :kagi-sign {:jvm :yes :browser :no :node :inject
+               :note "JVM: injected :kagi-signer + :kagi-decisions; key never enters guest; browser intentional native boundary"}
    :transport-connect {:jvm :inject :browser :no :node :inject
                        :note "JVM: transport-provider via :provider-host-functions; browser intentional native boundary"}
    :tls-open {:jvm :inject :browser :no :node :inject

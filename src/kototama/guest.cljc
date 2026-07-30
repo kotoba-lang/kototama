@@ -39,6 +39,7 @@
    ;; :http-post-headers comment for why this couldn't just widen
    ;; http-post's own arity.
    :http-post-headers "http_post_headers"
+   :kagi-sign "kagi_sign"
    :transport-connect "transport_connect"
    :tls-open "tls_open"
    :tls-server-end-point "tls_server_end_point"

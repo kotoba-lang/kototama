@@ -94,6 +94,14 @@
      :import/name "http-post-headers"
      :import/category :network
      :import/effects #{:network}}
+    ;; Decision-aware trusted signing (T8.4 host-parity :kagi-sign).
+    ;; Private key never enters guest memory. Caller injects :kagi-signer
+    ;; (fn [key-ref purpose message-bytes] -> signature-bytes) and
+    ;; :kagi-decisions grant rows. Default :max-kagi-signs 0 deny-by-default.
+    {:import/id :kagi-sign
+     :import/name "kagi-sign"
+     :import/category :identity
+     :import/effects #{:crypto :secret}}
     ;; Transport / TLS inject path (kototama.transport-provider native-provider).
     ;; Not built into tender core — callers pass HostFunctions via
     ;; open-session :provider-host-functions (T8.4 host-parity L5 inject).
@@ -156,6 +164,7 @@
                 :max-log-read-bytes :non-negative-int
                 :max-log-write-bytes :non-negative-int
                 :max-random-bytes :non-negative-int
+                :max-kagi-signs :non-negative-int
                 :max-memory-pages :non-negative-int
                 :max-transport-connections :non-negative-int
                 :max-transport-connect-ms :non-negative-int
@@ -186,6 +195,8 @@
    ;; CSPRNG fill quota (bytes). Default 0 = deny-by-default until raised
    ;; (matches actor-host.js maxRandomBytes: 0 and host-parity note).
    :max-random-bytes 0
+   ;; kagi-sign call quota (default 0 = deny until raised + grant + inject).
+   :max-kagi-signs 0
    ;; Transport inject (transport-provider). Defaults deny-by-default:
    ;; connections/bytes 0; endpoint allowlist nil fails endpoint-allowed?
    ;; (requires set). Callers raise limits + pass provider-host-functions.
@@ -316,6 +327,7 @@
         http-posts (count (filter #{:http-post :http-post-headers} ids))
         http-fetches (count (filter #{:http-fetch} ids))
         llm-infers (count (filter #{:llm-infer} ids))
+        kagi-signs (count (filter #{:kagi-sign} ids))
         secret-imports (filterv #(some (:import/effects (import-by-id %)) [:secret]) ids)
         write-imports (filterv #(some (:import/effects (import-by-id %)) [:write]) ids)]
     (cond-> []
@@ -338,6 +350,11 @@
       (conj {:error :limit/max-llm-infers
              :limit (:max-llm-infers limits)
              :actual llm-infers})
+
+      (> kagi-signs (:max-kagi-signs limits))
+      (conj {:error :limit/max-kagi-signs
+             :limit (:max-kagi-signs limits)
+             :actual kagi-signs})
 
       (and (false? (:allow-secret-imports? limits))
            (seq secret-imports))

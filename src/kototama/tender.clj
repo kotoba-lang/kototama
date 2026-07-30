@@ -174,7 +174,7 @@
 ;; call crashing on a Java exception it never gets a chance to handle. ──
 
 (defn- new-limits-state []
-  (atom {:http-posts 0 :http-fetches 0 :llm-infers 0
+  (atom {:http-posts 0 :http-fetches 0 :llm-infers 0 :kagi-signs 0
          :log-read-bytes 0 :log-write-bytes 0 :random-bytes 0}))
 
 (defn- within-count-limit? [state-key limit-key caps limits-state]
@@ -307,6 +307,42 @@
                    msg (read-bytes! instance (aget args 2) (aget args 3))
                    sig (read-bytes! instance (aget args 4) (aget args 5))]
                (if (ed/verify pub msg sig) 1 0)))))
+
+(defn- authorized-kagi-decision
+  "Pick the first grant decision matching KEY-REF for :kagi/sign."
+  [decisions key-ref]
+  (first (filter (fn [d]
+                   (and (= :grant (:decision d))
+                        (= :kagi/sign (:capability d))
+                        (= key-ref (:secret-ref d))
+                        (:purpose d)))
+                 decisions)))
+
+(defn- kagi-sign-host-fn
+  "`(ref-ptr ref-len msg-ptr msg-len out-ptr out-cap) -> bytes-written|-1`.
+  Decision-aware trusted signing: private key never enters guest memory.
+  SIGNER is injected as `(fn [key-ref purpose message-bytes] signature-bytes)`.
+  DECISIONS is a seq of grant maps from the host policy plane (aiueos etc.)."
+  [caps limits-state signer decisions]
+  (host-fn "kagi_sign" (mapv valtype [:i32 :i32 :i32 :i32 :i32 :i32]) ValType/I32
+           (fn [instance args]
+             (ensure-granted! caps :kagi-sign)
+             (if-not (within-count-limit? :kagi-signs :max-kagi-signs caps limits-state)
+               -1
+               (try
+                 (let [key-ref (String. ^bytes (read-bytes! instance (aget args 0) (aget args 1)) "UTF-8")
+                       msg (read-bytes! instance (aget args 2) (aget args 3))
+                       decision (authorized-kagi-decision decisions key-ref)]
+                   (if-not (and signer decision)
+                     -1
+                     (let [sig (signer key-ref (:purpose decision) msg)]
+                       (if-not (bytes? sig)
+                         -1
+                         (let [n (write-bytes! instance (aget args 4) (aget args 5) sig)]
+                           (when (not (neg? n))
+                             (swap! limits-state update :kagi-signs inc))
+                           n)))))
+                 (catch Exception _ -1))))))
 
 (defn- sha256-hex-host-fn
   "`(ptr len out-ptr out-cap) -> bytes-written|-1`. Writes the lowercase
@@ -1173,17 +1209,17 @@
    HostFunction re-checks grants at call time. Memory growth capped to
    HostCaps `:max-memory-pages`. Maturity R1 (ADR-2607101200).
 
-   opts: :store, :llm-client, :fuel, and :provider-host-functions.
-   The latter is an explicit map of import id → Chicory HostFunction for
-   inject-path ABIs (transport-provider etc.); missing bindings for
-   requested inject imports fail closed before instantiation."
+   opts: :store, :llm-client, :fuel, :kagi-signer, :kagi-decisions,
+   and :provider-host-functions. :kagi-signer is `(fn [ref purpose msg] sig-bytes)`
+   for decision-aware signing; :provider-host-functions maps import id →
+   Chicory HostFunction for inject-path ABIs (transport-provider etc.)."
   ([wasm-bytes requested-imports host-caps]
    (open-session wasm-bytes requested-imports host-caps {}))
   ([wasm-bytes requested-imports host-caps
     {:keys [store llm-client fuel require-kotoba-compatibility? profile capability-leases
             execution-identity execution-identity-cid lease-now-ms
             http-policy request-purpose credential-provider
-            provider-host-functions]
+            provider-host-functions kagi-signer kagi-decisions]
      :as opts
      :or {store (in-memory-store) llm-client (default-llm-client) fuel default-fuel-limit}}]
    (let [configured (cond-> #{}
@@ -1226,10 +1262,19 @@
        (throw (ex-info "kototama.tender: import surface rejected by contract"
                        {:kototama.tender/rejected requested-imports
                         :kototama.tender/errors (:errors validation)})))
+     (when (contains? (set (:requested validation)) :kagi-sign)
+       (when-not (and (ifn? kagi-signer) (seq kagi-decisions))
+         (throw (ex-info "kototama.tender: kagi-sign requires injected signer and decisions"
+                         {:kototama.tender/errors
+                          [{:error :runtime/kagi-signer-or-decision-missing
+                            :signer? (boolean (ifn? kagi-signer))
+                            :decisions? (boolean (seq kagi-decisions))}]}))))
      (let [limits-state (new-limits-state)
            fn-by-id {:gen-keypair #(gen-keypair-host-fn caps limits-state)
                      :sign #(sign-host-fn caps limits-state)
                      :verify #(verify-host-fn caps limits-state)
+                     :kagi-sign #(kagi-sign-host-fn caps limits-state
+                                                    kagi-signer kagi-decisions)
                      :sha256-hex #(sha256-hex-host-fn caps limits-state)
                      :http-post #(http-post-host-fn caps limits-state
                                                     network-context)

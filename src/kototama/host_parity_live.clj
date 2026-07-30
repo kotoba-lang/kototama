@@ -250,6 +250,53 @@
       (finally
         ((:close! provider))))))
 
+(defn- kagi-sign-wat
+  "kagi_sign guest; key-ref and message baked into data segments."
+  [key-ref msg]
+  (str "(module
+          (import \"kotoba\" \"kagi_sign\" (func $ks (param i32 i32 i32 i32 i32 i32) (result i32)))
+          (memory (export \"memory\") 1)
+          (data (i32.const 0) \"" key-ref "\")
+          (data (i32.const 64) \"" msg "\")
+          (func (export \"main\") (result i64)
+            (i64.extend_i32_s
+              (call $ks (i32.const 0) (i32.const " (count key-ref) ")
+                        (i32.const 64) (i32.const " (count msg) ")
+                        (i32.const 128) (i32.const 64)))))"))
+
+(defn- prove-kagi-sign-jvm
+  "Live-prove :kagi-sign with injected signer + grant decision (no real kagi)."
+  []
+  (let [key-ref "kagi://live/test"
+        msg "ok"
+        wasm (wat->wasm (kagi-sign-wat key-ref msg))
+        seed (byte-array 32)
+        _ (dotimes [i 32] (aset-byte seed i (unchecked-byte (inc i))))
+        signer (fn [ref purpose message]
+                 (when-not (and (= key-ref ref) (= :live-test purpose))
+                   (throw (ex-info "unexpected kagi ref/purpose"
+                                   {:ref ref :purpose purpose})))
+                 ;; 64-byte deterministic stand-in signature (not Ed25519 verify)
+                 (byte-array (concat (take 32 message)
+                                     (repeat (- 64 (min 32 (count message))) (byte 7)))))
+        decisions [{:decision :grant :capability :kagi/sign
+                    :secret-ref key-ref :purpose :live-test}]
+        caps (contract/host-caps
+              {:grants #{:kagi-sign}
+               :limits {:max-kagi-signs 1
+                        :allow-secret-imports? true}})
+        n (tender/run-main wasm [:kagi-sign] caps
+                           {:kagi-signer signer
+                            :kagi-decisions decisions})]
+    {:ok? (= 64 n)
+     :id :kagi-sign-jvm-available
+     :import :kagi-sign
+     :imports [:kagi-sign]
+     :host :jvm
+     :result n
+     :live? true
+     :note "injected kagi-signer + grant decision — no Keychain/OS kagi"}))
+
 (def jvm-live-corpus
   "Host-parity case ids that this runner can live-prove on JVM tender.
   Ids match lang/host-parity.edn :conformance :cases where listed;
@@ -324,7 +371,10 @@
     :prove prove-llm-infer-jvm}
    {:id :transport-connect-jvm-inject-available
     :import :transport-connect
-    :prove prove-transport-connect-jvm}])
+    :prove prove-transport-connect-jvm}
+   {:id :kagi-sign-jvm-available
+    :import :kagi-sign
+    :prove prove-kagi-sign-jvm}])
 
 (defn prove-import
   "Live-run one corpus entry on JVM tender. Returns
@@ -383,7 +433,7 @@
      :failed failed
      :results results
      :case-ids (mapv :id jvm-live-corpus)
-     :note "T8.4: JVM tender live proofs (crypto/clock/log/cbor/json/http/llm/transport)."}))
+     :note "T8.4: JVM tender live proofs (crypto/clock/log/cbor/json/http/llm/transport/kagi)."}))
 
 (defn run-node-live
   "Shell out to web/verify-host-parity-live.mjs (Node WebAssembly + actor-host).

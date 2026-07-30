@@ -58,10 +58,10 @@
     ;; Browser-linkable stays at 19 (crypto/log/http/codec/llm/stream).
     ;; Transport/TLS (6 imports) are intentional browser :no native boundary
     ;; — JVM inject via transport-provider / :provider-host-functions (T8.4).
-    (is (= 25 (:total s)))
+    (is (= 26 (:total s)))
     (is (= 19 (:browser-yes s)))
-    (is (= 6 (:browser-no s)))
-    (is (= (/ 19.0 25.0) (:ratio s)))))
+    (is (= 7 (:browser-no s)))
+    (is (< (Math/abs (- (/ 19.0 26.0) (:ratio s))) 1.0e-12))))
 
 (deftest r2-report-shape
   (let [r (browser/r2-report)]

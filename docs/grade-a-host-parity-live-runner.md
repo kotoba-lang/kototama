@@ -1,6 +1,6 @@
 # Grade A / T8.4 — live host runners (JVM + Node)
 
-- Status: partial (JVM expanded + Node live + random-bytes + http/llm + transport-connect inject)
+- Status: partial (JVM expanded + Node live + random-bytes + http/llm + transport + kagi-sign inject)
 - Date: 2026-07-31
 - WBS: T8.4
 
@@ -31,6 +31,7 @@ WAT guests + Chicory tender for:
 | `:http-post-jvm-available` | `:http-post` | loopback fail-closed (link+SSRF) |
 | `:llm-infer-jvm-available` | `:llm-infer` | injected infer-fn, no network |
 | `:transport-connect-jvm-inject-available` | `:transport-connect` | inject transport-provider; empty allowlist → 0 |
+| `:kagi-sign-jvm-available` | `:kagi-sign` | injected signer + grant decision |
 
 ### Node / browser (`web/verify-host-parity-live.mjs`)
 
@@ -52,15 +53,15 @@ Emits `HOST_PARITY_LIVE_JSON:` for Clojure integration (`run-node-live`).
 
 ## Non-claims
 
-- Not full host-parity table (pg/pool/kagi…; transport-connect inject only)
+- Not full host-parity table (pg/pool…; kagi-sign inject only, no OS Keychain)
 - Not signed ops AOT Components (T8.3)
 - Does not replace pure matrix `run-conformance`
 - Not claim T8.4 complete
-- JVM live corpus: 13 proofs (+ transport-connect inject fail-closed)
+- JVM live corpus: 14 proofs (+ kagi-sign inject)
 
 ## Evidence
 
-- `test/kototama/host_parity_live_test.clj` (13 JVM live proofs)
+- `test/kototama/host_parity_live_test.clj` (14 JVM live proofs)
 - `node web/verify-host-parity-live.mjs` (10 Node proofs)
 
 ## Related
