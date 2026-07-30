@@ -52,6 +52,14 @@
      :import/name "random-bytes"
      :import/category :randomness
      :import/effects #{:crypto :write}}
+    ;; Decision-aware trusted-adapter sign (host-parity L5 / T8.4).
+    ;; Key never enters the guest; default `:max-kagi-signs` 0 deny-by-default.
+    ;; JVM links via tender inject (`:kagi-client` + `:kagi-decisions`);
+    ;; browser intentional :no (native boundary); node :inject.
+    {:import/id :kagi-sign
+     :import/name "kagi-sign"
+     :import/category :identity
+     :import/effects #{:crypto}}
     {:import/id :llm-infer
      :import/name "llm-infer"
      :import/category :llm
@@ -153,6 +161,7 @@
                 :max-http-posts :non-negative-int
                 :max-http-fetches :non-negative-int
                 :max-llm-infers :non-negative-int
+                :max-kagi-signs :non-negative-int
                 :max-log-read-bytes :non-negative-int
                 :max-log-write-bytes :non-negative-int
                 :max-random-bytes :non-negative-int
@@ -181,6 +190,9 @@
    ;; limit AND grants the import" default as :max-http-posts -- an LLM
    ;; call is metered network egress + real API spend, not a free action.
    :max-llm-infers 0
+   ;; Finite kagi-sign invocation quota. Default 0 = deny-by-default until
+   ;; HostCaps raises it (matches actor-host.js maxKagiSigns: 0).
+   :max-kagi-signs 0
    :max-log-read-bytes 1048576
    :max-log-write-bytes 65536
    ;; CSPRNG fill quota (bytes). Default 0 = deny-by-default until raised
@@ -316,6 +328,7 @@
         http-posts (count (filter #{:http-post :http-post-headers} ids))
         http-fetches (count (filter #{:http-fetch} ids))
         llm-infers (count (filter #{:llm-infer} ids))
+        kagi-signs (count (filter #{:kagi-sign} ids))
         secret-imports (filterv #(some (:import/effects (import-by-id %)) [:secret]) ids)
         write-imports (filterv #(some (:import/effects (import-by-id %)) [:write]) ids)]
     (cond-> []
@@ -338,6 +351,11 @@
       (conj {:error :limit/max-llm-infers
              :limit (:max-llm-infers limits)
              :actual llm-infers})
+
+      (> kagi-signs (:max-kagi-signs limits))
+      (conj {:error :limit/max-kagi-signs
+             :limit (:max-kagi-signs limits)
+             :actual kagi-signs})
 
       (and (false? (:allow-secret-imports? limits))
            (seq secret-imports))

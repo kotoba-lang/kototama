@@ -56,12 +56,12 @@
 (deftest parity-score-ratio
   (let [s (browser/parity-score)]
     ;; Browser-linkable stays at 19 (crypto/log/http/codec/llm/stream).
-    ;; Transport/TLS (6 imports) are intentional browser :no native boundary
-    ;; — JVM inject via transport-provider / :provider-host-functions (T8.4).
-    (is (= 25 (:total s)))
+    ;; Transport/TLS (6) + kagi-sign (1) are intentional browser :no
+    ;; native boundary — JVM yes / node inject (T8.4).
+    (is (= 26 (:total s)))
     (is (= 19 (:browser-yes s)))
-    (is (= 6 (:browser-no s)))
-    (is (= (/ 19.0 25.0) (:ratio s)))))
+    (is (= 7 (:browser-no s)))
+    (is (== (/ 19 26) (:ratio s)))))
 
 (deftest r2-report-shape
   (let [r (browser/r2-report)]

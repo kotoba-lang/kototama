@@ -26,6 +26,7 @@
    :log-write "log_write"
    :clock-monotonic "clock_monotonic"
    :random-bytes "random_bytes"
+   :kagi-sign "kagi_sign"
    :llm-infer "llm_infer"
    ;; Second wave (com-junkawasaki/root ADR-2607230943). :http-fetch's
    ;; field matches kotoba-core-contracts' pre-existing "http/fetch"

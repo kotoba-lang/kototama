@@ -174,7 +174,7 @@
 ;; call crashing on a Java exception it never gets a chance to handle. ──
 
 (defn- new-limits-state []
-  (atom {:http-posts 0 :http-fetches 0 :llm-infers 0
+  (atom {:http-posts 0 :http-fetches 0 :llm-infers 0 :kagi-signs 0
          :log-read-bytes 0 :log-write-bytes 0 :random-bytes 0}))
 
 (defn- within-count-limit? [state-key limit-key caps limits-state]
@@ -1015,6 +1015,47 @@
                    (do (swap! limits-state update :llm-infers inc)
                        (write-bytes! instance (aget args 2) (aget args 3) (.getBytes ^String text "UTF-8")))))))))
 
+(defn- kagi-sign-host-fn
+  "`(ref-ptr ref-len msg-ptr msg-len out-ptr out-cap) -> written|-1`.
+  Decision-aware trusted adapter for kagi Keychain signing. The guest
+  never sees the key — only an opaque ref string and message bytes.
+  `#{:crypto}`, metered against `:max-kagi-signs` (default 0).
+
+  Requires inject: `:kagi-client` with `:authorized-sign-fn`
+  `(fn [decisions ref-str msg-bytes] -> bytes|nil)` and a non-empty
+  `:kagi-decisions` vector of maps each carrying at least `:ref`.
+  Without both, every call returns -1 (fail-closed; never throws)."
+  [caps limits-state kagi-client kagi-decisions]
+  (host-fn "kagi_sign" (mapv valtype [:i32 :i32 :i32 :i32 :i32 :i32]) ValType/I32
+           (fn [instance args]
+             (ensure-granted! caps :kagi-sign)
+             (let [ref-len (int (aget args 1))
+                   msg-len (int (aget args 3))
+                   sign-fn (:authorized-sign-fn kagi-client)]
+               (cond
+                 (or (nil? sign-fn)
+                     (not (sequential? kagi-decisions))
+                     (empty? kagi-decisions))
+                 -1
+                 (or (<= ref-len 0) (> ref-len 255)
+                     (neg? msg-len) (> msg-len 65536))
+                 -1
+                 (not (within-count-limit? :kagi-signs :max-kagi-signs
+                                           caps limits-state))
+                 -1
+                 :else
+                 (try
+                   (let [ref (String. ^bytes (read-bytes! instance (aget args 0) ref-len) "UTF-8")
+                         msg (read-bytes! instance (aget args 2) msg-len)
+                         sig (sign-fn kagi-decisions ref msg)]
+                     (if (or (nil? sig) (not (bytes? sig)))
+                       -1
+                       (let [n (write-bytes! instance (aget args 4) (aget args 5) sig)]
+                         (when (not (neg? n))
+                           (swap! limits-state update :kagi-signs inc))
+                         n)))
+                   (catch Exception _ -1)))))))
+
 (defn- log-read-host-fn
   "`(out-ptr out-cap) -> bytes-written|-1`. Reads the injected store's
   `:read-fn` (no args -> bytes) and writes it. `#{:storage}`, metered
@@ -1173,22 +1214,28 @@
    HostFunction re-checks grants at call time. Memory growth capped to
    HostCaps `:max-memory-pages`. Maturity R1 (ADR-2607101200).
 
-   opts: :store, :llm-client, :fuel, and :provider-host-functions.
+   opts: :store, :llm-client, :kagi-client, :kagi-decisions, :fuel,
+   and :provider-host-functions.
    The latter is an explicit map of import id → Chicory HostFunction for
    inject-path ABIs (transport-provider etc.); missing bindings for
-   requested inject imports fail closed before instantiation."
+   requested inject imports fail closed before instantiation.
+   `:kagi-client` is `{:authorized-sign-fn (fn [decisions ref msg] bytes|nil)}`;
+   without it (and non-empty `:kagi-decisions`) kagi-sign returns -1."
   ([wasm-bytes requested-imports host-caps]
    (open-session wasm-bytes requested-imports host-caps {}))
   ([wasm-bytes requested-imports host-caps
-    {:keys [store llm-client fuel require-kotoba-compatibility? profile capability-leases
+    {:keys [store llm-client kagi-client kagi-decisions fuel
+            require-kotoba-compatibility? profile capability-leases
             execution-identity execution-identity-cid lease-now-ms
             http-policy request-purpose credential-provider
             provider-host-functions]
      :as opts
-     :or {store (in-memory-store) llm-client (default-llm-client) fuel default-fuel-limit}}]
+     :or {store (in-memory-store) llm-client (default-llm-client)
+          kagi-client {} kagi-decisions [] fuel default-fuel-limit}}]
    (let [configured (cond-> #{}
                       (contains? opts :store) (conj :store)
                       (contains? opts :llm-client) (conj :llm-client)
+                      (contains? opts :kagi-client) (conj :kagi-client)
                       (contains? opts :http-policy) (conj :http-policy)
                       (contains? opts :request-purpose) (conj :request-purpose)
                       (contains? opts :credential-provider)
@@ -1238,6 +1285,8 @@
                      :log-write #(log-write-host-fn caps limits-state store)
                      :clock-monotonic #(clock-monotonic-host-fn caps limits-state)
                      :random-bytes #(random-bytes-host-fn caps limits-state)
+                     :kagi-sign #(kagi-sign-host-fn caps limits-state
+                                                    kagi-client kagi-decisions)
                      :http-fetch #(http-fetch-host-fn caps limits-state)
                      :cbor-encode #(cbor-encode-host-fn caps limits-state)
                      :json-encode #(json-encode-host-fn caps limits-state)

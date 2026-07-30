@@ -59,6 +59,8 @@
    :clock-monotonic {:jvm :yes :browser :yes :node :yes}
    :random-bytes    {:jvm :yes :browser :yes :node :yes
                      :note "bounded OS/Web Crypto CSPRNG; default max-random-bytes 0 (deny-by-default)"}
+   :kagi-sign       {:jvm :yes :browser :no :node :inject
+                     :note "decision-aware trusted adapter only; finite max-kagi-signs; key never enters guest or browser"}
    ;; :browser is genuinely :yes as of wasm-webcomponent PR #11 (2026-07-16):
    ;; reuses the SAME Worker+SAB+Atomics bridge http-post proved out
    ;; (kotoba-wasm-worker-host.js constructs ONE bridge, passes it as both
