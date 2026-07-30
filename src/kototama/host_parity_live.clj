@@ -5,11 +5,13 @@
   **actually links and calls** selected imports on the JVM tender (Chicory)
   and reports which host-parity case ids are live-proven.
 
-  Browser coverage remains `web/verify-actor-host.mjs` (sha256 + clock +
-  log-write + session revoke). This slice does not replace that path.
+  Browser/Node live coverage: `web/verify-host-parity-live.mjs` (actor-host
+  under Node WebAssembly; maps host-parity case ids). Legacy smoke:
+  `web/verify-actor-host.mjs`.
 
   ADR: docs/grade-a-host-parity-live-runner.md"
-  (:require [clojure.java.io :as io]
+  (:require [clojure.data.json :as json]
+            [clojure.java.io :as io]
             [clojure.java.shell :as shell]
             [clojure.string :as str]
             [kototama.contract :as contract]
@@ -236,13 +238,52 @@
      :failed failed
      :results results
      :case-ids (mapv :id jvm-live-corpus)
-     :note "T8.4 expand: JVM tender live proofs for crypto (sha256/gen/sign/verify), clock, log read/write, pure cbor/json encode. Browser remains web/verify-actor-host.mjs."}))
+     :note "T8.4: JVM tender live proofs (crypto/clock/log/cbor/json)."}))
+
+(defn run-node-live
+  "Shell out to web/verify-host-parity-live.mjs (Node WebAssembly + actor-host).
+  Returns map with :ok? / :total / :passed / :failed / :results, or
+  {:ok? false :skipped? true ...} when node/wasm-tools unavailable."
+  []
+  (let [script (io/file "web/verify-host-parity-live.mjs")]
+    (if-not (.exists script)
+      {:ok? false :skipped? true :host :node
+       :error "web/verify-host-parity-live.mjs not found (run from kototama root)"}
+      (let [{:keys [exit out err]}
+            (shell/sh "node" (.getPath script)
+                      :dir (.getAbsolutePath (io/file ".")))]
+        (if-let [line (->> (str/split-lines (str out))
+                           (filter #(str/starts-with? % "HOST_PARITY_LIVE_JSON:"))
+                           first)]
+          (let [json-str (subs line (count "HOST_PARITY_LIVE_JSON:"))
+                m (json/read-str json-str :key-fn keyword)
+                failed (vec (or (:failed m) []))]
+            {:ok? (and (zero? exit) (boolean (:ok m)))
+             :host :node
+             :total (or (:total m) 0)
+             :passed (or (:passed m) 0)
+             :failed failed
+             :results (vec (or (:results m) []))
+             :case-ids (mapv keyword (or (:case_ids m) []))
+             :source (:wasm_webcomponent_source m)
+             :note (:note m)
+             :stderr (when-not (str/blank? (str err)) (str/trim err))})
+          {:ok? false
+           :host :node
+           :error (str "node runner failed exit=" exit
+                       " out=" (str/trim (str out))
+                       " err=" (str/trim (str err)))})))))
 
 (defn report
-  "Compact snapshot for doctor/CLI."
-  []
-  (let [live (run-jvm-live)]
-    {:t84-slice :jvm-live-expand
-     :live live
-     :browser-runner "web/verify-actor-host.mjs"
-     :matrix-runner "kotoba.lang.host-parity/run-conformance (pure data)"}))
+  "Compact snapshot for doctor/CLI (JVM + optional Node live)."
+  ([] (report {:node? true}))
+  ([{:keys [node?] :or {node? true}}]
+   (let [jvm (run-jvm-live)
+         node (when node? (run-node-live))]
+     {:t84-slice :jvm-and-node-live
+      :jvm jvm
+      :node node
+      :ok? (and (:ok? jvm) (or (nil? node) (:ok? node) (:skipped? node)))
+      :browser-runner "web/verify-actor-host.mjs"
+      :node-runner "web/verify-host-parity-live.mjs"
+      :matrix-runner "kotoba.lang.host-parity/run-conformance (pure data)"})))

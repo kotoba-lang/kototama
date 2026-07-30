@@ -30,6 +30,15 @@
         (is (= :jvm (:host row)))))))
 
 (deftest report-shape
-  (let [rep (live/report)]
-    (is (= :jvm-live-expand (:t84-slice rep)))
-    (is (true? (get-in rep [:live :ok?])))))
+  (let [rep (live/report {:node? false})]
+    (is (= :jvm-and-node-live (:t84-slice rep)))
+    (is (true? (get-in rep [:jvm :ok?])))))
+
+(deftest run-node-live-proves-host-parity-cases
+  (let [r (live/run-node-live)]
+    (is (true? (:ok? r))
+        (str "node live failures: " (pr-str (or (:failed r) (:error r)))))
+    (is (= 8 (:total r)))
+    (is (= 8 (:passed r)))
+    (is (empty? (:failed r)))
+    (is (string? (:source r)))))
