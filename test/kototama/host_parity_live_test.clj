@@ -14,6 +14,7 @@
                 :verify-all-available
                 :cbor-encode-jvm-live
                 :json-encode-jvm-live
+                :random-bytes-all-available
                 :http-post-jvm-available
                 :llm-infer-jvm-available]]
       (is (contains? ids id) (str id)))))
@@ -22,8 +23,8 @@
   (let [r (live/run-jvm-live)]
     (is (true? (:ok? r))
         (str "live failures: " (pr-str (:failed r))))
-    (is (= 11 (:total r)))
-    (is (= 11 (:passed r)))
+    (is (= 12 (:total r)))
+    (is (= 12 (:passed r)))
     (is (empty? (:failed r)))
     (doseq [row (:results r)]
       (testing (str (:id row))

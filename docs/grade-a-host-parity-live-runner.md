@@ -1,6 +1,6 @@
 # Grade A / T8.4 — live host runners (JVM + Node)
 
-- Status: partial (JVM expanded + Node/browser actor-host live)
+- Status: partial (JVM expanded + Node/browser actor-host live + tender random-bytes + http/llm inject)
 - Date: 2026-07-31
 - WBS: T8.4
 
@@ -16,15 +16,20 @@ runtimes (kototama tender, wasm-webcomponent).
 
 WAT guests + Chicory tender for:
 
-| case id | import(s) |
-|---|---|
-| `:sha256-hex-all-available` | `:sha256-hex` |
-| `:clock-monotonic-all` | `:clock-monotonic` |
-| `:log-write-all-available` / `:log-read-all-available` | log |
-| `:gen-keypair-all-available` / `:sign-all-available` / `:verify-all-available` | crypto |
-| `:cbor-encode-jvm-live` / `:json-encode-jvm-live` | pure encode |
-| `:http-post-jvm-available` | `:http-post` (loopback fail-closed proves link+SSRF) |
-| `:llm-infer-jvm-available` | `:llm-infer` (injected infer-fn, no network) |
+| case id | import(s) | proof |
+|---|---|---|
+| `:sha256-hex-all-available` | `:sha256-hex` | WAT + Chicory |
+| `:clock-monotonic-all` | `:clock-monotonic` | WAT + Chicory |
+| `:log-write-all-available` | `:log-write` | WAT + Chicory |
+| `:log-read-all-available` | `:log-read` | WAT + Chicory |
+| `:gen-keypair-all-available` | `:gen-keypair` | WAT + Chicory |
+| `:sign-all-available` | `:gen-keypair` + `:sign` | WAT + Chicory |
+| `:verify-all-available` | gen+sign+`:verify` | WAT + Chicory |
+| `:cbor-encode-jvm-live` | `:cbor-encode` | pure allowlist host |
+| `:json-encode-jvm-live` | `:json-encode` | pure allowlist host |
+| `:random-bytes-all-available` | `:random-bytes` | WAT + Chicory (tender) |
+| `:http-post-jvm-available` | `:http-post` | loopback fail-closed (link+SSRF) |
+| `:llm-infer-jvm-available` | `:llm-infer` | injected infer-fn, no network |
 
 ### Node / browser (`web/verify-host-parity-live.mjs`)
 
@@ -46,14 +51,16 @@ Emits `HOST_PARITY_LIVE_JSON:` for Clojure integration (`run-node-live`).
 
 ## Non-claims
 
-- Not full host-parity table (pg/pool/llm/transport…)
+- Not full host-parity table (pg/pool/transport…)
 - Not signed ops AOT Components (T8.3)
+- Does not replace pure matrix `run-conformance`
 - Not claim T8.4 complete
+- JVM live corpus: 12 proofs (crypto + pure encode + random-bytes + http/llm)
 
 ## Evidence
 
-- `test/kototama/host_parity_live_test.clj`
-- `node web/verify-host-parity-live.mjs`
+- `test/kototama/host_parity_live_test.clj` (12 JVM live proofs)
+- `node web/verify-host-parity-live.mjs` (10 Node proofs)
 
 ## Related
 

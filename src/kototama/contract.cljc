@@ -45,6 +45,13 @@
      :import/name "clock-monotonic"
      :import/category :clock
      :import/effects #{:clock}}
+    ;; Bounded OS CSPRNG fill (actor-host `random_bytes`; host-parity L5).
+    ;; Default `:max-random-bytes` is 0 — fully denied until HostCaps raises
+    ;; the quota (same pattern as :max-http-posts / :max-llm-infers).
+    {:import/id :random-bytes
+     :import/name "random-bytes"
+     :import/category :randomness
+     :import/effects #{:crypto :write}}
     {:import/id :llm-infer
      :import/name "llm-infer"
      :import/category :llm
@@ -121,6 +128,7 @@
                 :max-llm-infers :non-negative-int
                 :max-log-read-bytes :non-negative-int
                 :max-log-write-bytes :non-negative-int
+                :max-random-bytes :non-negative-int
                 :max-memory-pages :non-negative-int
                 :allowed-url-prefixes :vector-of-string-or-nil
                 :allow-secret-imports? :boolean
@@ -141,6 +149,9 @@
    :max-llm-infers 0
    :max-log-read-bytes 1048576
    :max-log-write-bytes 65536
+   ;; CSPRNG fill quota (bytes). Default 0 = deny-by-default until raised
+   ;; (matches actor-host.js maxRandomBytes: 0 and host-parity note).
+   :max-random-bytes 0
    ;; 16 Wasm pages (64 KiB/page) = 1 MiB -- a guest that legitimately
    ;; needs more grows this explicitly via HostCaps, same as every other
    ;; limit here; this is NOT an :abi/imports-gated effect (a guest's

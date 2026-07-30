@@ -23,7 +23,8 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const siblingActorHost = path.resolve(here, '../../wasm-webcomponent/src/actor-host.js');
 // also try when this repo is named kototama (not kototama-t84)
 const siblingActorHostAlt = path.resolve(here, '../../../orgs/kotoba-lang/wasm-webcomponent/src/actor-host.js');
-const WASM_WEBCOMPONENT_COMMIT = '4922e10d30210036e3f9b30aae0481107d74c085';
+// Includes actor-host `random-bytes` (2026-07-31 merge on main).
+const WASM_WEBCOMPONENT_COMMIT = '3feb419c60d936b9d388377d8e997a4da522b3b4';
 const SRC_FILES = [
   'src/actor-host.js',
   'src/vendor/curves/ed25519.js',

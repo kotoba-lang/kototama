@@ -57,6 +57,8 @@
    :log-read        {:jvm :yes :browser :yes :node :yes}
    :log-write       {:jvm :yes :browser :yes :node :yes}
    :clock-monotonic {:jvm :yes :browser :yes :node :yes}
+   :random-bytes    {:jvm :yes :browser :yes :node :yes
+                     :note "bounded OS/Web Crypto CSPRNG; default max-random-bytes 0 (deny-by-default)"}
    ;; :browser is genuinely :yes as of wasm-webcomponent PR #11 (2026-07-16):
    ;; reuses the SAME Worker+SAB+Atomics bridge http-post proved out
    ;; (kotoba-wasm-worker-host.js constructs ONE bridge, passes it as both
