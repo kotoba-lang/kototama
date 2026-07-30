@@ -67,6 +67,15 @@
      (func (export \"main\") (result i64)
        (i64.extend_i32_s (call $gen_keypair (i32.const 0) (i32.const 64)))))")
 
+
+(def ^:private random-bytes-wat
+  "Fill 32 random bytes; returns 32 on success."
+  "(module
+     (import \"kotoba\" \"random_bytes\" (func $random_bytes (param i32 i32) (result i32)))
+     (memory (export \"memory\") 1)
+     (func (export \"main\") (result i64)
+       (i64.extend_i32_s (call $random_bytes (i32.const 0) (i32.const 32)))))")
+
 (def ^:private sign-wat
   "gen_keypair → sign fixed message \"ok\"; returns signature byte count (64)."
   "(module
@@ -168,6 +177,13 @@
     :host :jvm
     :wat gen-keypair-wat
     :check (fn [n] (= 64 n))}
+   {:id :random-bytes-all-available
+    :import :random-bytes
+    :imports [:random-bytes]
+    :host :jvm
+    :wat random-bytes-wat
+    :check (fn [n] (= 32 n))}
+
    {:id :sign-all-available
     :import :sign
     :imports [:gen-keypair :sign]
@@ -205,7 +221,8 @@
                  :limits {:allow-write-imports? true
                           :allow-secret-imports? true
                           :max-log-write-bytes 1024
-                          :max-log-read-bytes 1024}})
+                          :max-log-read-bytes 1024
+                          :max-random-bytes 4096}})
           result (tender/run-main wasm req caps)
           ok? (boolean (and (number? result) (check result)))]
       {:ok? ok?

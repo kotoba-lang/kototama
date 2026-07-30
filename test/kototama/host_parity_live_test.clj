@@ -13,15 +13,16 @@
                 :sign-all-available
                 :verify-all-available
                 :cbor-encode-jvm-live
-                :json-encode-jvm-live]]
+                :json-encode-jvm-live
+                :random-bytes-all-available]]
       (is (contains? ids id) (str id)))))
 
 (deftest run-jvm-live-proves-all-corpus-entries
   (let [r (live/run-jvm-live)]
     (is (true? (:ok? r))
         (str "live failures: " (pr-str (:failed r))))
-    (is (= 9 (:total r)))
-    (is (= 9 (:passed r)))
+    (is (= 10 (:total r)))
+    (is (= 10 (:passed r)))
     (is (empty? (:failed r)))
     (doseq [row (:results r)]
       (testing (str (:id row))

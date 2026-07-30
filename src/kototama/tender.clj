@@ -173,7 +173,9 @@
 ;; well-behaved guest can see it and back off instead of the whole `main`
 ;; call crashing on a Java exception it never gets a chance to handle. ──
 
-(defn- new-limits-state [] (atom {:http-posts 0 :http-fetches 0 :llm-infers 0 :log-read-bytes 0 :log-write-bytes 0}))
+(defn- new-limits-state []
+  (atom {:http-posts 0 :http-fetches 0 :llm-infers 0
+         :log-read-bytes 0 :log-write-bytes 0 :random-bytes 0}))
 
 (defn- within-count-limit? [state-key limit-key caps limits-state]
   (< (get @limits-state state-key) (get (:limits caps) limit-key)))
@@ -1046,6 +1048,28 @@
              (ensure-granted! caps :clock-monotonic)
              (System/currentTimeMillis))))
 
+(defn- random-bytes-host-fn
+  "`(out-ptr out-cap) -> bytes-written|-1`. Fills out-cap random bytes via
+  SecureRandom (CSPRNG). `#{:crypto :write}` — requires grant +
+  `:allow-write-imports?` (contract limit-errors) and is metered against
+  `:max-random-bytes` (default 0 = deny). Caps single fill at 4096 bytes
+  (same ceiling as actor-host.js)."
+  [caps limits-state]
+  (host-fn "random_bytes" [ValType/I32 ValType/I32] ValType/I32
+           (fn [instance args]
+             (ensure-granted! caps :random-bytes)
+             (let [out-ptr (aget args 0)
+                   out-cap (int (aget args 1))]
+               (cond
+                 (or (<= out-cap 0) (> out-cap 4096)) -1
+                 (not (try-add-bytes! :random-bytes :max-random-bytes
+                                      caps limits-state out-cap))
+                 -1
+                 :else
+                 (let [bs (byte-array out-cap)]
+                   (.nextBytes (SecureRandom.) bs)
+                   (write-bytes! instance out-ptr out-cap bs)))))))
+
 (defn in-memory-store
   "A trivial `{:read-fn :append-fn}` log store backing `log-read`/
   `log-write`, an atom of concatenated bytes -- the default for tests/
@@ -1209,6 +1233,7 @@
                      :log-read #(log-read-host-fn caps limits-state store)
                      :log-write #(log-write-host-fn caps limits-state store)
                      :clock-monotonic #(clock-monotonic-host-fn caps limits-state)
+                     :random-bytes #(random-bytes-host-fn caps limits-state)
                      :http-fetch #(http-fetch-host-fn caps limits-state)
                      :cbor-encode #(cbor-encode-host-fn caps limits-state)
                      :json-encode #(json-encode-host-fn caps limits-state)
