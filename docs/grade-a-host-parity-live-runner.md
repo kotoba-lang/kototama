@@ -1,6 +1,6 @@
 # Grade A / T8.4 — live host runners (JVM + Node)
 
-- Status: partial (JVM expanded + Node/browser actor-host live + tender random-bytes)
+- Status: partial (JVM expanded + Node/browser actor-host live + tender random-bytes + http/llm inject)
 - Date: 2026-07-31
 - WBS: T8.4
 
@@ -28,6 +28,8 @@ WAT guests + Chicory tender for:
 | `:cbor-encode-jvm-live` | `:cbor-encode` | pure allowlist host |
 | `:json-encode-jvm-live` | `:json-encode` | pure allowlist host |
 | `:random-bytes-all-available` | `:random-bytes` | WAT + Chicory (tender) |
+| `:http-post-jvm-available` | `:http-post` | loopback fail-closed (link+SSRF) |
+| `:llm-infer-jvm-available` | `:llm-infer` | injected infer-fn, no network |
 
 ### Node / browser (`web/verify-host-parity-live.mjs`)
 
@@ -35,8 +37,10 @@ Node WebAssembly + wasm-webcomponent `actor-host.js` for:
 
 | case id | import(s) |
 |---|---|
-| same crypto/clock/log as JVM (where matrix lists them) | |
+| crypto/clock/log (matrix-aligned) | |
 | `:random-bytes-all-available` | `:random-bytes` (actor-host) |
+| `:http-post-node-inject-available` | `:http-post` + inject + allowlist |
+| `:llm-infer-node-available` | `:llm-infer` + inject |
 
 Loads sibling `../wasm-webcomponent` when present; else pinned CDN commit.
 Emits `HOST_PARITY_LIVE_JSON:` for Clojure integration (`run-node-live`).
@@ -47,16 +51,16 @@ Emits `HOST_PARITY_LIVE_JSON:` for Clojure integration (`run-node-live`).
 
 ## Non-claims
 
-- Not full host-parity table (pg/pool/llm/transport…)
+- Not full host-parity table (pg/pool/transport…)
 - Not signed ops AOT Components (T8.3)
 - Does not replace pure matrix `run-conformance`
 - Not claim T8.4 complete
-- JVM live corpus covers critical crypto + pure encode + random-bytes (10 proofs)
+- JVM live corpus: 12 proofs (crypto + pure encode + random-bytes + http/llm)
 
 ## Evidence
 
-- `test/kototama/host_parity_live_test.clj` (10 JVM live proofs)
-- `node web/verify-host-parity-live.mjs`
+- `test/kototama/host_parity_live_test.clj` (12 JVM live proofs)
+- `node web/verify-host-parity-live.mjs` (10 Node proofs)
 
 ## Related
 

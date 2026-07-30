@@ -14,15 +14,17 @@
                 :verify-all-available
                 :cbor-encode-jvm-live
                 :json-encode-jvm-live
-                :random-bytes-all-available]]
+                :random-bytes-all-available
+                :http-post-jvm-available
+                :llm-infer-jvm-available]]
       (is (contains? ids id) (str id)))))
 
 (deftest run-jvm-live-proves-all-corpus-entries
   (let [r (live/run-jvm-live)]
     (is (true? (:ok? r))
         (str "live failures: " (pr-str (:failed r))))
-    (is (= 10 (:total r)))
-    (is (= 10 (:passed r)))
+    (is (= 12 (:total r)))
+    (is (= 12 (:passed r)))
     (is (empty? (:failed r)))
     (doseq [row (:results r)]
       (testing (str (:id row))
@@ -39,7 +41,7 @@
   (let [r (live/run-node-live)]
     (is (true? (:ok? r))
         (str "node live failures: " (pr-str (or (:failed r) (:error r)))))
-    (is (= 8 (:total r)))
-    (is (= 8 (:passed r)))
+    (is (= 10 (:total r)))
+    (is (= 10 (:passed r)))
     (is (empty? (:failed r)))
     (is (string? (:source r)))))
