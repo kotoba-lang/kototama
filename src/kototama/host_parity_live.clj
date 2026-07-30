@@ -285,6 +285,83 @@
          :elapsed-ms elapsed
          :live? true
          :note "inject transport-provider; empty allowlist fail-closed (0)"})
+
+      (finally
+        ((:close! provider))))))
+
+(defn- tls-open-wat
+  "tls_open on invalid handle 0; server-name ASCII in data segment."
+  [server-name]
+  (str "(module
+          (import \"kotoba\" \"tls_open\" (func $tls (param i64 i32 i32) (result i64)))
+          (memory (export \"memory\") 1)
+          (data (i32.const 0) \"" server-name "\")
+          (func (export \"main\") (result i64)
+            (call $tls (i64.const 0) (i32.const 0) (i32.const " (count server-name) "))))"))
+
+(defn- prove-tls-open-jvm
+  "Live-prove :tls-open inject. Handle 0 has no TCP entry → fail-closed 0."
+  []
+  (let [server "example.com"
+        wasm (wat->wasm (tls-open-wat server))
+        caps {:grants #{:tls-open}
+              :limits {:max-transport-connections 1
+                       :max-transport-connect-ms 100
+                       :max-transport-read-ms 100
+                       :max-transport-read-bytes 1024
+                       :max-transport-write-bytes 1024
+                       :transport-endpoint-allowlist #{}}}
+        provider (transport/native-provider caps {})
+        started (System/currentTimeMillis)]
+    (try
+      (let [n (tender/run-main wasm [:tls-open] caps
+                               {:provider-host-functions
+                                (:host-functions provider)})
+            elapsed (- (System/currentTimeMillis) started)]
+        {:ok? (and (zero? n) (< elapsed 2000))
+         :id :tls-open-jvm-inject-available
+         :import :tls-open
+         :imports [:tls-open]
+         :host :jvm
+         :result n
+         :elapsed-ms elapsed
+         :live? true
+         :note "inject transport-provider; invalid handle fail-closed (0)"})
+      (finally
+        ((:close! provider))))))
+
+(defn- transport-close-wat
+  "transport_close on unknown handle → -1."
+  []
+  "(module
+     (import \"kotoba\" \"transport_close\" (func $tc (param i64) (result i32)))
+     (func (export \"main\") (result i64)
+       (i64.extend_i32_s (call $tc (i64.const 99)))))")
+
+(defn- prove-transport-close-jvm
+  "Live-prove :transport-close inject with unknown handle (returns -1)."
+  []
+  (let [wasm (wat->wasm (transport-close-wat))
+        caps {:grants #{:transport-close}
+              :limits {:max-transport-connections 1
+                       :max-transport-connect-ms 100
+                       :max-transport-read-ms 100
+                       :max-transport-read-bytes 1024
+                       :max-transport-write-bytes 1024
+                       :transport-endpoint-allowlist #{}}}
+        provider (transport/native-provider caps {})]
+    (try
+      (let [n (tender/run-main wasm [:transport-close] caps
+                               {:provider-host-functions
+                                (:host-functions provider)})]
+        {:ok? (= -1 n)
+         :id :transport-close-jvm-inject-available
+         :import :transport-close
+         :imports [:transport-close]
+         :host :jvm
+         :result n
+         :live? true
+         :note "inject transport-provider; unknown handle → -1"})
       (finally
         ((:close! provider))))))
 
@@ -365,7 +442,13 @@
     :prove prove-kagi-sign-jvm}
    {:id :transport-connect-jvm-inject-available
     :import :transport-connect
-    :prove prove-transport-connect-jvm}])
+    :prove prove-transport-connect-jvm}
+   {:id :tls-open-jvm-inject-available
+    :import :tls-open
+    :prove prove-tls-open-jvm}
+   {:id :transport-close-jvm-inject-available
+    :import :transport-close
+    :prove prove-transport-close-jvm}])
 
 (defn prove-import
   "Live-run one corpus entry on JVM tender. Returns
