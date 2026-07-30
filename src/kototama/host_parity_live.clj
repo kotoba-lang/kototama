@@ -538,6 +538,43 @@
           (finally
             ((:close! provider))))))))
 
+(defn- tls-server-end-point-wat
+  "tls_server_end_point on non-TLS handle 0; out buffer cap 32."
+  []
+  "(module
+     (import \"kotoba\" \"tls_server_end_point\" (func $sep (param i64 i32 i32) (result i32)))
+     (memory (export \"memory\") 1)
+     (func (export \"main\") (result i64)
+       (i64.extend_i32_s
+         (call $sep (i64.const 0) (i32.const 0) (i32.const 32)))))")
+
+(defn- prove-tls-server-end-point-jvm
+  "Live-prove :tls-server-end-point inject. No TLS session → -1."
+  []
+  (let [wasm (wat->wasm (tls-server-end-point-wat))
+        caps {:grants #{:tls-server-end-point}
+              :limits {:max-transport-connections 1
+                       :max-transport-connect-ms 100
+                       :max-transport-read-ms 100
+                       :max-transport-read-bytes 1024
+                       :max-transport-write-bytes 1024
+                       :transport-endpoint-allowlist #{}}}
+        provider (transport/native-provider caps {})]
+    (try
+      (let [n (tender/run-main wasm [:tls-server-end-point] caps
+                               {:provider-host-functions
+                                (:host-functions provider)})]
+        {:ok? (= -1 n)
+         :id :tls-server-end-point-jvm-available
+         :import :tls-server-end-point
+         :imports [:tls-server-end-point]
+         :host :jvm
+         :result n
+         :live? true
+         :note "inject transport-provider; non-TLS handle → -1"})
+      (finally
+        ((:close! provider))))))
+
 (def jvm-live-corpus
   "Host-parity case ids that this runner can live-prove on JVM tender.
   Ids match lang/host-parity.edn :conformance :cases where listed;
@@ -630,7 +667,10 @@
     :prove prove-transport-read-jvm-inject}
    {:id :transport-rw-jvm-loopback-success
     :import :transport-write
-    :prove prove-transport-rw-jvm-loopback-success}])
+    :prove prove-transport-rw-jvm-loopback-success}
+   {:id :tls-server-end-point-jvm-available
+    :import :tls-server-end-point
+    :prove prove-tls-server-end-point-jvm}])
 
 (defn prove-import
   "Live-run one corpus entry on JVM tender. Returns
