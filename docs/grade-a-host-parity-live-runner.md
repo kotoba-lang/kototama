@@ -23,6 +23,8 @@ WAT guests + Chicory tender for:
 | `:log-write-all-available` / `:log-read-all-available` | log |
 | `:gen-keypair-all-available` / `:sign-all-available` / `:verify-all-available` | crypto |
 | `:cbor-encode-jvm-live` / `:json-encode-jvm-live` | pure encode |
+| `:http-post-jvm-available` | `:http-post` (loopback fail-closed proves link+SSRF) |
+| `:llm-infer-jvm-available` | `:llm-infer` (injected infer-fn, no network) |
 
 ### Node / browser (`web/verify-host-parity-live.mjs`)
 
@@ -30,8 +32,10 @@ Node WebAssembly + wasm-webcomponent `actor-host.js` for:
 
 | case id | import(s) |
 |---|---|
-| same crypto/clock/log as JVM (where matrix lists them) | |
-| `:random-bytes-all-available` | `:random-bytes` (actor-host; not yet in tender table) |
+| crypto/clock/log (matrix-aligned) | |
+| `:random-bytes-all-available` | `:random-bytes` (actor-host) |
+| `:http-post-node-inject-available` | `:http-post` + inject + allowlist |
+| `:llm-infer-node-available` | `:llm-infer` + inject |
 
 Loads sibling `../wasm-webcomponent` when present; else pinned CDN commit.
 Emits `HOST_PARITY_LIVE_JSON:` for Clojure integration (`run-node-live`).

@@ -143,6 +143,42 @@ const corpus = [
       (func (export "main") (result i64)
         (i64.extend_i32_s (call $random_bytes (i32.const 0) (i32.const 16)))))`,
   },
+  {
+    id: 'http-post-node-inject-available',
+    imports: ['http-post'],
+    // Injected host callback — no real network; proves link + inject path.
+    // URL must match https allowlist entry (exact host + path prefix).
+    limits: {
+      maxHttpPosts: 8,
+      httpUrlAllowlist: ['https://example.test/'],
+    },
+    inject: { httpPost: () => new TextEncoder().encode('pong') },
+    check: (n) => Number(n) === 4,
+    wat: `(module
+      (import "kotoba" "http_post" (func $http_post (param i32 i32 i32 i32 i32 i32) (result i32)))
+      (memory (export "memory") 1)
+      (data (i32.const 0) "https://example.test/x")
+      (data (i32.const 50) "body")
+      (func (export "main") (result i64)
+        (i64.extend_i32_s
+          (call $http_post (i32.const 0) (i32.const 22)
+                           (i32.const 50) (i32.const 4)
+                           (i32.const 200) (i32.const 256)))))`,
+  },
+  {
+    id: 'llm-infer-node-available',
+    imports: ['llm-infer'],
+    limits: { maxLlmInfers: 2 },
+    inject: { llmInfer: () => 'pong' },
+    check: (n) => Number(n) === 4,
+    wat: `(module
+      (import "kotoba" "llm_infer" (func $llm_infer (param i32 i32 i32 i32) (result i32)))
+      (memory (export "memory") 1)
+      (data (i32.const 0) "hi")
+      (func (export "main") (result i64)
+        (i64.extend_i32_s
+          (call $llm_infer (i32.const 0) (i32.const 2) (i32.const 100) (i32.const 64)))))`,
+  },
 ];
 
 const tmpRoot = await mkdtemp(path.join(tmpdir(), 'kototama-host-parity-live-'));
@@ -190,10 +226,18 @@ try {
           maxRandomBytes: 65536,
           maxLogWriteBytes: 65536,
           maxLogReadBytes: 65536,
+          maxHttpPosts: 8,
+          maxHttpGets: 8,
+          maxLlmInfers: 2,
+          ...(entry.limits || {}),
         },
       });
       const importObject = {
-        kotoba: actorHostImports(entry.imports, caps, memoryBox, { store, runtime: 'node' }),
+        kotoba: actorHostImports(entry.imports, caps, memoryBox, {
+          store,
+          runtime: 'node',
+          ...(entry.inject || {}),
+        }),
       };
       const { instance } = await WebAssembly.instantiate(wasm, importObject);
       memoryBox.memory = instance.exports.memory;

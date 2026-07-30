@@ -134,10 +134,72 @@
        (i64.extend_i32_s
          (call $json_encode (i32.const 0) (i32.const 2) (i32.const 64) (i32.const 256)))))")
 
+(defn- http-post-wat
+  "http_post guest; URL baked into data segment (ASCII, no quotes)."
+  [url]
+  (str "(module
+          (import \"kotoba\" \"http_post\" (func $http_post (param i32 i32 i32 i32 i32 i32) (result i32)))
+          (memory (export \"memory\") 1)
+          (data (i32.const 0) \"" url "\")
+          (data (i32.const 50) \"body\")
+          (func (export \"main\") (result i64)
+            (i64.extend_i32_s
+              (call $http_post (i32.const 0) (i32.const " (count url) ")
+                               (i32.const 50) (i32.const 4)
+                               (i32.const 200) (i32.const 256)))))"))
+
+(def ^:private llm-infer-wat
+  "(module
+     (import \"kotoba\" \"llm_infer\" (func $llm_infer (param i32 i32 i32 i32) (result i32)))
+     (memory (export \"memory\") 1)
+     (data (i32.const 0) \"hi\")
+     (func (export \"main\") (result i64)
+       (i64.extend_i32_s
+         (call $llm_infer (i32.const 0) (i32.const 2) (i32.const 100) (i32.const 64)))))")
+
+(defn- prove-http-post-jvm
+  "Live-prove :http-post links and SSRF gate runs (loopback fail-closed -1).
+  Completing a real public POST is not required for host-parity availability."
+  []
+  (let [url "http://127.0.0.1:9/"
+        wasm (wat->wasm (http-post-wat url))
+        caps (contract/host-caps {:grants [:http-post]
+                                  :limits {:max-http-posts 1}})
+        started (System/currentTimeMillis)
+        n (tender/run-main wasm [:http-post] caps)
+        elapsed (- (System/currentTimeMillis) started)]
+    {:ok? (and (= -1 n) (< elapsed 2000))
+     :id :http-post-jvm-available
+     :import :http-post
+     :imports [:http-post]
+     :host :jvm
+     :result n
+     :elapsed-ms elapsed
+     :live? true
+     :note "fail-closed loopback proves host linked + SSRF gate"}))
+
+(defn- prove-llm-infer-jvm
+  "Live-prove :llm-infer with injected :infer-fn (no network)."
+  []
+  (let [wasm (wat->wasm llm-infer-wat)
+        caps (contract/host-caps {:grants [:llm-infer]
+                                  :limits {:max-llm-infers 1}})
+        n (tender/run-main wasm [:llm-infer] caps
+                           {:llm-client {:infer-fn (fn [_] "pong")}})]
+    {:ok? (= 4 n) ;; "pong" length
+     :id :llm-infer-jvm-available
+     :import :llm-infer
+     :imports [:llm-infer]
+     :host :jvm
+     :result n
+     :live? true
+     :note "injected infer-fn — no Anthropic network"}))
+
 (def jvm-live-corpus
   "Host-parity case ids that this runner can live-prove on JVM tender.
   Ids match lang/host-parity.edn :conformance :cases where listed;
-  pure allowlist host imports (cbor/json) are T8.4 expand extras."
+  pure allowlist host imports (cbor/json) are T8.4 expand extras.
+  Entries may use :prove (0-arity) instead of :wat/:check."
   [{:id :sha256-hex-all-available
     :import :sha256-hex
     :imports [:sha256-hex]
@@ -191,38 +253,55 @@
     :imports [:json-encode]
     :host :jvm
     :wat json-encode-wat
-    :check (fn [n] (pos? n))}])
+    :check (fn [n] (pos? n))}
+   {:id :http-post-jvm-available
+    :import :http-post
+    :prove prove-http-post-jvm}
+   {:id :llm-infer-jvm-available
+    :import :llm-infer
+    :prove prove-llm-infer-jvm}])
 
 (defn prove-import
   "Live-run one corpus entry on JVM tender. Returns
   {:ok? bool :id ... :import ... :result ... :error? ...}."
-  [{:keys [id import imports wat check] :as entry}]
-  (try
-    (let [req (or imports [import])
-          wasm (wat->wasm wat)
-          caps (contract/host-caps
-                {:grants (set req)
-                 :limits {:allow-write-imports? true
-                          :allow-secret-imports? true
-                          :max-log-write-bytes 1024
-                          :max-log-read-bytes 1024}})
-          result (tender/run-main wasm req caps)
-          ok? (boolean (and (number? result) (check result)))]
-      {:ok? ok?
-       :id id
-       :import import
-       :imports req
-       :host :jvm
-       :result result
-       :live? true})
-    (catch Exception e
-      {:ok? false
-       :id id
-       :import import
-       :host :jvm
-       :live? true
-       :error (.getMessage e)
-       :error-class (.getName (class e))})))
+  [{:keys [id import imports wat check prove] :as entry}]
+  (if prove
+    (try
+      (prove)
+      (catch Exception e
+        {:ok? false
+         :id id
+         :import import
+         :host :jvm
+         :live? true
+         :error (.getMessage e)
+         :error-class (.getName (class e))}))
+    (try
+      (let [req (or imports [import])
+            wasm (wat->wasm wat)
+            caps (contract/host-caps
+                  {:grants (set req)
+                   :limits {:allow-write-imports? true
+                            :allow-secret-imports? true
+                            :max-log-write-bytes 1024
+                            :max-log-read-bytes 1024}})
+            result (tender/run-main wasm req caps)
+            ok? (boolean (and (number? result) (check result)))]
+        {:ok? ok?
+         :id id
+         :import import
+         :imports req
+         :host :jvm
+         :result result
+         :live? true})
+      (catch Exception e
+        {:ok? false
+         :id id
+         :import import
+         :host :jvm
+         :live? true
+         :error (.getMessage e)
+         :error-class (.getName (class e))}))))
 
 (defn run-jvm-live
   "Run the JVM live corpus. Returns
