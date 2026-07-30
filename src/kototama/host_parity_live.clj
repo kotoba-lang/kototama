@@ -205,6 +205,44 @@
      :live? true
      :note "injected infer-fn — no Anthropic network"}))
 
+(def ^:private kagi-sign-wat
+  "(module
+     (import \"kotoba\" \"kagi_sign\" (func $kagi_sign (param i32 i32 i32 i32 i32 i32) (result i32)))
+     (memory (export \"memory\") 1)
+     (data (i32.const 0) \"kagi://ops/key\")
+     (data (i32.const 32) \"msg\")
+     (func (export \"main\") (result i64)
+       (i64.extend_i32_s
+         (call $kagi_sign (i32.const 0) (i32.const 14)
+                          (i32.const 32) (i32.const 3)
+                          (i32.const 64) (i32.const 64)))))")
+
+(defn- prove-kagi-sign-jvm
+  "Live-prove :kagi-sign via decision-aware inject (no Keychain / kagi binary)."
+  []
+  (let [wasm (wat->wasm kagi-sign-wat)
+        decisions [{:ref "kagi://ops/key" :purpose "release"}]
+        caps (contract/host-caps {:grants [:kagi-sign]
+                                  :limits {:max-kagi-signs 1}})
+        sig (byte-array 64 (byte 7))
+        n (tender/run-main wasm [:kagi-sign] caps
+                           {:kagi-decisions decisions
+                            :kagi-client
+                            {:authorized-sign-fn
+                             (fn [ds ref msg]
+                               (when (and (= ds decisions)
+                                          (= ref "kagi://ops/key")
+                                          (= (String. ^bytes msg "UTF-8") "msg"))
+                                 sig))}})]
+    {:ok? (= 64 n)
+     :id :kagi-sign-jvm-available
+     :import :kagi-sign
+     :imports [:kagi-sign]
+     :host :jvm
+     :result n
+     :live? true
+     :note "injected authorized-sign-fn + decisions — no kagi/Keychain"}))
+
 (defn- transport-connect-wat
   "transport_connect guest; host ASCII baked into data segment."
   [host port]
@@ -322,6 +360,9 @@
    {:id :llm-infer-jvm-available
     :import :llm-infer
     :prove prove-llm-infer-jvm}
+   {:id :kagi-sign-jvm-available
+    :import :kagi-sign
+    :prove prove-kagi-sign-jvm}
    {:id :transport-connect-jvm-inject-available
     :import :transport-connect
     :prove prove-transport-connect-jvm}])
@@ -383,7 +424,7 @@
      :failed failed
      :results results
      :case-ids (mapv :id jvm-live-corpus)
-     :note "T8.4: JVM tender live proofs (crypto/clock/log/cbor/json/http/llm/transport)."}))
+     :note "T8.4: JVM tender live proofs (crypto/clock/log/cbor/json/http/llm/kagi/transport)."}))
 
 (defn run-node-live
   "Shell out to web/verify-host-parity-live.mjs (Node WebAssembly + actor-host).

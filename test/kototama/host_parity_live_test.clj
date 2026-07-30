@@ -17,6 +17,7 @@
                 :random-bytes-all-available
                 :http-post-jvm-available
                 :llm-infer-jvm-available
+                :kagi-sign-jvm-available
                 :transport-connect-jvm-inject-available]]
       (is (contains? ids id) (str id)))))
 
@@ -24,8 +25,8 @@
   (let [r (live/run-jvm-live)]
     (is (true? (:ok? r))
         (str "live failures: " (pr-str (:failed r))))
-    (is (= 13 (:total r)))
-    (is (= 13 (:passed r)))
+    (is (= 14 (:total r)))
+    (is (= 14 (:passed r)))
     (is (empty? (:failed r)))
     (doseq [row (:results r)]
       (testing (str (:id row))
@@ -42,7 +43,7 @@
   (let [r (live/run-node-live)]
     (is (true? (:ok? r))
         (str "node live failures: " (pr-str (or (:failed r) (:error r)))))
-    (is (= 10 (:total r)))
-    (is (= 10 (:passed r)))
+    (is (= 11 (:total r)))
+    (is (= 11 (:passed r)))
     (is (empty? (:failed r)))
     (is (string? (:source r)))))

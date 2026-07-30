@@ -23,8 +23,8 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const siblingActorHost = path.resolve(here, '../../wasm-webcomponent/src/actor-host.js');
 // also try when this repo is named kototama (not kototama-t84)
 const siblingActorHostAlt = path.resolve(here, '../../../orgs/kotoba-lang/wasm-webcomponent/src/actor-host.js');
-// Includes actor-host `random-bytes` (2026-07-31 merge on main).
-const WASM_WEBCOMPONENT_COMMIT = '3feb419c60d936b9d388377d8e997a4da522b3b4';
+// Includes actor-host `random-bytes` + `kagi-sign` inject (2026-07-31).
+const WASM_WEBCOMPONENT_COMMIT = '68805af90604a389ecb8056c1f5be7170e2ff282';
 const SRC_FILES = [
   'src/actor-host.js',
   'src/vendor/curves/ed25519.js',
@@ -179,6 +179,30 @@ const corpus = [
       (func (export "main") (result i64)
         (i64.extend_i32_s
           (call $llm_infer (i32.const 0) (i32.const 2) (i32.const 100) (i32.const 64)))))`,
+  },
+  {
+    id: 'kagi-sign-node-inject-available',
+    imports: ['kagi-sign'],
+    limits: { maxKagiSigns: 1 },
+    inject: {
+      kagiDecisions: [{ ref: 'kagi://ops/key', purpose: 'release' }],
+      kagiSigner: {
+        authorizedSign(_decisions, _ref, _message) {
+          return new Uint8Array(64).fill(7);
+        },
+      },
+    },
+    check: (n) => Number(n) === 64,
+    wat: `(module
+      (import "kotoba" "kagi_sign" (func $kagi_sign (param i32 i32 i32 i32 i32 i32) (result i32)))
+      (memory (export "memory") 1)
+      (data (i32.const 0) "kagi://ops/key")
+      (data (i32.const 32) "msg")
+      (func (export "main") (result i64)
+        (i64.extend_i32_s
+          (call $kagi_sign (i32.const 0) (i32.const 14)
+                           (i32.const 32) (i32.const 3)
+                           (i32.const 64) (i32.const 64)))))`,
   },
 ];
 
