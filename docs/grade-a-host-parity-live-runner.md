@@ -37,6 +37,7 @@ WAT guests + Chicory tender for:
 | `:transport-write-jvm-inject-available` | `:transport-write` | inject; unknown handle → -1 |
 | `:transport-read-jvm-inject-available` | `:transport-read` | inject; unknown handle → -1 |
 | `:transport-rw-jvm-loopback-success` | `:transport-write` + `:transport-read` | loopback ServerSocket echo; write+read 2 bytes |
+| `:tls-server-end-point-jvm-available` | `:tls-server-end-point` | inject; non-TLS handle → -1 |
 
 ### Node / browser (`web/verify-host-parity-live.mjs`)
 
@@ -63,12 +64,12 @@ Emits `HOST_PARITY_LIVE_JSON:` for Clojure integration (`run-node-live`).
 - Not signed ops AOT Components (T8.3)
 - Does not replace pure matrix `run-conformance`
 - Not claim T8.4 complete
-- JVM live corpus: 19 proofs; Node: 11 proofs
+- JVM live corpus: 20 proofs; Node: 11 proofs
 - Loopback success is plain TCP (not TLS mutual-auth / production network ABAC)
 
 ## Evidence
 
-- `test/kototama/host_parity_live_test.clj` (19 JVM live proofs)
+- `test/kototama/host_parity_live_test.clj` (20 JVM live proofs)
 - `node web/verify-host-parity-live.mjs` (11 Node proofs)
 
 ## Related

@@ -23,15 +23,16 @@
                 :transport-close-jvm-inject-available
                 :transport-write-jvm-inject-available
                 :transport-read-jvm-inject-available
-                :transport-rw-jvm-loopback-success]]
+                :transport-rw-jvm-loopback-success
+                :tls-server-end-point-jvm-available]]
       (is (contains? ids id) (str id)))))
 
 (deftest run-jvm-live-proves-all-corpus-entries
   (let [r (live/run-jvm-live)]
     (is (true? (:ok? r))
         (str "live failures: " (pr-str (:failed r))))
-    (is (= 19 (:total r)))
-    (is (= 19 (:passed r)))
+    (is (= 20 (:total r)))
+    (is (= 20 (:passed r)))
     (is (empty? (:failed r)))
     (doseq [row (:results r)]
       (testing (str (:id row))
