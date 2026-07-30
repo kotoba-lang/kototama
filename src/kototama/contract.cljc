@@ -94,6 +94,33 @@
      :import/name "http-post-headers"
      :import/category :network
      :import/effects #{:network}}
+    ;; Transport / TLS inject path (kototama.transport-provider native-provider).
+    ;; Not built into tender core — callers pass HostFunctions via
+    ;; open-session :provider-host-functions (T8.4 host-parity L5 inject).
+    {:import/id :transport-connect
+     :import/name "transport-connect"
+     :import/category :network
+     :import/effects #{:network}}
+    {:import/id :tls-open
+     :import/name "tls-open"
+     :import/category :network
+     :import/effects #{:network}}
+    {:import/id :tls-server-end-point
+     :import/name "tls-server-end-point"
+     :import/category :network
+     :import/effects #{:network}}
+    {:import/id :transport-write
+     :import/name "transport-write"
+     :import/category :network
+     :import/effects #{:network :write}}
+    {:import/id :transport-read
+     :import/name "transport-read"
+     :import/category :network
+     :import/effects #{:network}}
+    {:import/id :transport-close
+     :import/name "transport-close"
+     :import/category :network
+     :import/effects #{:network}}
     ;; Component-only linear resources. Core-Wasm tenders do not bind these
     ;; names; they are present in HostCaps so the Component adapter can carry
     ;; Aiueos decisions to individual WIT providers without an ambient escape.
@@ -130,6 +157,13 @@
                 :max-log-write-bytes :non-negative-int
                 :max-random-bytes :non-negative-int
                 :max-memory-pages :non-negative-int
+                :max-transport-connections :non-negative-int
+                :max-transport-connect-ms :non-negative-int
+                :max-transport-read-ms :non-negative-int
+                :max-transport-read-bytes :non-negative-int
+                :max-transport-write-bytes :non-negative-int
+                :transport-endpoint-allowlist :set-or-nil
+                :transport-resolved-address-allowlist :set-or-nil
                 :allowed-url-prefixes :vector-of-string-or-nil
                 :allow-secret-imports? :boolean
                 :allow-write-imports? :boolean
@@ -152,6 +186,16 @@
    ;; CSPRNG fill quota (bytes). Default 0 = deny-by-default until raised
    ;; (matches actor-host.js maxRandomBytes: 0 and host-parity note).
    :max-random-bytes 0
+   ;; Transport inject (transport-provider). Defaults deny-by-default:
+   ;; connections/bytes 0; endpoint allowlist nil fails endpoint-allowed?
+   ;; (requires set). Callers raise limits + pass provider-host-functions.
+   :max-transport-connections 0
+   :max-transport-connect-ms 5000
+   :max-transport-read-ms 5000
+   :max-transport-read-bytes 0
+   :max-transport-write-bytes 0
+   :transport-endpoint-allowlist nil
+   :transport-resolved-address-allowlist nil
    ;; 16 Wasm pages (64 KiB/page) = 1 MiB -- a guest that legitimately
    ;; needs more grows this explicitly via HostCaps, same as every other
    ;; limit here; this is NOT an :abi/imports-gated effect (a guest's

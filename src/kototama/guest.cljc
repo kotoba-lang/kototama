@@ -39,6 +39,12 @@
    ;; :http-post-headers comment for why this couldn't just widen
    ;; http-post's own arity.
    :http-post-headers "http_post_headers"
+   :transport-connect "transport_connect"
+   :tls-open "tls_open"
+   :tls-server-end-point "tls_server_end_point"
+   :transport-write "transport_write"
+   :transport-read "transport_read"
+   :transport-close "transport_close"
    :http-get-stream "http_get_stream"
    :object-get-stream "object_get_stream"
    :object-put-block "object_put_block"

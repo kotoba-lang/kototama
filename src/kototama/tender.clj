@@ -1173,13 +1173,17 @@
    HostFunction re-checks grants at call time. Memory growth capped to
    HostCaps `:max-memory-pages`. Maturity R1 (ADR-2607101200).
 
-   opts: :store, :llm-client, :fuel (see previous instantiate docstring)."
+   opts: :store, :llm-client, :fuel, and :provider-host-functions.
+   The latter is an explicit map of import id → Chicory HostFunction for
+   inject-path ABIs (transport-provider etc.); missing bindings for
+   requested inject imports fail closed before instantiation."
   ([wasm-bytes requested-imports host-caps]
    (open-session wasm-bytes requested-imports host-caps {}))
   ([wasm-bytes requested-imports host-caps
     {:keys [store llm-client fuel require-kotoba-compatibility? profile capability-leases
             execution-identity execution-identity-cid lease-now-ms
-            http-policy request-purpose credential-provider]
+            http-policy request-purpose credential-provider
+            provider-host-functions]
      :as opts
      :or {store (in-memory-store) llm-client (default-llm-client) fuel default-fuel-limit}}]
    (let [configured (cond-> #{}
@@ -1239,6 +1243,19 @@
                      :json-encode #(json-encode-host-fn caps limits-state)
                      :json-extract-field #(json-extract-field-host-fn caps limits-state)
                      :http-post-headers #(http-post-headers-host-fn caps limits-state)}
+           ;; Inject path: transport-provider (and component linker bridges)
+           ;; supply ready HostFunction values keyed by import id.
+           fn-by-id (merge fn-by-id
+                           (into {}
+                                 (map (fn [[id host-fn]]
+                                        [id (constantly host-fn)]))
+                                 provider-host-functions))
+           missing-providers (vec (remove fn-by-id (:requested validation)))
+           _ (when (seq missing-providers)
+               (throw (ex-info "kototama.tender: provider binding unavailable"
+                               {:kototama.tender/errors
+                                [{:error :runtime/provider-unavailable
+                                  :imports missing-providers}]})))
            host-fns (mapv (fn [id] ((get fn-by-id id))) (:requested validation))
            imports (-> (ImportValues/builder)
                       (.addFunction (into-array ImportFunction host-fns))
