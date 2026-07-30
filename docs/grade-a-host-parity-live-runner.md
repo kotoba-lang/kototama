@@ -1,6 +1,6 @@
 # Grade A / T8.4 — live host runners (JVM + Node)
 
-- Status: partial (JVM + Node live; + transport r/w inject + loopback success)
+- Status: partial (JVM + Node live; + transport r/w + pg-pool inject fail-closed)
 - Date: 2026-07-31
 - WBS: T8.4
 
@@ -38,6 +38,10 @@ WAT guests + Chicory tender for:
 | `:transport-read-jvm-inject-available` | `:transport-read` | inject; unknown handle → -1 |
 | `:transport-rw-jvm-loopback-success` | `:transport-write` + `:transport-read` | loopback ServerSocket echo; write+read 2 bytes |
 | `:tls-server-end-point-jvm-available` | `:tls-server-end-point` | inject; non-TLS handle → -1 |
+| `:pg-pool-open-jvm-inject-available` | `:pg-pool-open` | fail-closed inject provider → -1 |
+| `:pg-pool-acquire-jvm-inject-available` | `:pg-pool-acquire` | fail-closed inject; unknown pool → -1 |
+| `:pg-pool-health-jvm-inject-available` | `:pg-pool-health` | fail-closed inject; unknown pool → -1 |
+| `:pg-pool-close-jvm-inject-available` | `:pg-pool-close` | fail-closed inject; unknown pool → -1 |
 
 ### Node / browser (`web/verify-host-parity-live.mjs`)
 
@@ -60,16 +64,19 @@ Emits `HOST_PARITY_LIVE_JSON:` for Clojure integration (`run-node-live`).
 
 ## Non-claims
 
-- Not full host-parity table (pg/pool still open)
+- Not full host-parity table (pg component-link surface; remaining pool ops
+  query/release/stats/drain not yet live-proven individually; open is
+  fail-closed inject only — no live SCRAM/PG success path here)
 - Not signed ops AOT Components (T8.3)
 - Does not replace pure matrix `run-conformance`
 - Not claim T8.4 complete
-- JVM live corpus: 20 proofs; Node: 11 proofs
+- JVM live corpus: 24 proofs; Node: 11 proofs
 - Loopback success is plain TCP (not TLS mutual-auth / production network ABAC)
+- Pool inject uses `fail-closed-inject-provider` (no live PostgreSQL)
 
 ## Evidence
 
-- `test/kototama/host_parity_live_test.clj` (20 JVM live proofs)
+- `test/kototama/host_parity_live_test.clj` (24 JVM live proofs)
 - `node web/verify-host-parity-live.mjs` (11 Node proofs)
 
 ## Related

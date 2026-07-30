@@ -99,6 +99,22 @@
                     :note "JVM transport-provider inject; browser native boundary"}
    :transport-close {:jvm :inject :browser :no :node :inject
                      :note "JVM transport-provider inject; browser native boundary"}
+   :pg-pool-open {:jvm :inject :browser :no :node :inject
+                  :note "JVM postgresql-pool-provider via :provider-host-functions; browser intentional native boundary"}
+   :pg-pool-acquire {:jvm :inject :browser :no :node :inject
+                     :note "JVM postgresql-pool-provider inject; browser native boundary"}
+   :pg-pool-query {:jvm :inject :browser :no :node :inject
+                   :note "JVM postgresql-pool-provider inject; browser native boundary"}
+   :pg-pool-release {:jvm :inject :browser :no :node :inject
+                     :note "JVM postgresql-pool-provider inject; browser native boundary"}
+   :pg-pool-stats {:jvm :inject :browser :no :node :inject
+                   :note "JVM postgresql-pool-provider inject; browser native boundary"}
+   :pg-pool-health {:jvm :inject :browser :no :node :inject
+                    :note "JVM postgresql-pool-provider inject; browser native boundary"}
+   :pg-pool-drain {:jvm :inject :browser :no :node :inject
+                   :note "JVM postgresql-pool-provider inject; browser native boundary"}
+   :pg-pool-close {:jvm :inject :browser :no :node :inject
+                   :note "JVM postgresql-pool-provider inject; browser native boundary"}
    :http-get-stream {:jvm :yes :browser :inject :node :inject
                      :note "linear Component provider; browser/node require an injected bounded stream adapter"}
    :object-get-stream {:jvm :yes :browser :inject :node :inject
