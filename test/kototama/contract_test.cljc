@@ -10,7 +10,9 @@
   (is (= #{:gen-keypair :sign :verify :sha256-hex :http-post :llm-infer
            :log-read :log-write :clock-monotonic :random-bytes
            :http-fetch :cbor-encode :json-encode :json-extract-field
-           :http-post-headers :http-get-stream :object-get-stream
+           :http-post-headers :transport-connect :tls-open
+           :tls-server-end-point :transport-write :transport-read
+           :transport-close :http-get-stream :object-get-stream
            :object-put-block :object-compare-and-set-ref}
          (set (keys contract/import-by-id))))
   (is (= :log-write (contract/import-id "log-write"))))

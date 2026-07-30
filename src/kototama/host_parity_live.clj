@@ -15,7 +15,8 @@
             [clojure.java.shell :as shell]
             [clojure.string :as str]
             [kototama.contract :as contract]
-            [kototama.tender :as tender]))
+            [kototama.tender :as tender]
+            [kototama.transport-provider :as transport]))
 
 (defn- wat->wasm
   "Assemble WAT → Wasm via wasm-tools (same path as tender-test)."
@@ -204,6 +205,51 @@
      :live? true
      :note "injected infer-fn — no Anthropic network"}))
 
+(defn- transport-connect-wat
+  "transport_connect guest; host ASCII baked into data segment."
+  [host port]
+  (str "(module
+          (import \"kotoba\" \"transport_connect\" (func $tc (param i32 i32 i32) (result i64)))
+          (memory (export \"memory\") 1)
+          (data (i32.const 0) \"" host "\")
+          (func (export \"main\") (result i64)
+            (call $tc (i32.const 0) (i32.const " (count host) ")
+                      (i32.const " port "))))"))
+
+(defn- prove-transport-connect-jvm
+  "Live-prove :transport-connect via inject (provider-host-functions).
+  Empty endpoint allowlist fails closed with handle 0 — no real socket."
+  []
+  (let [host "example.com"
+        port 443
+        wasm (wat->wasm (transport-connect-wat host port))
+        caps {:grants #{:transport-connect}
+              :limits {:max-transport-connections 1
+                       :max-transport-connect-ms 100
+                       :max-transport-read-ms 100
+                       :max-transport-read-bytes 1024
+                       :max-transport-write-bytes 1024
+                       ;; set but empty → endpoint-allowed? false for all
+                       :transport-endpoint-allowlist #{}}}
+        provider (transport/native-provider caps {})
+        started (System/currentTimeMillis)]
+    (try
+      (let [n (tender/run-main wasm [:transport-connect] caps
+                               {:provider-host-functions
+                                (:host-functions provider)})
+            elapsed (- (System/currentTimeMillis) started)]
+        {:ok? (and (zero? n) (< elapsed 2000))
+         :id :transport-connect-jvm-inject-available
+         :import :transport-connect
+         :imports [:transport-connect]
+         :host :jvm
+         :result n
+         :elapsed-ms elapsed
+         :live? true
+         :note "inject transport-provider; empty allowlist fail-closed (0)"})
+      (finally
+        ((:close! provider))))))
+
 (def jvm-live-corpus
   "Host-parity case ids that this runner can live-prove on JVM tender.
   Ids match lang/host-parity.edn :conformance :cases where listed;
@@ -275,7 +321,10 @@
     :prove prove-http-post-jvm}
    {:id :llm-infer-jvm-available
     :import :llm-infer
-    :prove prove-llm-infer-jvm}])
+    :prove prove-llm-infer-jvm}
+   {:id :transport-connect-jvm-inject-available
+    :import :transport-connect
+    :prove prove-transport-connect-jvm}])
 
 (defn prove-import
   "Live-run one corpus entry on JVM tender. Returns
@@ -334,7 +383,7 @@
      :failed failed
      :results results
      :case-ids (mapv :id jvm-live-corpus)
-     :note "T8.4: JVM tender live proofs (crypto/clock/log/cbor/json)."}))
+     :note "T8.4: JVM tender live proofs (crypto/clock/log/cbor/json/http/llm/transport)."}))
 
 (defn run-node-live
   "Shell out to web/verify-host-parity-live.mjs (Node WebAssembly + actor-host).
