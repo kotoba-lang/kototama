@@ -129,6 +129,43 @@
      :import/name "transport-close"
      :import/category :network
      :import/effects #{:network}}
+    ;; PostgreSQL opaque pool inject path (kototama.postgresql-pool-provider).
+    ;; Not built into tender core — callers pass HostFunctions via
+    ;; open-session :provider-host-functions (T8.4 host-parity L5 inject).
+    ;; Production uses real pool-provider + SCRAM/query sessions; live runner
+    ;; may inject fail-closed stubs to prove linkage without a live PG.
+    {:import/id :pg-pool-open
+     :import/name "pg-pool-open"
+     :import/category :network
+     :import/effects #{:network}}
+    {:import/id :pg-pool-acquire
+     :import/name "pg-pool-acquire"
+     :import/category :network
+     :import/effects #{:network}}
+    {:import/id :pg-pool-query
+     :import/name "pg-pool-query"
+     :import/category :network
+     :import/effects #{:network :write}}
+    {:import/id :pg-pool-release
+     :import/name "pg-pool-release"
+     :import/category :network
+     :import/effects #{:network}}
+    {:import/id :pg-pool-stats
+     :import/name "pg-pool-stats"
+     :import/category :network
+     :import/effects #{:network}}
+    {:import/id :pg-pool-health
+     :import/name "pg-pool-health"
+     :import/category :network
+     :import/effects #{:network}}
+    {:import/id :pg-pool-drain
+     :import/name "pg-pool-drain"
+     :import/category :network
+     :import/effects #{:network}}
+    {:import/id :pg-pool-close
+     :import/name "pg-pool-close"
+     :import/category :network
+     :import/effects #{:network}}
     ;; Component-only linear resources. Core-Wasm tenders do not bind these
     ;; names; they are present in HostCaps so the Component adapter can carry
     ;; Aiueos decisions to individual WIT providers without an ambient escape.

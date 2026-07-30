@@ -431,3 +431,47 @@
       :pg-pool-stats stats-fn :pg-pool-health health-fn
       :pg-pool-drain drain-fn :pg-pool-close close-fn}
      :state state :close! close!}))
+
+(defn fail-closed-inject-provider
+  "T8.4 inject surface without SCRAM/query sessions or a live PostgreSQL.
+
+  Returns the same host-function keys as `pool-provider`, each ABI-matched
+  and always failing closed (-1). Use with tender `open-session`
+  `:provider-host-functions` to live-prove actor:host pg-pool-* linkage.
+  Production callers must use `pool-provider` with real scram/query sessions
+  (see docs/postgresql-qualification.edn)."
+  []
+  (let [deny (fn [_ _] -1)
+        open-fn
+        (tender/host-fn
+         "pg_pool_open"
+         [ValType/I32 ValType/I32 ValType/I32 ValType/I32 ValType/I32
+          ValType/I32 ValType/I32 ValType/I32 ValType/I32]
+         ValType/I32
+         deny)
+        acquire-fn
+        (tender/host-fn "pg_pool_acquire" [ValType/I32] ValType/I32 deny)
+        query-fn
+        (tender/host-fn
+         "pg_pool_query"
+         [ValType/I32 ValType/I32 ValType/I32 ValType/I32 ValType/I32
+          ValType/I32 ValType/I32]
+         ValType/I32
+         deny)
+        release-fn
+        (tender/host-fn "pg_pool_release" [ValType/I32] ValType/I32 deny)
+        stats-fn
+        (tender/host-fn
+         "pg_pool_stats" [ValType/I32 ValType/I32 ValType/I32] ValType/I32 deny)
+        health-fn
+        (tender/host-fn "pg_pool_health" [ValType/I32] ValType/I32 deny)
+        drain-fn
+        (tender/host-fn "pg_pool_drain" [ValType/I32] ValType/I32 deny)
+        close-fn
+        (tender/host-fn "pg_pool_close" [ValType/I32] ValType/I32 deny)]
+    {:host-functions
+     {:pg-pool-open open-fn :pg-pool-acquire acquire-fn
+      :pg-pool-query query-fn :pg-pool-release release-fn
+      :pg-pool-stats stats-fn :pg-pool-health health-fn
+      :pg-pool-drain drain-fn :pg-pool-close close-fn}
+     :close! (fn [])}))

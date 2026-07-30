@@ -16,6 +16,7 @@
             [clojure.string :as str]
             [kototama.contract :as contract]
             [kototama.tender :as tender]
+            [kototama.postgresql-pool-provider :as pg-pool]
             [kototama.transport-provider :as transport]))
 
 (defn- wat->wasm
@@ -575,6 +576,139 @@
       (finally
         ((:close! provider))))))
 
+
+(defn- pg-pool-acquire-wat
+  "pg_pool_acquire on unknown pool id → -1."
+  []
+  "(module
+     (import \"kotoba\" \"pg_pool_acquire\" (func $a (param i32) (result i32)))
+     (func (export \"main\") (result i64)
+       (i64.extend_i32_s (call $a (i32.const 99)))))")
+
+(defn- prove-pg-pool-acquire-jvm
+  "Live-prove :pg-pool-acquire inject fail-closed (unknown pool → -1)."
+  []
+  (let [wasm (wat->wasm (pg-pool-acquire-wat))
+        caps {:grants #{:pg-pool-acquire}
+              :limits {}}
+        provider (pg-pool/fail-closed-inject-provider)]
+    (try
+      (let [n (tender/run-main wasm [:pg-pool-acquire] caps
+                               {:provider-host-functions
+                                (:host-functions provider)})]
+        {:ok? (= -1 n)
+         :id :pg-pool-acquire-jvm-inject-available
+         :import :pg-pool-acquire
+         :imports [:pg-pool-acquire]
+         :host :jvm
+         :result n
+         :live? true
+         :note "inject pool fail-closed provider; unknown pool → -1"})
+      (finally
+        ((:close! provider))))))
+
+(defn- pg-pool-close-wat
+  "pg_pool_close on unknown pool id → -1."
+  []
+  "(module
+     (import \"kotoba\" \"pg_pool_close\" (func $c (param i32) (result i32)))
+     (func (export \"main\") (result i64)
+       (i64.extend_i32_s (call $c (i32.const 99)))))")
+
+(defn- prove-pg-pool-close-jvm
+  "Live-prove :pg-pool-close inject fail-closed (unknown pool → -1)."
+  []
+  (let [wasm (wat->wasm (pg-pool-close-wat))
+        caps {:grants #{:pg-pool-close}
+              :limits {}}
+        provider (pg-pool/fail-closed-inject-provider)]
+    (try
+      (let [n (tender/run-main wasm [:pg-pool-close] caps
+                               {:provider-host-functions
+                                (:host-functions provider)})]
+        {:ok? (= -1 n)
+         :id :pg-pool-close-jvm-inject-available
+         :import :pg-pool-close
+         :imports [:pg-pool-close]
+         :host :jvm
+         :result n
+         :live? true
+         :note "inject pool fail-closed provider; unknown pool → -1"})
+      (finally
+        ((:close! provider))))))
+
+(defn- pg-pool-open-wat
+  "pg_pool_open with baked host/user/db/cred; fail-closed inject → -1."
+  []
+  "(module
+     (import \"kotoba\" \"pg_pool_open\"
+       (func $o (param i32 i32 i32 i32 i32 i32 i32 i32 i32) (result i32)))
+     (memory (export \"memory\") 1)
+     (data (i32.const 0) \"h\")
+     (data (i32.const 8) \"u\")
+     (data (i32.const 16) \"d\")
+     (data (i32.const 24) \"c\")
+     (func (export \"main\") (result i64)
+       (i64.extend_i32_s
+         (call $o
+           (i32.const 0) (i32.const 1)  ;; host
+           (i32.const 5432)             ;; port
+           (i32.const 8) (i32.const 1)  ;; user
+           (i32.const 16) (i32.const 1) ;; db
+           (i32.const 24) (i32.const 1)))))") ;; cred
+
+(defn- prove-pg-pool-open-jvm
+  "Live-prove :pg-pool-open inject fail-closed (no SCRAM/PG → -1)."
+  []
+  (let [wasm (wat->wasm (pg-pool-open-wat))
+        caps {:grants #{:pg-pool-open}
+              :limits {}}
+        provider (pg-pool/fail-closed-inject-provider)]
+    (try
+      (let [n (tender/run-main wasm [:pg-pool-open] caps
+                               {:provider-host-functions
+                                (:host-functions provider)})]
+        {:ok? (= -1 n)
+         :id :pg-pool-open-jvm-inject-available
+         :import :pg-pool-open
+         :imports [:pg-pool-open]
+         :host :jvm
+         :result n
+         :live? true
+         :note "inject pool fail-closed provider; open without SCRAM → -1"})
+      (finally
+        ((:close! provider))))))
+
+(defn- pg-pool-health-wat
+  "pg_pool_health on unknown pool → -1."
+  []
+  "(module
+     (import \"kotoba\" \"pg_pool_health\" (func $h (param i32) (result i32)))
+     (func (export \"main\") (result i64)
+       (i64.extend_i32_s (call $h (i32.const 99)))))")
+
+(defn- prove-pg-pool-health-jvm
+  "Live-prove :pg-pool-health inject fail-closed (unknown pool → -1)."
+  []
+  (let [wasm (wat->wasm (pg-pool-health-wat))
+        caps {:grants #{:pg-pool-health}
+              :limits {}}
+        provider (pg-pool/fail-closed-inject-provider)]
+    (try
+      (let [n (tender/run-main wasm [:pg-pool-health] caps
+                               {:provider-host-functions
+                                (:host-functions provider)})]
+        {:ok? (= -1 n)
+         :id :pg-pool-health-jvm-inject-available
+         :import :pg-pool-health
+         :imports [:pg-pool-health]
+         :host :jvm
+         :result n
+         :live? true
+         :note "inject pool fail-closed provider; unknown pool → -1"})
+      (finally
+        ((:close! provider))))))
+
 (def jvm-live-corpus
   "Host-parity case ids that this runner can live-prove on JVM tender.
   Ids match lang/host-parity.edn :conformance :cases where listed;
@@ -670,7 +804,19 @@
     :prove prove-transport-rw-jvm-loopback-success}
    {:id :tls-server-end-point-jvm-available
     :import :tls-server-end-point
-    :prove prove-tls-server-end-point-jvm}])
+    :prove prove-tls-server-end-point-jvm}
+   {:id :pg-pool-open-jvm-inject-available
+    :import :pg-pool-open
+    :prove prove-pg-pool-open-jvm}
+   {:id :pg-pool-acquire-jvm-inject-available
+    :import :pg-pool-acquire
+    :prove prove-pg-pool-acquire-jvm}
+   {:id :pg-pool-health-jvm-inject-available
+    :import :pg-pool-health
+    :prove prove-pg-pool-health-jvm}
+   {:id :pg-pool-close-jvm-inject-available
+    :import :pg-pool-close
+    :prove prove-pg-pool-close-jvm}])
 
 (defn prove-import
   "Live-run one corpus entry on JVM tender. Returns
@@ -729,7 +875,7 @@
      :failed failed
      :results results
      :case-ids (mapv :id jvm-live-corpus)
-     :note "T8.4: JVM tender live proofs (crypto/clock/log/cbor/json/http/llm/kagi/transport r/w)."}))
+     :note "T8.4: JVM tender live proofs (crypto/clock/log/cbor/json/http/llm/kagi/transport/pg-pool)."}))
 
 (defn run-node-live
   "Shell out to web/verify-host-parity-live.mjs (Node WebAssembly + actor-host).
