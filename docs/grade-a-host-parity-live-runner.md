@@ -1,6 +1,6 @@
 # Grade A / T8.4 — live host runners (JVM + Node)
 
-- Status: partial (JVM + Node live; + transport r/w + pg-pool inject fail-closed)
+- Status: partial (JVM + Node live; all 8 pg-pool inject fail-closed)
 - Date: 2026-07-31
 - WBS: T8.4
 
@@ -42,6 +42,10 @@ WAT guests + Chicory tender for:
 | `:pg-pool-acquire-jvm-inject-available` | `:pg-pool-acquire` | fail-closed inject; unknown pool → -1 |
 | `:pg-pool-health-jvm-inject-available` | `:pg-pool-health` | fail-closed inject; unknown pool → -1 |
 | `:pg-pool-close-jvm-inject-available` | `:pg-pool-close` | fail-closed inject; unknown pool → -1 |
+| `:pg-pool-query-jvm-inject-available` | `:pg-pool-query` | fail-closed inject; no lease → -1 |
+| `:pg-pool-release-jvm-inject-available` | `:pg-pool-release` | fail-closed inject; unknown lease → -1 |
+| `:pg-pool-stats-jvm-inject-available` | `:pg-pool-stats` | fail-closed inject; unknown pool → -1 |
+| `:pg-pool-drain-jvm-inject-available` | `:pg-pool-drain` | fail-closed inject; unknown pool → -1 |
 
 ### Node / browser (`web/verify-host-parity-live.mjs`)
 
@@ -64,19 +68,19 @@ Emits `HOST_PARITY_LIVE_JSON:` for Clojure integration (`run-node-live`).
 
 ## Non-claims
 
-- Not full host-parity table (pg component-link surface; remaining pool ops
-  query/release/stats/drain not yet live-proven individually; open is
-  fail-closed inject only — no live SCRAM/PG success path here)
+- Not full host-parity table (pg component-link / SCRAM surface still open;
+  all 8 `pg-pool-*` inject ops are live fail-closed only — no live SCRAM/PG
+  success path here)
 - Not signed ops AOT Components (T8.3)
 - Does not replace pure matrix `run-conformance`
 - Not claim T8.4 complete
-- JVM live corpus: 24 proofs; Node: 11 proofs
+- JVM live corpus: 28 proofs; Node: 11 proofs
 - Loopback success is plain TCP (not TLS mutual-auth / production network ABAC)
 - Pool inject uses `fail-closed-inject-provider` (no live PostgreSQL)
 
 ## Evidence
 
-- `test/kototama/host_parity_live_test.clj` (24 JVM live proofs)
+- `test/kototama/host_parity_live_test.clj` (28 JVM live proofs)
 - `node web/verify-host-parity-live.mjs` (11 Node proofs)
 
 ## Related
