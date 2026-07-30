@@ -365,6 +365,179 @@
       (finally
         ((:close! provider))))))
 
+(defn- transport-write-fail-wat
+  "transport_write on unknown handle → -1."
+  []
+  "(module
+     (import \"kotoba\" \"transport_write\" (func $tw (param i64 i32 i32) (result i32)))
+     (memory (export \"memory\") 1)
+     (data (i32.const 0) \"xx\")
+     (func (export \"main\") (result i64)
+       (i64.extend_i32_s
+         (call $tw (i64.const 99) (i32.const 0) (i32.const 2)))))")
+
+(defn- prove-transport-write-jvm-inject
+  "Live-prove :transport-write inject; unknown handle fail-closed (-1)."
+  []
+  (let [wasm (wat->wasm (transport-write-fail-wat))
+        caps {:grants #{:transport-write}
+              :limits {:max-transport-connections 1
+                       :max-transport-connect-ms 100
+                       :max-transport-read-ms 100
+                       :max-transport-read-bytes 1024
+                       :max-transport-write-bytes 1024
+                       :allow-write-imports? true
+                       :transport-endpoint-allowlist #{}}}
+        provider (transport/native-provider caps {})]
+    (try
+      (let [n (tender/run-main wasm [:transport-write] caps
+                               {:provider-host-functions
+                                (:host-functions provider)})]
+        {:ok? (= -1 n)
+         :id :transport-write-jvm-inject-available
+         :import :transport-write
+         :imports [:transport-write]
+         :host :jvm
+         :result n
+         :live? true
+         :note "inject transport-provider; unknown handle → -1"})
+      (finally
+        ((:close! provider))))))
+
+(defn- transport-read-fail-wat
+  "transport_read on unknown handle → -1."
+  []
+  "(module
+     (import \"kotoba\" \"transport_read\" (func $tr (param i64 i32 i32) (result i32)))
+     (memory (export \"memory\") 1)
+     (func (export \"main\") (result i64)
+       (i64.extend_i32_s
+         (call $tr (i64.const 99) (i32.const 0) (i32.const 16)))))")
+
+(defn- prove-transport-read-jvm-inject
+  "Live-prove :transport-read inject; unknown handle fail-closed (-1)."
+  []
+  (let [wasm (wat->wasm (transport-read-fail-wat))
+        caps {:grants #{:transport-read}
+              :limits {:max-transport-connections 1
+                       :max-transport-connect-ms 100
+                       :max-transport-read-ms 100
+                       :max-transport-read-bytes 1024
+                       :max-transport-write-bytes 1024
+                       :transport-endpoint-allowlist #{}}}
+        provider (transport/native-provider caps {})]
+    (try
+      (let [n (tender/run-main wasm [:transport-read] caps
+                               {:provider-host-functions
+                                (:host-functions provider)})]
+        {:ok? (= -1 n)
+         :id :transport-read-jvm-inject-available
+         :import :transport-read
+         :imports [:transport-read]
+         :host :jvm
+         :result n
+         :live? true
+         :note "inject transport-provider; unknown handle → -1"})
+      (finally
+        ((:close! provider))))))
+
+(defn- transport-rw-loopback-wat
+  "connect → write \"hi\" → read echo → close. Returns bytes read (2) on success.
+  host ASCII and port baked into data / immediates."
+  [host port]
+  (str "(module
+          (import \"kotoba\" \"transport_connect\" (func $tc (param i32 i32 i32) (result i64)))
+          (import \"kotoba\" \"transport_write\" (func $tw (param i64 i32 i32) (result i32)))
+          (import \"kotoba\" \"transport_read\" (func $tr (param i64 i32 i32) (result i32)))
+          (import \"kotoba\" \"transport_close\" (func $tcl (param i64) (result i32)))
+          (memory (export \"memory\") 1)
+          (data (i32.const 0) \"" host "\")
+          (data (i32.const 16) \"hi\")
+          (func (export \"main\") (result i64)
+            (local $h i64)
+            (local $wn i32)
+            (local $rn i32)
+            (local.set $h
+              (call $tc (i32.const 0) (i32.const " (count host) ")
+                        (i32.const " port ")))
+            (if (i64.eqz (local.get $h))
+              (then (return (i64.const -2))))
+            (local.set $wn
+              (call $tw (local.get $h) (i32.const 16) (i32.const 2)))
+            (if (i32.ne (local.get $wn) (i32.const 2))
+              (then (return (i64.const -3))))
+            (local.set $rn
+              (call $tr (local.get $h) (i32.const 32) (i32.const 16)))
+            (drop (call $tcl (local.get $h)))
+            (i64.extend_i32_s (local.get $rn))))"))
+
+(defn- with-loopback-echo
+  "Start 127.0.0.1 ServerSocket echo (read once → write back), call f with port.
+  Always closes server. Echo thread is daemon-style via future + timeout."
+  [f]
+  (let [srv (java.net.ServerSocket. 0 1 (java.net.InetAddress/getByName "127.0.0.1"))
+        port (.getLocalPort srv)
+        echo (future
+               (try
+                 (let [s (.accept srv)
+                       in (.getInputStream s)
+                       out (.getOutputStream s)
+                       buf (byte-array 16)
+                       n (.read in buf)]
+                   (when (pos? n)
+                     (.write out buf 0 n)
+                     (.flush out))
+                   (.close s))
+                 (catch Exception _ nil)))]
+    (try
+      (f port)
+      (finally
+        (try (.close srv) (catch Exception _ nil))
+        (try
+          (deref echo 3000 :timeout)
+          (catch Exception _ nil))))))
+
+(defn- prove-transport-rw-jvm-loopback-success
+  "Live-prove :transport-write + :transport-read success on real loopback TCP
+  via transport-provider inject (connect → write \"hi\" → echo read)."
+  []
+  (with-loopback-echo
+    (fn [port]
+      (let [host "127.0.0.1"
+            ep (str host ":" port)
+            wasm (wat->wasm (transport-rw-loopback-wat host port))
+            caps {:grants #{:transport-connect :transport-write
+                            :transport-read :transport-close}
+                  :limits {:max-transport-connections 2
+                           :max-transport-connect-ms 2000
+                           :max-transport-read-ms 2000
+                           :max-transport-read-bytes 1024
+                           :max-transport-write-bytes 1024
+                           :allow-write-imports? true
+                           :transport-endpoint-allowlist #{ep}}}
+            provider (transport/native-provider caps {})
+            started (System/currentTimeMillis)]
+        (try
+          (let [n (tender/run-main
+                   wasm
+                   [:transport-connect :transport-write
+                    :transport-read :transport-close]
+                   caps
+                   {:provider-host-functions (:host-functions provider)})
+                elapsed (- (System/currentTimeMillis) started)]
+            {:ok? (and (= 2 n) (< elapsed 5000))
+             :id :transport-rw-jvm-loopback-success
+             :import :transport-write
+             :imports [:transport-connect :transport-write
+                       :transport-read :transport-close]
+             :host :jvm
+             :result n
+             :elapsed-ms elapsed
+             :live? true
+             :note "loopback ServerSocket echo; write+read success (2 bytes)"})
+          (finally
+            ((:close! provider))))))))
+
 (def jvm-live-corpus
   "Host-parity case ids that this runner can live-prove on JVM tender.
   Ids match lang/host-parity.edn :conformance :cases where listed;
@@ -448,7 +621,16 @@
     :prove prove-tls-open-jvm}
    {:id :transport-close-jvm-inject-available
     :import :transport-close
-    :prove prove-transport-close-jvm}])
+    :prove prove-transport-close-jvm}
+   {:id :transport-write-jvm-inject-available
+    :import :transport-write
+    :prove prove-transport-write-jvm-inject}
+   {:id :transport-read-jvm-inject-available
+    :import :transport-read
+    :prove prove-transport-read-jvm-inject}
+   {:id :transport-rw-jvm-loopback-success
+    :import :transport-write
+    :prove prove-transport-rw-jvm-loopback-success}])
 
 (defn prove-import
   "Live-run one corpus entry on JVM tender. Returns
@@ -507,7 +689,7 @@
      :failed failed
      :results results
      :case-ids (mapv :id jvm-live-corpus)
-     :note "T8.4: JVM tender live proofs (crypto/clock/log/cbor/json/http/llm/kagi/transport)."}))
+     :note "T8.4: JVM tender live proofs (crypto/clock/log/cbor/json/http/llm/kagi/transport r/w)."}))
 
 (defn run-node-live
   "Shell out to web/verify-host-parity-live.mjs (Node WebAssembly + actor-host).

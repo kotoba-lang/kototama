@@ -1,6 +1,6 @@
 # Grade A / T8.4 — live host runners (JVM + Node)
 
-- Status: partial (JVM + Node live; + tls-open/transport-close inject)
+- Status: partial (JVM + Node live; + transport r/w inject + loopback success)
 - Date: 2026-07-31
 - WBS: T8.4
 
@@ -34,6 +34,9 @@ WAT guests + Chicory tender for:
 | `:transport-connect-jvm-inject-available` | `:transport-connect` | inject transport-provider; empty allowlist → 0 |
 | `:tls-open-jvm-inject-available` | `:tls-open` | inject; invalid handle → 0 |
 | `:transport-close-jvm-inject-available` | `:transport-close` | inject; unknown handle → -1 |
+| `:transport-write-jvm-inject-available` | `:transport-write` | inject; unknown handle → -1 |
+| `:transport-read-jvm-inject-available` | `:transport-read` | inject; unknown handle → -1 |
+| `:transport-rw-jvm-loopback-success` | `:transport-write` + `:transport-read` | loopback ServerSocket echo; write+read 2 bytes |
 
 ### Node / browser (`web/verify-host-parity-live.mjs`)
 
@@ -56,15 +59,16 @@ Emits `HOST_PARITY_LIVE_JSON:` for Clojure integration (`run-node-live`).
 
 ## Non-claims
 
-- Not full host-parity table (pg/pool; remaining TLS/transport ops)
+- Not full host-parity table (pg/pool still open)
 - Not signed ops AOT Components (T8.3)
 - Does not replace pure matrix `run-conformance`
 - Not claim T8.4 complete
-- JVM live corpus: 16 proofs; Node: 11 proofs
+- JVM live corpus: 19 proofs; Node: 11 proofs
+- Loopback success is plain TCP (not TLS mutual-auth / production network ABAC)
 
 ## Evidence
 
-- `test/kototama/host_parity_live_test.clj` (16 JVM live proofs)
+- `test/kototama/host_parity_live_test.clj` (19 JVM live proofs)
 - `node web/verify-host-parity-live.mjs` (11 Node proofs)
 
 ## Related

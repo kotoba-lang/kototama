@@ -20,15 +20,18 @@
                 :kagi-sign-jvm-available
                 :transport-connect-jvm-inject-available
                 :tls-open-jvm-inject-available
-                :transport-close-jvm-inject-available]]
+                :transport-close-jvm-inject-available
+                :transport-write-jvm-inject-available
+                :transport-read-jvm-inject-available
+                :transport-rw-jvm-loopback-success]]
       (is (contains? ids id) (str id)))))
 
 (deftest run-jvm-live-proves-all-corpus-entries
   (let [r (live/run-jvm-live)]
     (is (true? (:ok? r))
         (str "live failures: " (pr-str (:failed r))))
-    (is (= 16 (:total r)))
-    (is (= 16 (:passed r)))
+    (is (= 19 (:total r)))
+    (is (= 19 (:passed r)))
     (is (empty? (:failed r)))
     (doseq [row (:results r)]
       (testing (str (:id row))
