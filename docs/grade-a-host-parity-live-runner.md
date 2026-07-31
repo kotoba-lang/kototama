@@ -1,6 +1,6 @@
 # Grade A / T8.4 — live host runners (JVM + Node)
 
-- Status: partial (JVM 31 + Node 14 live; fetch/headers/json-extract on both)
+- Status: partial (JVM 33 + Node 16 live; fetch/headers/json-extract on both)
 - Date: 2026-07-31
 - WBS: T8.4
 
@@ -66,6 +66,8 @@ Node WebAssembly + wasm-webcomponent `actor-host.js` for:
 | `:http-fetch-node-inject-available` | `:http-fetch` + inject + allowlist |
 | `:http-post-headers-node-inject-available` | `:http-post-headers` + inject |
 | `:json-extract-field-node-live` | `:json-extract-field` pure host |
+| `:cbor-encode-node-live` | `:cbor-encode` pure flat-pairs |
+| `:json-encode-node-live` | `:json-encode` pure flat-pairs |
 
 Loads sibling `../wasm-webcomponent` when present; else pinned CDN commit.
 Emits `HOST_PARITY_LIVE_JSON:` for Clojure integration (`run-node-live`).
@@ -82,14 +84,14 @@ Emits `HOST_PARITY_LIVE_JSON:` for Clojure integration (`run-node-live`).
 - Not signed ops AOT Components (T8.3)
 - Does not replace pure matrix `run-conformance`
 - Not claim T8.4 complete
-- JVM live corpus: 33 proofs; Node: 14 proofs
+- JVM live corpus: 33 proofs; Node: 16 proofs
 - Loopback success is plain TCP (not TLS mutual-auth / production network ABAC)
 - Pool inject uses `fail-closed-inject-provider` (no live PostgreSQL)
 
 ## Evidence
 
 - `test/kototama/host_parity_live_test.clj` (33 JVM live proofs)
-- `node web/verify-host-parity-live.mjs` (14 Node proofs)
+- `node web/verify-host-parity-live.mjs` (16 Node proofs)
 
 ## Related
 

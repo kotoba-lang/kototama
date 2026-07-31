@@ -266,6 +266,33 @@ const corpus = [
                    (i32.const 100) (i32.const 1)
                    (i32.const 300) (i32.const 64)))))`,
   },
+  {
+    id: 'cbor-encode-node-live',
+    imports: ['cbor-encode'],
+    // flat pairs a<TAB>b via WAT hex escapes (3 bytes)
+    check: (n) => Number(n) > 0,
+    wat: `(module
+      (import "kotoba" "cbor_encode" (func $c (param i32 i32 i32 i32) (result i32)))
+      (memory (export "memory") 1)
+      (data (i32.const 0) "\\61\\09\\62")
+      (func (export "main") (result i64)
+        (i64.extend_i32_s
+          (call $c (i32.const 0) (i32.const 3)
+                   (i32.const 64) (i32.const 256)))))`,
+  },
+  {
+    id: 'json-encode-node-live',
+    imports: ['json-encode'],
+    check: (n) => Number(n) > 0,
+    wat: `(module
+      (import "kotoba" "json_encode" (func $j (param i32 i32 i32 i32) (result i32)))
+      (memory (export "memory") 1)
+      (data (i32.const 0) "\\61\\09\\62")
+      (func (export "main") (result i64)
+        (i64.extend_i32_s
+          (call $j (i32.const 0) (i32.const 3)
+                   (i32.const 64) (i32.const 256)))))`,
+  },
 ];
 
 const tmpRoot = await mkdtemp(path.join(tmpdir(), 'kototama-host-parity-live-'));
