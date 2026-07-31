@@ -56,6 +56,66 @@
          "pg_close_statement"
          (into [ValType/I64] (i32s 6))
          ValType/I32
+         deny-i32)
+        pg_query_state_fn
+        (tender/host-fn
+         "pg_query_state"
+         (into [ValType/I64] (i32s 6))
+         ValType/I32
+         deny-i32)
+        pg_prepare_typed_fn
+        (tender/host-fn
+         "pg_prepare_typed"
+         (into [ValType/I64] (i32s 11))
+         ValType/I32
+         deny-i32)
+        pg_execute_params2_fn
+        (tender/host-fn
+         "pg_execute_params2"
+         (into [ValType/I64] (i32s 10))
+         ValType/I32
+         deny-i32)
+        pg_execute_params_fn
+        (tender/host-fn
+         "pg_execute_params"
+         (into [ValType/I64] (i32s 8))
+         ValType/I32
+         deny-i32)
+        pg_bind_portal_fn
+        (tender/host-fn
+         "pg_bind_portal"
+         (into [ValType/I64] (i32s 10))
+         ValType/I32
+         deny-i32)
+        pg_fetch_portal_fn
+        (tender/host-fn
+         "pg_fetch_portal"
+         (into [ValType/I64] (i32s 7))
+         ValType/I32
+         deny-i32)
+        pg_close_portal_fn
+        (tender/host-fn
+         "pg_close_portal"
+         (into [ValType/I64] (i32s 6))
+         ValType/I32
+         deny-i32)
+        pg_copy_out_fn
+        (tender/host-fn
+         "pg_copy_out"
+         (into [ValType/I64] (i32s 6))
+         ValType/I32
+         deny-i32)
+        pg_copy_in_fn
+        (tender/host-fn
+         "pg_copy_in"
+         (into [ValType/I64] (i32s 8))
+         ValType/I32
+         deny-i32)
+        pg_execute_batch_fn
+        (tender/host-fn
+         "pg_execute_batch"
+         (into [ValType/I64] (i32s 7))
+         ValType/I32
          deny-i32)]
     {:host-functions
      {:pg-open open-fn
@@ -63,5 +123,15 @@
       :pg-simple-query simple-fn
       :pg-prepare prepare-fn
       :pg-session-reset session-reset-fn
-      :pg-close-statement close-stmt-fn}
+      :pg-close-statement close-stmt-fn
+      :pg-query-state pg_query_state_fn
+      :pg-prepare-typed pg_prepare_typed_fn
+      :pg-execute-params2 pg_execute_params2_fn
+      :pg-execute-params pg_execute_params_fn
+      :pg-bind-portal pg_bind_portal_fn
+      :pg-fetch-portal pg_fetch_portal_fn
+      :pg-close-portal pg_close_portal_fn
+      :pg-copy-out pg_copy_out_fn
+      :pg-copy-in pg_copy_in_fn
+      :pg-execute-batch pg_execute_batch_fn}
      :close! (fn [])}))

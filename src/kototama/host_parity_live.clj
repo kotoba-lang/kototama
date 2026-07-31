@@ -1259,6 +1259,306 @@
       (finally
         ((:close! provider))))))
 
+(defn- pg_query_state-wat
+  []
+  "(module
+     (import \"kotoba\" \"pg_query_state\" (func $f (param i64 i32 i32 i32 i32 i32 i32) (result i32)))
+     (memory (export \"memory\") 1)
+     (func (export \"main\") (result i64)
+       (i64.extend_i32_s (call $f (i64.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0)))))")
+
+(defn- prove-pg-query-state-jvm
+  "Live-prove :pg-query-state inject fail-closed (→ -1)."
+  []
+  (let [wasm (wat->wasm (pg_query_state-wat))
+        caps {:grants #{:pg-query-state}
+              :limits {:allow-write-imports? true}}
+        provider (pg-wire/fail-closed-inject-provider)]
+    (try
+      (let [n (tender/run-main wasm [:pg-query-state] caps
+                               {:provider-host-functions
+                                (:host-functions provider)})]
+        {:ok? (= -1 n)
+         :id :pg-query-state-jvm-inject-available
+         :import :pg-query-state
+         :imports [:pg-query-state]
+         :host :jvm
+         :result n
+         :live? true
+         :note "inject wire fail-closed provider → -1"})
+      (finally
+        ((:close! provider))))))
+
+(defn- pg_prepare_typed-wat
+  []
+  "(module
+     (import \"kotoba\" \"pg_prepare_typed\" (func $f (param i64 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32) (result i32)))
+     (memory (export \"memory\") 1)
+     (func (export \"main\") (result i64)
+       (i64.extend_i32_s (call $f (i64.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0)))))")
+
+(defn- prove-pg-prepare-typed-jvm
+  "Live-prove :pg-prepare-typed inject fail-closed (→ -1)."
+  []
+  (let [wasm (wat->wasm (pg_prepare_typed-wat))
+        caps {:grants #{:pg-prepare-typed}
+              :limits {:allow-write-imports? true}}
+        provider (pg-wire/fail-closed-inject-provider)]
+    (try
+      (let [n (tender/run-main wasm [:pg-prepare-typed] caps
+                               {:provider-host-functions
+                                (:host-functions provider)})]
+        {:ok? (= -1 n)
+         :id :pg-prepare-typed-jvm-inject-available
+         :import :pg-prepare-typed
+         :imports [:pg-prepare-typed]
+         :host :jvm
+         :result n
+         :live? true
+         :note "inject wire fail-closed provider → -1"})
+      (finally
+        ((:close! provider))))))
+
+(defn- pg_execute_params2-wat
+  []
+  "(module
+     (import \"kotoba\" \"pg_execute_params2\" (func $f (param i64 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32) (result i32)))
+     (memory (export \"memory\") 1)
+     (func (export \"main\") (result i64)
+       (i64.extend_i32_s (call $f (i64.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0)))))")
+
+(defn- prove-pg-execute-params2-jvm
+  "Live-prove :pg-execute-params2 inject fail-closed (→ -1)."
+  []
+  (let [wasm (wat->wasm (pg_execute_params2-wat))
+        caps {:grants #{:pg-execute-params2}
+              :limits {:allow-write-imports? true}}
+        provider (pg-wire/fail-closed-inject-provider)]
+    (try
+      (let [n (tender/run-main wasm [:pg-execute-params2] caps
+                               {:provider-host-functions
+                                (:host-functions provider)})]
+        {:ok? (= -1 n)
+         :id :pg-execute-params2-jvm-inject-available
+         :import :pg-execute-params2
+         :imports [:pg-execute-params2]
+         :host :jvm
+         :result n
+         :live? true
+         :note "inject wire fail-closed provider → -1"})
+      (finally
+        ((:close! provider))))))
+
+(defn- pg_execute_params-wat
+  []
+  "(module
+     (import \"kotoba\" \"pg_execute_params\" (func $f (param i64 i32 i32 i32 i32 i32 i32 i32 i32) (result i32)))
+     (memory (export \"memory\") 1)
+     (func (export \"main\") (result i64)
+       (i64.extend_i32_s (call $f (i64.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0)))))")
+
+(defn- prove-pg-execute-params-jvm
+  "Live-prove :pg-execute-params inject fail-closed (→ -1)."
+  []
+  (let [wasm (wat->wasm (pg_execute_params-wat))
+        caps {:grants #{:pg-execute-params}
+              :limits {:allow-write-imports? true}}
+        provider (pg-wire/fail-closed-inject-provider)]
+    (try
+      (let [n (tender/run-main wasm [:pg-execute-params] caps
+                               {:provider-host-functions
+                                (:host-functions provider)})]
+        {:ok? (= -1 n)
+         :id :pg-execute-params-jvm-inject-available
+         :import :pg-execute-params
+         :imports [:pg-execute-params]
+         :host :jvm
+         :result n
+         :live? true
+         :note "inject wire fail-closed provider → -1"})
+      (finally
+        ((:close! provider))))))
+
+(defn- pg_bind_portal-wat
+  []
+  "(module
+     (import \"kotoba\" \"pg_bind_portal\" (func $f (param i64 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32) (result i32)))
+     (memory (export \"memory\") 1)
+     (func (export \"main\") (result i64)
+       (i64.extend_i32_s (call $f (i64.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0)))))")
+
+(defn- prove-pg-bind-portal-jvm
+  "Live-prove :pg-bind-portal inject fail-closed (→ -1)."
+  []
+  (let [wasm (wat->wasm (pg_bind_portal-wat))
+        caps {:grants #{:pg-bind-portal}
+              :limits {:allow-write-imports? true}}
+        provider (pg-wire/fail-closed-inject-provider)]
+    (try
+      (let [n (tender/run-main wasm [:pg-bind-portal] caps
+                               {:provider-host-functions
+                                (:host-functions provider)})]
+        {:ok? (= -1 n)
+         :id :pg-bind-portal-jvm-inject-available
+         :import :pg-bind-portal
+         :imports [:pg-bind-portal]
+         :host :jvm
+         :result n
+         :live? true
+         :note "inject wire fail-closed provider → -1"})
+      (finally
+        ((:close! provider))))))
+
+(defn- pg_fetch_portal-wat
+  []
+  "(module
+     (import \"kotoba\" \"pg_fetch_portal\" (func $f (param i64 i32 i32 i32 i32 i32 i32 i32) (result i32)))
+     (memory (export \"memory\") 1)
+     (func (export \"main\") (result i64)
+       (i64.extend_i32_s (call $f (i64.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0)))))")
+
+(defn- prove-pg-fetch-portal-jvm
+  "Live-prove :pg-fetch-portal inject fail-closed (→ -1)."
+  []
+  (let [wasm (wat->wasm (pg_fetch_portal-wat))
+        caps {:grants #{:pg-fetch-portal}
+              :limits {:allow-write-imports? true}}
+        provider (pg-wire/fail-closed-inject-provider)]
+    (try
+      (let [n (tender/run-main wasm [:pg-fetch-portal] caps
+                               {:provider-host-functions
+                                (:host-functions provider)})]
+        {:ok? (= -1 n)
+         :id :pg-fetch-portal-jvm-inject-available
+         :import :pg-fetch-portal
+         :imports [:pg-fetch-portal]
+         :host :jvm
+         :result n
+         :live? true
+         :note "inject wire fail-closed provider → -1"})
+      (finally
+        ((:close! provider))))))
+
+(defn- pg_close_portal-wat
+  []
+  "(module
+     (import \"kotoba\" \"pg_close_portal\" (func $f (param i64 i32 i32 i32 i32 i32 i32) (result i32)))
+     (memory (export \"memory\") 1)
+     (func (export \"main\") (result i64)
+       (i64.extend_i32_s (call $f (i64.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0)))))")
+
+(defn- prove-pg-close-portal-jvm
+  "Live-prove :pg-close-portal inject fail-closed (→ -1)."
+  []
+  (let [wasm (wat->wasm (pg_close_portal-wat))
+        caps {:grants #{:pg-close-portal}
+              :limits {:allow-write-imports? true}}
+        provider (pg-wire/fail-closed-inject-provider)]
+    (try
+      (let [n (tender/run-main wasm [:pg-close-portal] caps
+                               {:provider-host-functions
+                                (:host-functions provider)})]
+        {:ok? (= -1 n)
+         :id :pg-close-portal-jvm-inject-available
+         :import :pg-close-portal
+         :imports [:pg-close-portal]
+         :host :jvm
+         :result n
+         :live? true
+         :note "inject wire fail-closed provider → -1"})
+      (finally
+        ((:close! provider))))))
+
+(defn- pg_copy_out-wat
+  []
+  "(module
+     (import \"kotoba\" \"pg_copy_out\" (func $f (param i64 i32 i32 i32 i32 i32 i32) (result i32)))
+     (memory (export \"memory\") 1)
+     (func (export \"main\") (result i64)
+       (i64.extend_i32_s (call $f (i64.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0)))))")
+
+(defn- prove-pg-copy-out-jvm
+  "Live-prove :pg-copy-out inject fail-closed (→ -1)."
+  []
+  (let [wasm (wat->wasm (pg_copy_out-wat))
+        caps {:grants #{:pg-copy-out}
+              :limits {:allow-write-imports? true}}
+        provider (pg-wire/fail-closed-inject-provider)]
+    (try
+      (let [n (tender/run-main wasm [:pg-copy-out] caps
+                               {:provider-host-functions
+                                (:host-functions provider)})]
+        {:ok? (= -1 n)
+         :id :pg-copy-out-jvm-inject-available
+         :import :pg-copy-out
+         :imports [:pg-copy-out]
+         :host :jvm
+         :result n
+         :live? true
+         :note "inject wire fail-closed provider → -1"})
+      (finally
+        ((:close! provider))))))
+
+(defn- pg_copy_in-wat
+  []
+  "(module
+     (import \"kotoba\" \"pg_copy_in\" (func $f (param i64 i32 i32 i32 i32 i32 i32 i32 i32) (result i32)))
+     (memory (export \"memory\") 1)
+     (func (export \"main\") (result i64)
+       (i64.extend_i32_s (call $f (i64.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0)))))")
+
+(defn- prove-pg-copy-in-jvm
+  "Live-prove :pg-copy-in inject fail-closed (→ -1)."
+  []
+  (let [wasm (wat->wasm (pg_copy_in-wat))
+        caps {:grants #{:pg-copy-in}
+              :limits {:allow-write-imports? true}}
+        provider (pg-wire/fail-closed-inject-provider)]
+    (try
+      (let [n (tender/run-main wasm [:pg-copy-in] caps
+                               {:provider-host-functions
+                                (:host-functions provider)})]
+        {:ok? (= -1 n)
+         :id :pg-copy-in-jvm-inject-available
+         :import :pg-copy-in
+         :imports [:pg-copy-in]
+         :host :jvm
+         :result n
+         :live? true
+         :note "inject wire fail-closed provider → -1"})
+      (finally
+        ((:close! provider))))))
+
+(defn- pg_execute_batch-wat
+  []
+  "(module
+     (import \"kotoba\" \"pg_execute_batch\" (func $f (param i64 i32 i32 i32 i32 i32 i32 i32) (result i32)))
+     (memory (export \"memory\") 1)
+     (func (export \"main\") (result i64)
+       (i64.extend_i32_s (call $f (i64.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0)))))")
+
+(defn- prove-pg-execute-batch-jvm
+  "Live-prove :pg-execute-batch inject fail-closed (→ -1)."
+  []
+  (let [wasm (wat->wasm (pg_execute_batch-wat))
+        caps {:grants #{:pg-execute-batch}
+              :limits {:allow-write-imports? true}}
+        provider (pg-wire/fail-closed-inject-provider)]
+    (try
+      (let [n (tender/run-main wasm [:pg-execute-batch] caps
+                               {:provider-host-functions
+                                (:host-functions provider)})]
+        {:ok? (= -1 n)
+         :id :pg-execute-batch-jvm-inject-available
+         :import :pg-execute-batch
+         :imports [:pg-execute-batch]
+         :host :jvm
+         :result n
+         :live? true
+         :note "inject wire fail-closed provider → -1"})
+      (finally
+        ((:close! provider))))))
+
 (def jvm-live-corpus
   "Host-parity case ids that this runner can live-prove on JVM tender.
   Ids match lang/host-parity.edn :conformance :cases where listed;
@@ -1403,6 +1703,36 @@
    {:id :pg-close-statement-jvm-inject-available
     :import :pg-close-statement
     :prove prove-pg-close-statement-jvm}
+   {:id :pg-query-state-jvm-inject-available
+    :import :pg-query-state
+    :prove prove-pg-query-state-jvm}
+   {:id :pg-prepare-typed-jvm-inject-available
+    :import :pg-prepare-typed
+    :prove prove-pg-prepare-typed-jvm}
+   {:id :pg-execute-params2-jvm-inject-available
+    :import :pg-execute-params2
+    :prove prove-pg-execute-params2-jvm}
+   {:id :pg-execute-params-jvm-inject-available
+    :import :pg-execute-params
+    :prove prove-pg-execute-params-jvm}
+   {:id :pg-bind-portal-jvm-inject-available
+    :import :pg-bind-portal
+    :prove prove-pg-bind-portal-jvm}
+   {:id :pg-fetch-portal-jvm-inject-available
+    :import :pg-fetch-portal
+    :prove prove-pg-fetch-portal-jvm}
+   {:id :pg-close-portal-jvm-inject-available
+    :import :pg-close-portal
+    :prove prove-pg-close-portal-jvm}
+   {:id :pg-copy-out-jvm-inject-available
+    :import :pg-copy-out
+    :prove prove-pg-copy-out-jvm}
+   {:id :pg-copy-in-jvm-inject-available
+    :import :pg-copy-in
+    :prove prove-pg-copy-in-jvm}
+   {:id :pg-execute-batch-jvm-inject-available
+    :import :pg-execute-batch
+    :prove prove-pg-execute-batch-jvm}
    {:id :http-fetch-jvm-available
     :import :http-fetch
     :prove prove-http-fetch-jvm}

@@ -202,6 +202,46 @@
      :import/name "pg-close-statement"
      :import/category :network
      :import/effects #{:network}}
+    {:import/id :pg-query-state
+     :import/name "pg-query-state"
+     :import/category :network
+     :import/effects #{:network}}
+    {:import/id :pg-prepare-typed
+     :import/name "pg-prepare-typed"
+     :import/category :network
+     :import/effects #{:network :write}}
+    {:import/id :pg-execute-params2
+     :import/name "pg-execute-params2"
+     :import/category :network
+     :import/effects #{:network :write}}
+    {:import/id :pg-execute-params
+     :import/name "pg-execute-params"
+     :import/category :network
+     :import/effects #{:network :write}}
+    {:import/id :pg-bind-portal
+     :import/name "pg-bind-portal"
+     :import/category :network
+     :import/effects #{:network :write}}
+    {:import/id :pg-fetch-portal
+     :import/name "pg-fetch-portal"
+     :import/category :network
+     :import/effects #{:network}}
+    {:import/id :pg-close-portal
+     :import/name "pg-close-portal"
+     :import/category :network
+     :import/effects #{:network}}
+    {:import/id :pg-copy-out
+     :import/name "pg-copy-out"
+     :import/category :network
+     :import/effects #{:network}}
+    {:import/id :pg-copy-in
+     :import/name "pg-copy-in"
+     :import/category :network
+     :import/effects #{:network :write}}
+    {:import/id :pg-execute-batch
+     :import/name "pg-execute-batch"
+     :import/category :network
+     :import/effects #{:network :write}}
     ;; Component-only linear resources. Core-Wasm tenders do not bind these
     ;; names; they are present in HostCaps so the Component adapter can carry
     ;; Aiueos decisions to individual WIT providers without an ambient escape.
