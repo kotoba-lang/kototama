@@ -151,6 +151,16 @@
              :note "JVM postgresql-wire-provider fail-closed inject; browser native boundary"}
    :pg-execute-batch {:jvm :inject :browser :no :node :inject
              :note "JVM postgresql-wire-provider fail-closed inject; browser native boundary"}
+   :pg-open-scram {:jvm :inject :browser :no :node :inject
+             :note "JVM postgresql-wire-provider fail-closed inject; browser native boundary"}
+   :pg-open-scram-random {:jvm :inject :browser :no :node :inject
+             :note "JVM postgresql-wire-provider fail-closed inject; browser native boundary"}
+   :pg-open-scram-cancellable-random {:jvm :inject :browser :no :node :inject
+             :note "JVM postgresql-wire-provider fail-closed inject; browser native boundary"}
+   :pg-cancel-authority-use {:jvm :inject :browser :no :node :inject
+             :note "JVM postgresql-wire-provider fail-closed inject; browser native boundary"}
+   :pg-close-scram {:jvm :inject :browser :no :node :inject
+             :note "JVM postgresql-wire-provider fail-closed inject; browser native boundary"}
    :http-get-stream {:jvm :yes :browser :inject :node :inject
                      :note "linear Component provider; browser/node require an injected bounded stream adapter"}
    :object-get-stream {:jvm :yes :browser :inject :node :inject

@@ -242,6 +242,27 @@
      :import/name "pg-execute-batch"
      :import/category :network
      :import/effects #{:network :write}}
+    ;; SCRAM wire inject (T8.4 remaining wire beyond portal/copy/batch).
+    {:import/id :pg-open-scram
+     :import/name "pg-open-scram"
+     :import/category :network
+     :import/effects #{:network}}
+    {:import/id :pg-open-scram-random
+     :import/name "pg-open-scram-random"
+     :import/category :network
+     :import/effects #{:network}}
+    {:import/id :pg-open-scram-cancellable-random
+     :import/name "pg-open-scram-cancellable-random"
+     :import/category :network
+     :import/effects #{:network}}
+    {:import/id :pg-cancel-authority-use
+     :import/name "pg-cancel-authority-use"
+     :import/category :network
+     :import/effects #{:network}}
+    {:import/id :pg-close-scram
+     :import/name "pg-close-scram"
+     :import/category :network
+     :import/effects #{:network}}
     ;; Component-only linear resources. Core-Wasm tenders do not bind these
     ;; names; they are present in HostCaps so the Component adapter can carry
     ;; Aiueos decisions to individual WIT providers without an ambient escape.

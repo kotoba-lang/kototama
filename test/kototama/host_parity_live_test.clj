@@ -52,6 +52,11 @@
                 :pg-copy-out-jvm-inject-available
                 :pg-copy-in-jvm-inject-available
                 :pg-execute-batch-jvm-inject-available
+                :pg-open-scram-jvm-inject-available
+                :pg-open-scram-random-jvm-inject-available
+                :pg-open-scram-cancellable-random-jvm-inject-available
+                :pg-cancel-authority-use-jvm-inject-available
+                :pg-close-scram-jvm-inject-available
                 :http-post-headers-jvm-available
                 :json-extract-field-jvm-live]]
       (is (contains? ids id) (str id)))))
@@ -60,8 +65,8 @@
   (let [r (live/run-jvm-live)]
     (is (true? (:ok? r))
         (str "live failures: " (pr-str (:failed r))))
-    (is (= 49 (:total r)))
-    (is (= 49 (:passed r)))
+    (is (= 54 (:total r)))
+    (is (= 54 (:passed r)))
     (is (empty? (:failed r)))
     (doseq [row (:results r)]
       (testing (str (:id row))
