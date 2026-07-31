@@ -127,43 +127,43 @@
               :note "JVM postgresql-wire-provider fail-closed inject; browser native boundary"}
    :pg-simple-query {:jvm :inject :browser :no :node :inject
                      :note "JVM postgresql-wire-provider fail-closed inject; browser native boundary"}
-   :pg-prepare {:jvm :inject :browser :no :node :no
+   :pg-prepare {:jvm :inject :browser :no :node :inject
                 :note "JVM postgresql-wire-provider fail-closed inject; browser native boundary"}
-   :pg-session-reset {:jvm :inject :browser :no :node :no
+   :pg-session-reset {:jvm :inject :browser :no :node :inject
                       :note "JVM postgresql-wire-provider fail-closed inject; browser native boundary"}
-   :pg-close-statement {:jvm :inject :browser :no :node :no
+   :pg-close-statement {:jvm :inject :browser :no :node :inject
                         :note "JVM postgresql-wire-provider fail-closed inject; browser native boundary"}
-   :pg-query-state {:jvm :inject :browser :no :node :no
+   :pg-query-state {:jvm :inject :browser :no :node :inject
              :note "JVM postgresql-wire-provider fail-closed inject; browser native boundary"}
-   :pg-prepare-typed {:jvm :inject :browser :no :node :no
+   :pg-prepare-typed {:jvm :inject :browser :no :node :inject
              :note "JVM postgresql-wire-provider fail-closed inject; browser native boundary"}
-   :pg-execute-params2 {:jvm :inject :browser :no :node :no
+   :pg-execute-params2 {:jvm :inject :browser :no :node :inject
              :note "JVM postgresql-wire-provider fail-closed inject; browser native boundary"}
-   :pg-execute-params {:jvm :inject :browser :no :node :no
+   :pg-execute-params {:jvm :inject :browser :no :node :inject
              :note "JVM postgresql-wire-provider fail-closed inject; browser native boundary"}
-   :pg-bind-portal {:jvm :inject :browser :no :node :no
+   :pg-bind-portal {:jvm :inject :browser :no :node :inject
              :note "JVM postgresql-wire-provider fail-closed inject; browser native boundary"}
-   :pg-fetch-portal {:jvm :inject :browser :no :node :no
+   :pg-fetch-portal {:jvm :inject :browser :no :node :inject
              :note "JVM postgresql-wire-provider fail-closed inject; browser native boundary"}
-   :pg-close-portal {:jvm :inject :browser :no :node :no
+   :pg-close-portal {:jvm :inject :browser :no :node :inject
              :note "JVM postgresql-wire-provider fail-closed inject; browser native boundary"}
-   :pg-copy-out {:jvm :inject :browser :no :node :no
+   :pg-copy-out {:jvm :inject :browser :no :node :inject
              :note "JVM postgresql-wire-provider fail-closed inject; browser native boundary"}
-   :pg-copy-in {:jvm :inject :browser :no :node :no
+   :pg-copy-in {:jvm :inject :browser :no :node :inject
              :note "JVM postgresql-wire-provider fail-closed inject; browser native boundary"}
-   :pg-execute-batch {:jvm :inject :browser :no :node :no
+   :pg-execute-batch {:jvm :inject :browser :no :node :inject
              :note "JVM postgresql-wire-provider fail-closed inject; browser native boundary"}
    :scram-sha256 {:jvm :yes :browser :no :node :inject
              :note "JVM host crypto; Node: actor-host PBKDF2/HMAC inject (wasm-webcomponent#18); browser intentional absence"}
-   :pg-open-scram {:jvm :inject :browser :no :node :no
+   :pg-open-scram {:jvm :inject :browser :no :node :inject
              :note "JVM postgresql-wire-provider fail-closed inject; browser native boundary"}
-   :pg-open-scram-random {:jvm :inject :browser :no :node :no
+   :pg-open-scram-random {:jvm :inject :browser :no :node :inject
              :note "JVM postgresql-wire-provider fail-closed inject; browser native boundary"}
-   :pg-open-scram-cancellable-random {:jvm :inject :browser :no :node :no
+   :pg-open-scram-cancellable-random {:jvm :inject :browser :no :node :inject
              :note "JVM postgresql-wire-provider fail-closed inject; browser native boundary"}
-   :pg-cancel-authority-use {:jvm :inject :browser :no :node :no
+   :pg-cancel-authority-use {:jvm :inject :browser :no :node :inject
              :note "JVM postgresql-wire-provider fail-closed inject; browser native boundary"}
-   :pg-close-scram {:jvm :inject :browser :no :node :no
+   :pg-close-scram {:jvm :inject :browser :no :node :inject
              :note "JVM postgresql-wire-provider fail-closed inject; browser native boundary"}
    :http-get-stream {:jvm :yes :browser :inject :node :inject
                      :note "linear Component provider; browser/node require an injected bounded stream adapter"}
