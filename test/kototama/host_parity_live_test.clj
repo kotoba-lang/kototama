@@ -32,15 +32,18 @@
                 :pg-pool-query-jvm-inject-available
                 :pg-pool-release-jvm-inject-available
                 :pg-pool-stats-jvm-inject-available
-                :pg-pool-drain-jvm-inject-available]]
+                :pg-pool-drain-jvm-inject-available
+                :http-fetch-jvm-available
+                :http-post-headers-jvm-available
+                :json-extract-field-jvm-live]]
       (is (contains? ids id) (str id)))))
 
 (deftest run-jvm-live-proves-all-corpus-entries
   (let [r (live/run-jvm-live)]
     (is (true? (:ok? r))
         (str "live failures: " (pr-str (:failed r))))
-    (is (= 28 (:total r)))
-    (is (= 28 (:passed r)))
+    (is (= 31 (:total r)))
+    (is (= 31 (:passed r)))
     (is (empty? (:failed r)))
     (doseq [row (:results r)]
       (testing (str (:id row))
