@@ -24,7 +24,7 @@ const siblingActorHost = path.resolve(here, '../../wasm-webcomponent/src/actor-h
 // also try when this repo is named kototama (not kototama-t84)
 const siblingActorHostAlt = path.resolve(here, '../../../orgs/kotoba-lang/wasm-webcomponent/src/actor-host.js');
 // Includes actor-host `random-bytes` + `kagi-sign` inject (2026-07-31).
-const WASM_WEBCOMPONENT_COMMIT = 'bda77a674f0ea6a9fc6541327a4690531fc7c2a3';
+const WASM_WEBCOMPONENT_COMMIT = 'e5b5c0d14ab89fee570f6d1e8c2aca1fe1747eec';
 const SRC_FILES = [
   'src/actor-host.js',
   'src/vendor/curves/ed25519.js',
@@ -351,6 +351,134 @@ const corpus = [
       (func (export "main") (result i64)
         (i64.extend_i32_s (call $tr (i64.const 0) (i32.const 0) (i32.const 8)))))`,
   },
+
+  {
+    id: 'pg-pool-open-node-inject-available',
+    imports: ['pg-pool-open'],
+    check: (n) => Number(n) === -1,
+    wat: `(module
+      (import "kotoba" "pg_pool_open"
+        (func $o (param i32 i32 i32 i32 i32 i32 i32 i32 i32) (result i32)))
+      (memory (export "memory") 1)
+      (data (i32.const 0) "h")
+      (data (i32.const 8) "u")
+      (data (i32.const 16) "d")
+      (data (i32.const 24) "c")
+      (func (export "main") (result i64)
+        (i64.extend_i32_s
+          (call $o
+            (i32.const 0) (i32.const 1)
+            (i32.const 5432)
+            (i32.const 8) (i32.const 1)
+            (i32.const 16) (i32.const 1)
+            (i32.const 24) (i32.const 1)))))`,
+  },
+  {
+    id: 'pg-pool-acquire-node-inject-available',
+    imports: ['pg-pool-acquire'],
+    check: (n) => Number(n) === -1,
+    wat: `(module
+      (import "kotoba" "pg_pool_acquire" (func $a (param i32) (result i32)))
+      (func (export "main") (result i64)
+        (i64.extend_i32_s (call $a (i32.const 99)))))`,
+  },
+  {
+    id: 'pg-pool-health-node-inject-available',
+    imports: ['pg-pool-health'],
+    check: (n) => Number(n) === -1,
+    wat: `(module
+      (import "kotoba" "pg_pool_health" (func $h (param i32) (result i32)))
+      (func (export "main") (result i64)
+        (i64.extend_i32_s (call $h (i32.const 99)))))`,
+  },
+  {
+    id: 'pg-pool-close-node-inject-available',
+    imports: ['pg-pool-close'],
+    check: (n) => Number(n) === -1,
+    wat: `(module
+      (import "kotoba" "pg_pool_close" (func $c (param i32) (result i32)))
+      (func (export "main") (result i64)
+        (i64.extend_i32_s (call $c (i32.const 99)))))`,
+  },
+  {
+    id: 'pg-open-node-inject-available',
+    imports: ['pg-open'],
+    check: (n) => Number(n) === 0,
+    wat: `(module
+      (import "kotoba" "pg_open"
+        (func $o (param i32 i32 i32 i32 i32 i32 i32) (result i64)))
+      (memory (export "memory") 1)
+      (data (i32.const 0) "h")
+      (data (i32.const 8) "u")
+      (data (i32.const 16) "d")
+      (func (export "main") (result i64)
+        (call $o
+          (i32.const 0) (i32.const 1)
+          (i32.const 5432)
+          (i32.const 8) (i32.const 1)
+          (i32.const 16) (i32.const 1))))`,
+  },
+  {
+    id: 'pg-query-node-inject-available',
+    imports: ['pg-query'],
+    check: (n) => Number(n) === -1,
+    wat: `(module
+      (import "kotoba" "pg_query"
+        (func $q (param i64 i32 i32 i32 i32) (result i32)))
+      (memory (export "memory") 1)
+      (data (i32.const 0) "SELECT 1")
+      (func (export "main") (result i64)
+        (i64.extend_i32_s
+          (call $q
+            (i64.const 0)
+            (i32.const 0) (i32.const 8)
+            (i32.const 64) (i32.const 256)))))`,
+  },
+  {
+    id: 'scram-sha256-node-deny-available',
+    imports: ['scram-sha256'],
+    check: (n) => Number(n) === -1,
+    wat: `(module
+      (import "kotoba" "scram_sha256"
+        (func $scram (param i32 i32 i32 i32 i32 i32 i32 i32 i32) (result i32)))
+      (memory (export "memory") 1)
+      (data (i32.const 0) "db/primary")
+      (data (i32.const 32) "saltsalt")
+      (data (i32.const 64) "n,,n=u,r=r1,r=r2,c=biws,p=x")
+      (func (export "main") (result i64)
+        (i64.extend_i32_s
+          (call $scram
+            (i32.const 0) (i32.const 10)
+            (i32.const 32) (i32.const 8)
+            (i32.const 4096)
+            (i32.const 64) (i32.const 28)
+            (i32.const 128) (i32.const 64)))))`,
+  },
+  {
+    id: 'scram-sha256-node-available',
+    imports: ['scram-sha256'],
+    inject: {
+      scramCredentials: { 'db/primary': 's3cret' },
+      scramCredentialAllowlist: new Set(['db/primary']),
+    },
+    check: (n) => Number(n) === 64,
+    wat: `(module
+      (import "kotoba" "scram_sha256"
+        (func $scram (param i32 i32 i32 i32 i32 i32 i32 i32 i32) (result i32)))
+      (memory (export "memory") 1)
+      (data (i32.const 0) "db/primary")
+      (data (i32.const 32) "saltsalt")
+      (data (i32.const 64) "n,,n=u,r=r1,r=r2,c=biws,p=x")
+      (func (export "main") (result i64)
+        (i64.extend_i32_s
+          (call $scram
+            (i32.const 0) (i32.const 10)
+            (i32.const 32) (i32.const 8)
+            (i32.const 4096)
+            (i32.const 64) (i32.const 28)
+            (i32.const 128) (i32.const 64)))))`,
+  },
+
 
 ];
 

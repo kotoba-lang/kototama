@@ -1,6 +1,6 @@
 # Grade A / T8.4 — live host runners (JVM + Node)
 
-- Status: partial (JVM 56 + Node 21 inject/live; **live SCRAM/PG success via** `clojure -M:postgresql-interop`; **scram-sha256 host crypto live-proven**)
+- Status: partial (JVM 56 + Node 29 inject/live; **live SCRAM/PG success via** `clojure -M:postgresql-interop`; **scram-sha256 host crypto live-proven**)
 - Date: 2026-07-31
 - WBS: T8.4
 
@@ -77,6 +77,14 @@ Node WebAssembly + wasm-webcomponent `actor-host.js` for:
 | `:transport-close-node-inject-available` | `:transport-close` fail-closed (-1) |
 | `:transport-write-node-inject-available` | `:transport-write` fail-closed (-1) |
 | `:transport-read-node-inject-available` | `:transport-read` fail-closed (-1) |
+| `:pg-pool-open-node-inject-available` | `:pg-pool-open` fail-closed (-1) |
+| `:pg-pool-acquire-node-inject-available` | `:pg-pool-acquire` fail-closed (-1) |
+| `:pg-pool-health-node-inject-available` | `:pg-pool-health` fail-closed (-1) |
+| `:pg-pool-close-node-inject-available` | `:pg-pool-close` fail-closed (-1) |
+| `:pg-open-node-inject-available` | `:pg-open` fail-closed (handle 0) |
+| `:pg-query-node-inject-available` | `:pg-query` fail-closed (-1) |
+| `:scram-sha256-node-deny-available` | `:scram-sha256` deny without credentials |
+| `:scram-sha256-node-available` | `:scram-sha256` host crypto inject (64-byte proof) |
 | `:http-fetch-node-inject-available` | `:http-fetch` + inject + allowlist |
 | `:http-post-headers-node-inject-available` | `:http-post-headers` + inject |
 | `:json-extract-field-node-live` | `:json-extract-field` pure host |
@@ -92,7 +100,7 @@ Emits `HOST_PARITY_LIVE_JSON:` for Clojure integration (`run-node-live`).
 
 ## Non-claims
 
-- Transport/TLS Node inject fail-closed proven (wasm-webcomponent#17). pg wire/pool/SCRAM Node still residual
+- Transport/TLS + pg-pool/wire/scram Node inject fail-closed proven (wasm-webcomponent#17+#18). Residual: deeper wire (prepare/portal/copy) Node inject optional
 - Live SCRAM-SHA-256-PLUS *session* success is proven by `clojure -M:postgresql-interop`
   (ephemeral PG + TLS + SCRAM guest providers); not embedded in the 56 JVM inject corpus
 - `:scram-sha256` **host crypto** is live-proven in the JVM corpus (credentials inject;
@@ -100,14 +108,14 @@ Emits `HOST_PARITY_LIVE_JSON:` for Clojure integration (`run-node-live`).
 - Not signed ops AOT Components (T8.3)
 - Does not replace pure matrix `run-conformance`
 - Not claim T8.4 complete
-- JVM live corpus: 56 proofs; Node: 21 proofs (incl. transport inject fail-closed)
+- JVM live corpus: 56 proofs; Node: 29 proofs (incl. transport inject fail-closed)
 - Loopback success is plain TCP (not TLS mutual-auth / production network ABAC)
 - Pool inject uses `fail-closed-inject-provider` (no live PostgreSQL)
 
 ## Evidence
 
 - `test/kototama/host_parity_live_test.clj` (56 JVM live proofs)
-- `node web/verify-host-parity-live.mjs` (21 Node proofs)
+- `node web/verify-host-parity-live.mjs` (29 Node proofs)
 
 ## Related
 
