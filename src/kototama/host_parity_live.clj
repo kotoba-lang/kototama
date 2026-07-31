@@ -159,6 +159,120 @@
                                (i32.const 50) (i32.const 4)
                                (i32.const 200) (i32.const 256)))))"))
 
+
+(defn- http-fetch-wat
+  "http_fetch guest; URL baked into data segment (ASCII, no quotes)."
+  [url]
+  (str "(module
+          (import \"kotoba\" \"http_fetch\" (func $http_fetch (param i32 i32 i32 i32) (result i32)))
+          (memory (export \"memory\") 1)
+          (data (i32.const 0) \"" url "\")
+          (func (export \"main\") (result i64)
+            (i64.extend_i32_s
+              (call $http_fetch (i32.const 0) (i32.const " (count url) ")
+                                (i32.const 200) (i32.const 256)))))"))
+
+(defn- prove-http-fetch-jvm
+  "Live-prove :http-fetch links and SSRF gate runs (loopback fail-closed -1)."
+  []
+  (let [url "http://127.0.0.1:9/"
+        wasm (wat->wasm (http-fetch-wat url))
+        caps (contract/host-caps {:grants [:http-fetch]
+                                  :limits {:max-http-fetches 1}})
+        started (System/currentTimeMillis)
+        n (tender/run-main wasm [:http-fetch] caps)
+        elapsed (- (System/currentTimeMillis) started)]
+    {:ok? (and (= -1 n) (< elapsed 2000))
+     :id :http-fetch-jvm-available
+     :import :http-fetch
+     :imports [:http-fetch]
+     :host :jvm
+     :result n
+     :elapsed-ms elapsed
+     :live? true
+     :note "fail-closed loopback proves host linked + SSRF gate"}))
+
+(defn- wat-escape
+  "Escape for WAT data string literals (TAB/LF/quote/backslash)."
+  [^String s]
+  (-> s
+      (str/replace "\\" "\\\\")
+      (str/replace "\"" "\\\"")
+      (str/replace "\t" "\\t")
+      (str/replace "\n" "\\n")))
+
+(defn- http-post-headers-wat
+  "http_post_headers guest; URL/body/headers at fixed offsets."
+  [url body headers]
+  (str "(module
+          (import \"kotoba\" \"http_post_headers\"
+            (func $h (param i32 i32 i32 i32 i32 i32 i32 i32) (result i32)))
+          (memory (export \"memory\") 1)
+          (data (i32.const 0) \"" (wat-escape url) "\")
+          (data (i32.const 100) \"" (wat-escape body) "\")
+          (data (i32.const 200) \"" (wat-escape headers) "\")
+          (func (export \"main\") (result i64)
+            (i64.extend_i32_s
+              (call $h (i32.const 0) (i32.const " (count url) ")
+                       (i32.const 100) (i32.const " (count body) ")
+                       (i32.const 200) (i32.const " (count headers) ")
+                       (i32.const 500) (i32.const 256)))))"))
+
+(defn- prove-http-post-headers-jvm
+  "Live-prove :http-post-headers SSRF gate (loopback fail-closed -1)."
+  []
+  (let [url "http://127.0.0.1:9/"
+        body "body"
+        headers "X-Test\t1"
+        wasm (wat->wasm (http-post-headers-wat url body headers))
+        caps (contract/host-caps {:grants [:http-post-headers]
+                                  :limits {:max-http-posts 1}})
+        started (System/currentTimeMillis)
+        n (tender/run-main wasm [:http-post-headers] caps)
+        elapsed (- (System/currentTimeMillis) started)]
+    {:ok? (and (= -1 n) (< elapsed 2000))
+     :id :http-post-headers-jvm-available
+     :import :http-post-headers
+     :imports [:http-post-headers]
+     :host :jvm
+     :result n
+     :elapsed-ms elapsed
+     :live? true
+     :note "fail-closed loopback proves host linked + SSRF gate"}))
+
+(defn- json-extract-field-wat
+  "json_extract_field guest; JSON at 0, field at 100, out at 300."
+  [json-text field out-cap]
+  (str "(module
+          (import \"kotoba\" \"json_extract_field\"
+            (func $j (param i32 i32 i32 i32 i32 i32) (result i32)))
+          (memory (export \"memory\") 1)
+          (data (i32.const 0) \"" (wat-escape json-text) "\")
+          (data (i32.const 100) \"" (wat-escape field) "\")
+          (func (export \"main\") (result i64)
+            (i64.extend_i32_s
+              (call $j (i32.const 0) (i32.const " (count json-text) ")
+                       (i32.const 100) (i32.const " (count field) ")
+                       (i32.const 300) (i32.const " out-cap ")))))"))
+
+(defn- prove-json-extract-field-jvm
+  "Live-prove :json-extract-field pure host (extract \"ok\" from {\"x\":\"ok\"})."
+  []
+  (let [json-text "{\"x\":\"ok\"}"
+        field "x"
+        wasm (wat->wasm (json-extract-field-wat json-text field 64))
+        caps (contract/host-caps {:grants [:json-extract-field]
+                                  :limits {}})
+        n (tender/run-main wasm [:json-extract-field] caps)]
+    {:ok? (= 2 n) ;; "ok"
+     :id :json-extract-field-jvm-live
+     :import :json-extract-field
+     :imports [:json-extract-field]
+     :host :jvm
+     :result n
+     :live? true
+     :note "pure host extract string field — no network"}))
+
 (def ^:private llm-infer-wat
   "(module
      (import \"kotoba\" \"llm_infer\" (func $llm_infer (param i32 i32 i32 i32) (result i32)))
@@ -958,7 +1072,16 @@
     :prove prove-pg-pool-stats-jvm}
    {:id :pg-pool-drain-jvm-inject-available
     :import :pg-pool-drain
-    :prove prove-pg-pool-drain-jvm}])
+    :prove prove-pg-pool-drain-jvm}
+   {:id :http-fetch-jvm-available
+    :import :http-fetch
+    :prove prove-http-fetch-jvm}
+   {:id :http-post-headers-jvm-available
+    :import :http-post-headers
+    :prove prove-http-post-headers-jvm}
+   {:id :json-extract-field-jvm-live
+    :import :json-extract-field
+    :prove prove-json-extract-field-jvm}])
 
 (defn prove-import
   "Live-run one corpus entry on JVM tender. Returns
@@ -1017,7 +1140,7 @@
      :failed failed
      :results results
      :case-ids (mapv :id jvm-live-corpus)
-     :note "T8.4: JVM tender live proofs (crypto/clock/log/cbor/json/http/llm/kagi/transport/pg-pool)."}))
+     :note "T8.4: JVM tender live proofs (crypto/clock/log/cbor/json/http-fetch/headers/llm/kagi/transport/pg-pool)."}))
 
 (defn run-node-live
   "Shell out to web/verify-host-parity-live.mjs (Node WebAssembly + actor-host).
