@@ -1,5 +1,5 @@
 {:tcb/version 1
- :tcb/as-of "2026-07-26"
+ :tcb/as-of "2026-07-31"
  :tcb/scope
  "Code whose compromise can grant actor:host authority, bypass production
   admission or resource containment, or cross a
@@ -16,7 +16,7 @@
   {:path "src/kototama/component_authority_daemon.clj" :role :component-authority-daemon
    :sha256 "fd399b2f2e0c7dbd5ed51ea1d3cd2151a144c173b3cba6f7aa16cb590b006834"}
   {:path "src/kototama/browser.cljc" :role :host-support-admission
-   :sha256 "8f4186c834d8ccf8852827558becc016cfc477ce0cea2e781195e2b65c738d6d"}
+   :sha256 "c6deefdb7596fe7e3fa49b60f48bb265e3861129dbca0f87072dac977e4caf42"}
   {:path "src/kototama/cli.clj" :role :operator-entrypoint
    :sha256 "ff9e5af59a8a5fc7ee5e3f01b3eed0d50bc30a1472b875ef861e08673ffdac0b"}
   {:path "src/kototama/compatibility.clj" :role :artifact-admission
@@ -30,9 +30,9 @@
   {:path "workerd/kototama-core-host.mjs" :role :workerd-provider-host-boundary
    :sha256 "cf511d788b9ed70afa2099a26089007fc7c7b8a27b5f9960421ec132a9d861f0"}
   {:path "src/kototama/contract.cljc" :role :authority-schema
-   :sha256 "aebf2f8d564add4072024be4926d954476fa243b46471dfbe2166ee169f4507e"}
+   :sha256 "8ba660047ac77b2b6f3f0672da93590ea0906c8308f66228f4f78d933afc7ffd"}
   {:path "src/kototama/guest.cljc" :role :guest-abi-mapping
-   :sha256 "21bbe8fe9bbd0e6a3a6dfba5a72f73b8f7c099c822bd46a93cfb9086bd34ea5b"}
+   :sha256 "e6c109dd44542d096d7db47287556ea85bfcd4c6dff36814aeeb181e35df3316"}
   {:path "src/kototama/linker.clj" :role :postgresql-link-boundary
    :sha256 "6cf53a05c9a7329f220cb062464007060c83ea357ed27f9c1776dc592e905641"}
   {:path "src/kototama/network_authority.clj" :role :network-provider-authority
@@ -50,7 +50,7 @@
   {:path "src/kototama/tcb.clj" :role :tcb-drift-verifier
    :sha256 "9c7c9a9527d6a7c553ea7b4712bbb3a069aff1958874086537c7dba75aeeee18"}
   {:path "src/kototama/tender.clj" :role :wasm-runtime-host-abi
-   :sha256 "7d062cce7c06438d8cc4fdedaedcb8e61d3b2450f19b09bf6366aa429bfeb052"}]
+   :sha256 "d768e093eefee1d9ce9c4787da1d6b3651d303897e28599b19855bfa4998622d"}]
  :tcb/external
  [{:coordinate "com.dylibso.chicory/wasm" :version "1.4.0"
    :role :wasm-parser}
