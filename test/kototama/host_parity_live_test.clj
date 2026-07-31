@@ -35,6 +35,9 @@
                 :pg-pool-drain-jvm-inject-available
                 :pg-cancel-register-jvm-inject-available
                 :pg-cancel-jvm-inject-available
+                :pg-open-jvm-inject-available
+                :pg-query-jvm-inject-available
+                :pg-simple-query-jvm-inject-available
                 :http-fetch-jvm-available
                 :http-post-headers-jvm-available
                 :json-extract-field-jvm-live]]
@@ -44,8 +47,8 @@
   (let [r (live/run-jvm-live)]
     (is (true? (:ok? r))
         (str "live failures: " (pr-str (:failed r))))
-    (is (= 33 (:total r)))
-    (is (= 33 (:passed r)))
+    (is (= 36 (:total r)))
+    (is (= 36 (:passed r)))
     (is (empty? (:failed r)))
     (doseq [row (:results r)]
       (testing (str (:id row))

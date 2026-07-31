@@ -48,6 +48,9 @@ WAT guests + Chicory tender for:
 | `:pg-pool-drain-jvm-inject-available` | `:pg-pool-drain` | fail-closed inject; unknown pool → -1 |
 | `:pg-cancel-register-jvm-inject-available` | `:pg-cancel-register` | inject; non-TLS handle → 0 |
 | `:pg-cancel-jvm-inject-available` | `:pg-cancel` | inject; unknown handle → -1 |
+| `:pg-open-jvm-inject-available` | `:pg-open` | wire fail-closed inject → handle 0 |
+| `:pg-query-jvm-inject-available` | `:pg-query` | wire fail-closed inject → -1 |
+| `:pg-simple-query-jvm-inject-available` | `:pg-simple-query` | wire fail-closed inject → -1 |
 | `:http-fetch-jvm-available` | `:http-fetch` | loopback fail-closed (link+SSRF) |
 | `:http-post-headers-jvm-available` | `:http-post-headers` | loopback fail-closed (link+SSRF) |
 | `:json-extract-field-jvm-live` | `:json-extract-field` | pure host extract `{"x":"ok"}` → 2 |
@@ -77,18 +80,18 @@ Emits `HOST_PARITY_LIVE_JSON:` for Clojure integration (`run-node-live`).
 ## Non-claims
 
 - Not full host-parity table (pg component-link / SCRAM surface still open;
-  all 8 `pg-pool-*` + pg-cancel inject fail-closed; no live SCRAM/PG success
+  pg-pool + pg-cancel + core wire (open/query/simple-query) inject fail-closed; no live SCRAM/PG success
   success path here)
 - Not signed ops AOT Components (T8.3)
 - Does not replace pure matrix `run-conformance`
 - Not claim T8.4 complete
-- JVM live corpus: 33 proofs; Node: 14 proofs
+- JVM live corpus: 36 proofs; Node: 14 proofs
 - Loopback success is plain TCP (not TLS mutual-auth / production network ABAC)
 - Pool inject uses `fail-closed-inject-provider` (no live PostgreSQL)
 
 ## Evidence
 
-- `test/kototama/host_parity_live_test.clj` (33 JVM live proofs)
+- `test/kototama/host_parity_live_test.clj` (36 JVM live proofs)
 - `node web/verify-host-parity-live.mjs` (14 Node proofs)
 
 ## Related
