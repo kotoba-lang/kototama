@@ -1146,6 +1146,119 @@
       (finally
         ((:close! provider))))))
 
+
+(defn- pg-prepare-wat
+  "pg_prepare on handle 0; fail-closed → -1."
+  []
+  "(module
+     (import \"kotoba\" \"pg_prepare\"
+       (func $p (param i64 i32 i32 i32 i32 i32 i32 i32 i32) (result i32)))
+     (memory (export \"memory\") 1)
+     (data (i32.const 0) \"s\")
+     (data (i32.const 8) \"SELECT 1\")
+     (func (export \"main\") (result i64)
+       (i64.extend_i32_s
+         (call $p
+           (i64.const 0)
+           (i32.const 0) (i32.const 1)
+           (i32.const 8) (i32.const 8)
+           (i32.const 32) (i32.const 64)
+           (i32.const 128) (i32.const 4)))))")
+
+(defn- prove-pg-prepare-jvm
+  "Live-prove :pg-prepare wire inject fail-closed → -1."
+  []
+  (let [wasm (wat->wasm (pg-prepare-wat))
+        caps {:grants #{:pg-prepare}
+              :limits {:allow-write-imports? true}}
+        provider (pg-wire/fail-closed-inject-provider)]
+    (try
+      (let [n (tender/run-main wasm [:pg-prepare] caps
+                               {:provider-host-functions
+                                (:host-functions provider)})]
+        {:ok? (= -1 n)
+         :id :pg-prepare-jvm-inject-available
+         :import :pg-prepare
+         :imports [:pg-prepare]
+         :host :jvm
+         :result n
+         :live? true
+         :note "inject wire fail-closed provider; prepare → -1"})
+      (finally
+        ((:close! provider))))))
+
+(defn- pg-session-reset-wat
+  "pg_session_reset on handle 0; fail-closed → -1."
+  []
+  "(module
+     (import \"kotoba\" \"pg_session_reset\"
+       (func $r (param i64 i32 i32 i32 i32) (result i32)))
+     (memory (export \"memory\") 1)
+     (func (export \"main\") (result i64)
+       (i64.extend_i32_s
+         (call $r
+           (i64.const 0)
+           (i32.const 0) (i32.const 64)
+           (i32.const 128) (i32.const 4)))))")
+
+(defn- prove-pg-session-reset-jvm
+  "Live-prove :pg-session-reset wire inject fail-closed → -1."
+  []
+  (let [wasm (wat->wasm (pg-session-reset-wat))
+        caps {:grants #{:pg-session-reset} :limits {}}
+        provider (pg-wire/fail-closed-inject-provider)]
+    (try
+      (let [n (tender/run-main wasm [:pg-session-reset] caps
+                               {:provider-host-functions
+                                (:host-functions provider)})]
+        {:ok? (= -1 n)
+         :id :pg-session-reset-jvm-inject-available
+         :import :pg-session-reset
+         :imports [:pg-session-reset]
+         :host :jvm
+         :result n
+         :live? true
+         :note "inject wire fail-closed provider; session-reset → -1"})
+      (finally
+        ((:close! provider))))))
+
+(defn- pg-close-statement-wat
+  "pg_close_statement on handle 0; fail-closed → -1."
+  []
+  "(module
+     (import \"kotoba\" \"pg_close_statement\"
+       (func $c (param i64 i32 i32 i32 i32 i32 i32) (result i32)))
+     (memory (export \"memory\") 1)
+     (data (i32.const 0) \"s\")
+     (func (export \"main\") (result i64)
+       (i64.extend_i32_s
+         (call $c
+           (i64.const 0)
+           (i32.const 0) (i32.const 1)
+           (i32.const 32) (i32.const 64)
+           (i32.const 128) (i32.const 4)))))")
+
+(defn- prove-pg-close-statement-jvm
+  "Live-prove :pg-close-statement wire inject fail-closed → -1."
+  []
+  (let [wasm (wat->wasm (pg-close-statement-wat))
+        caps {:grants #{:pg-close-statement} :limits {}}
+        provider (pg-wire/fail-closed-inject-provider)]
+    (try
+      (let [n (tender/run-main wasm [:pg-close-statement] caps
+                               {:provider-host-functions
+                                (:host-functions provider)})]
+        {:ok? (= -1 n)
+         :id :pg-close-statement-jvm-inject-available
+         :import :pg-close-statement
+         :imports [:pg-close-statement]
+         :host :jvm
+         :result n
+         :live? true
+         :note "inject wire fail-closed provider; close-statement → -1"})
+      (finally
+        ((:close! provider))))))
+
 (def jvm-live-corpus
   "Host-parity case ids that this runner can live-prove on JVM tender.
   Ids match lang/host-parity.edn :conformance :cases where listed;
@@ -1281,6 +1394,15 @@
    {:id :pg-simple-query-jvm-inject-available
     :import :pg-simple-query
     :prove prove-pg-simple-query-jvm}
+   {:id :pg-prepare-jvm-inject-available
+    :import :pg-prepare
+    :prove prove-pg-prepare-jvm}
+   {:id :pg-session-reset-jvm-inject-available
+    :import :pg-session-reset
+    :prove prove-pg-session-reset-jvm}
+   {:id :pg-close-statement-jvm-inject-available
+    :import :pg-close-statement
+    :prove prove-pg-close-statement-jvm}
    {:id :http-fetch-jvm-available
     :import :http-fetch
     :prove prove-http-fetch-jvm}

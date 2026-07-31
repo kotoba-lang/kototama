@@ -190,6 +190,18 @@
      :import/name "pg-simple-query"
      :import/category :network
      :import/effects #{:network :write}}
+    {:import/id :pg-prepare
+     :import/name "pg-prepare"
+     :import/category :network
+     :import/effects #{:network :write}}
+    {:import/id :pg-session-reset
+     :import/name "pg-session-reset"
+     :import/category :network
+     :import/effects #{:network}}
+    {:import/id :pg-close-statement
+     :import/name "pg-close-statement"
+     :import/category :network
+     :import/effects #{:network}}
     ;; Component-only linear resources. Core-Wasm tenders do not bind these
     ;; names; they are present in HostCaps so the Component adapter can carry
     ;; Aiueos decisions to individual WIT providers without an ambient escape.

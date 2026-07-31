@@ -1,6 +1,6 @@
 # Grade A / T8.4 — live host runners (JVM + Node)
 
-- Status: partial (JVM 36 + Node 16 live; + pg wire open/query/simple-query inject)
+- Status: partial (JVM 39 + Node 16 live; + pg wire open/query/simple-query inject)
 - Date: 2026-07-31
 - WBS: T8.4
 
@@ -51,6 +51,9 @@ WAT guests + Chicory tender for:
 | `:pg-open-jvm-inject-available` | `:pg-open` | wire fail-closed inject → handle 0 |
 | `:pg-query-jvm-inject-available` | `:pg-query` | wire fail-closed inject → -1 |
 | `:pg-simple-query-jvm-inject-available` | `:pg-simple-query` | wire fail-closed inject → -1 |
+| `:pg-prepare-jvm-inject-available` | `:pg-prepare` | wire fail-closed inject → -1 |
+| `:pg-session-reset-jvm-inject-available` | `:pg-session-reset` | wire fail-closed inject → -1 |
+| `:pg-close-statement-jvm-inject-available` | `:pg-close-statement` | wire fail-closed inject → -1 |
 | `:http-fetch-jvm-available` | `:http-fetch` | loopback fail-closed (link+SSRF) |
 | `:http-post-headers-jvm-available` | `:http-post-headers` | loopback fail-closed (link+SSRF) |
 | `:json-extract-field-jvm-live` | `:json-extract-field` | pure host extract `{"x":"ok"}` → 2 |
@@ -86,16 +89,16 @@ Emits `HOST_PARITY_LIVE_JSON:` for Clojure integration (`run-node-live`).
 - Not signed ops AOT Components (T8.3)
 - Does not replace pure matrix `run-conformance`
 - Not claim T8.4 complete
-- JVM live corpus: 36 proofs; Node: 16 proofs
-- JVM live corpus: 36 proofs; Node: 16 proofs
+- JVM live corpus: 39 proofs; Node: 16 proofs
+- JVM live corpus: 39 proofs; Node: 16 proofs
 - Loopback success is plain TCP (not TLS mutual-auth / production network ABAC)
 - Pool inject uses `fail-closed-inject-provider` (no live PostgreSQL)
 
 ## Evidence
 
-- `test/kototama/host_parity_live_test.clj` (36 JVM live proofs)
+- `test/kototama/host_parity_live_test.clj` (39 JVM live proofs)
 - `node web/verify-host-parity-live.mjs` (16 Node proofs)
-- `test/kototama/host_parity_live_test.clj` (36 JVM live proofs)
+- `test/kototama/host_parity_live_test.clj` (39 JVM live proofs)
 - `node web/verify-host-parity-live.mjs` (16 Node proofs)
 
 ## Related

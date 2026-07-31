@@ -125,6 +125,12 @@
               :note "JVM postgresql-wire-provider fail-closed inject; browser native boundary"}
    :pg-simple-query {:jvm :inject :browser :no :node :inject
                      :note "JVM postgresql-wire-provider fail-closed inject; browser native boundary"}
+   :pg-prepare {:jvm :inject :browser :no :node :inject
+                :note "JVM postgresql-wire-provider fail-closed inject; browser native boundary"}
+   :pg-session-reset {:jvm :inject :browser :no :node :inject
+                      :note "JVM postgresql-wire-provider fail-closed inject; browser native boundary"}
+   :pg-close-statement {:jvm :inject :browser :no :node :inject
+                        :note "JVM postgresql-wire-provider fail-closed inject; browser native boundary"}
    :http-get-stream {:jvm :yes :browser :inject :node :inject
                      :note "linear Component provider; browser/node require an injected bounded stream adapter"}
    :object-get-stream {:jvm :yes :browser :inject :node :inject
