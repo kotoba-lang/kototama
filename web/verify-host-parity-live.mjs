@@ -24,7 +24,7 @@ const siblingActorHost = path.resolve(here, '../../wasm-webcomponent/src/actor-h
 // also try when this repo is named kototama (not kototama-t84)
 const siblingActorHostAlt = path.resolve(here, '../../../orgs/kotoba-lang/wasm-webcomponent/src/actor-host.js');
 // Includes actor-host `random-bytes` + `kagi-sign` inject (2026-07-31).
-const WASM_WEBCOMPONENT_COMMIT = '68805af90604a389ecb8056c1f5be7170e2ff282';
+const WASM_WEBCOMPONENT_COMMIT = 'bda77a674f0ea6a9fc6541327a4690531fc7c2a3';
 const SRC_FILES = [
   'src/actor-host.js',
   'src/vendor/curves/ed25519.js',
@@ -293,6 +293,65 @@ const corpus = [
           (call $j (i32.const 0) (i32.const 3)
                    (i32.const 64) (i32.const 256)))))`,
   },
+
+  {
+    id: 'transport-connect-node-inject-available',
+    imports: ['transport-connect'],
+    limits: { maxTransportConnections: 1 },
+    check: (n) => Number(n) === 0,
+    // fail-closed empty-allowlist semantics → handle 0
+    wat: `(module
+      (import "kotoba" "transport_connect" (func $tc (param i32 i32 i32) (result i64)))
+      (memory (export "memory") 1)
+      (data (i32.const 0) "example.com")
+      (func (export "main") (result i64)
+        (call $tc (i32.const 0) (i32.const 11) (i32.const 443))))`,
+  },
+  {
+    id: 'tls-open-node-inject-available',
+    imports: ['tls-open'],
+    limits: { maxTransportConnections: 1 },
+    check: (n) => Number(n) === 0,
+    wat: `(module
+      (import "kotoba" "tls_open" (func $tls (param i64 i32 i32) (result i64)))
+      (memory (export "memory") 1)
+      (data (i32.const 0) "example.com")
+      (func (export "main") (result i64)
+        (call $tls (i64.const 0) (i32.const 0) (i32.const 11))))`,
+  },
+  {
+    id: 'transport-close-node-inject-available',
+    imports: ['transport-close'],
+    limits: { maxTransportConnections: 1 },
+    check: (n) => Number(n) === -1,
+    wat: `(module
+      (import "kotoba" "transport_close" (func $tc (param i64) (result i32)))
+      (func (export "main") (result i64)
+        (i64.extend_i32_s (call $tc (i64.const 0)))))`,
+  },
+  {
+    id: 'transport-write-node-inject-available',
+    imports: ['transport-write'],
+    limits: { maxTransportConnections: 1 },
+    check: (n) => Number(n) === -1,
+    wat: `(module
+      (import "kotoba" "transport_write" (func $tw (param i64 i32 i32) (result i32)))
+      (memory (export "memory") 1)
+      (func (export "main") (result i64)
+        (i64.extend_i32_s (call $tw (i64.const 0) (i32.const 0) (i32.const 0)))))`,
+  },
+  {
+    id: 'transport-read-node-inject-available',
+    imports: ['transport-read'],
+    limits: { maxTransportConnections: 1 },
+    check: (n) => Number(n) === -1,
+    wat: `(module
+      (import "kotoba" "transport_read" (func $tr (param i64 i32 i32) (result i32)))
+      (memory (export "memory") 1)
+      (func (export "main") (result i64)
+        (i64.extend_i32_s (call $tr (i64.const 0) (i32.const 0) (i32.const 8)))))`,
+  },
+
 ];
 
 const tmpRoot = await mkdtemp(path.join(tmpdir(), 'kototama-host-parity-live-'));

@@ -84,7 +84,7 @@
   (let [r (live/run-node-live)]
     (is (true? (:ok? r))
         (str "node live failures: " (pr-str (or (:failed r) (:error r)))))
-    (is (= 16 (:total r)))
-    (is (= 16 (:passed r)))
+    (is (= 21 (:total r)))
+    (is (= 21 (:passed r)))
     (is (empty? (:failed r)))
     (is (string? (:source r)))))

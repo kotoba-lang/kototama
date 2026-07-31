@@ -89,18 +89,18 @@
                          :note "browser: byte-for-byte JS port in wasm-webcomponent actor-host.js (pure computation, no bridge)"}
    :http-post-headers  {:jvm :yes :browser :yes :node :inject
                         :note "browser: shared Worker+SAB transport; exact flat-pair headers ABI and shared maxHttpPosts quota"}
-   :transport-connect {:jvm :inject :browser :no :node :no
-                       :note "JVM: transport-provider via :provider-host-functions; browser intentional native boundary"}
-   :tls-open {:jvm :inject :browser :no :node :no
-              :note "JVM transport-provider inject; browser native boundary"}
-   :tls-server-end-point {:jvm :inject :browser :no :node :no
-                          :note "JVM transport-provider inject; browser native boundary"}
-   :transport-write {:jvm :inject :browser :no :node :no
-                     :note "JVM transport-provider inject; browser native boundary"}
-   :transport-read {:jvm :inject :browser :no :node :no
-                    :note "JVM transport-provider inject; browser native boundary"}
-   :transport-close {:jvm :inject :browser :no :node :no
-                     :note "JVM transport-provider inject; browser native boundary"}
+   :transport-connect {:jvm :inject :browser :no :node :inject
+                       :note "JVM: transport-provider via :provider-host-functions; Node: actor-host fail-closed inject (wasm-webcomponent#17); browser intentional native boundary"}
+   :tls-open {:jvm :inject :browser :no :node :inject
+              :note "JVM transport-provider inject; Node: actor-host fail-closed inject (wasm-webcomponent#17); browser intentional native boundary"}
+   :tls-server-end-point {:jvm :inject :browser :no :node :inject
+                          :note "JVM transport-provider inject; Node: actor-host fail-closed inject (wasm-webcomponent#17); browser intentional native boundary"}
+   :transport-write {:jvm :inject :browser :no :node :inject
+                     :note "JVM transport-provider inject; Node: actor-host fail-closed inject (wasm-webcomponent#17); browser intentional native boundary"}
+   :transport-read {:jvm :inject :browser :no :node :inject
+                    :note "JVM transport-provider inject; Node: actor-host fail-closed inject (wasm-webcomponent#17); browser intentional native boundary"}
+   :transport-close {:jvm :inject :browser :no :node :inject
+                     :note "JVM transport-provider inject; Node: actor-host fail-closed inject (wasm-webcomponent#17); browser intentional native boundary"}
    :pg-cancel-register {:jvm :inject :browser :no :node :no
                         :note "JVM transport-provider inject; browser native boundary"}
    :pg-cancel {:jvm :inject :browser :no :node :no
