@@ -1,6 +1,6 @@
 # Grade A / T8.4 — live host runners (JVM + Node)
 
-- Status: partial (JVM 49 + Node 16 live; + pg wire open/query/simple-query inject)
+- Status: partial (JVM 54 + Node 16 live; + pg SCRAM open/close inject)
 - Date: 2026-07-31
 - WBS: T8.4
 
