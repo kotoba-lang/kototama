@@ -1,6 +1,6 @@
 # Grade A / T8.4 — live host runners (JVM + Node)
 
-- Status: partial (JVM + Node live; pg-pool inject + http-fetch/headers + json-extract)
+- Status: partial (JVM 31 + Node 14 live; fetch/headers/json-extract on both)
 - Date: 2026-07-31
 - WBS: T8.4
 
@@ -61,6 +61,9 @@ Node WebAssembly + wasm-webcomponent `actor-host.js` for:
 | `:http-post-node-inject-available` | `:http-post` + inject + allowlist |
 | `:llm-infer-node-available` | `:llm-infer` + inject |
 | `:kagi-sign-node-inject-available` | `:kagi-sign` + kagiSigner/decisions inject |
+| `:http-fetch-node-inject-available` | `:http-fetch` + inject + allowlist |
+| `:http-post-headers-node-inject-available` | `:http-post-headers` + inject |
+| `:json-extract-field-node-live` | `:json-extract-field` pure host |
 
 Loads sibling `../wasm-webcomponent` when present; else pinned CDN commit.
 Emits `HOST_PARITY_LIVE_JSON:` for Clojure integration (`run-node-live`).
@@ -77,14 +80,14 @@ Emits `HOST_PARITY_LIVE_JSON:` for Clojure integration (`run-node-live`).
 - Not signed ops AOT Components (T8.3)
 - Does not replace pure matrix `run-conformance`
 - Not claim T8.4 complete
-- JVM live corpus: 31 proofs; Node: 11 proofs
+- JVM live corpus: 31 proofs; Node: 14 proofs
 - Loopback success is plain TCP (not TLS mutual-auth / production network ABAC)
 - Pool inject uses `fail-closed-inject-provider` (no live PostgreSQL)
 
 ## Evidence
 
 - `test/kototama/host_parity_live_test.clj` (31 JVM live proofs)
-- `node web/verify-host-parity-live.mjs` (11 Node proofs)
+- `node web/verify-host-parity-live.mjs` (14 Node proofs)
 
 ## Related
 
