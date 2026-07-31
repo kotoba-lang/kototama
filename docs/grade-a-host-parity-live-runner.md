@@ -1,6 +1,6 @@
 # Grade A / T8.4 — live host runners (JVM + Node)
 
-- Status: partial (JVM 54 + Node 16 live; + pg SCRAM open/close inject)
+- Status: partial (JVM 54 + Node 16 inject/live; **live SCRAM/PG success via** `clojure -M:postgresql-interop`)
 - Date: 2026-07-31
 - WBS: T8.4
 
@@ -85,8 +85,9 @@ Emits `HOST_PARITY_LIVE_JSON:` for Clojure integration (`run-node-live`).
 
 ## Non-claims
 
-- Not full host-parity table (pg component-link / SCRAM surface still open;
-  pg-pool + pg-cancel + core wire (open/query/simple-query) inject fail-closed; no live SCRAM/PG success path here)
+- Not full host-parity table in this runner (pg wire/SCRAM open inject fail-closed here)
+- Live SCRAM-SHA-256-PLUS success is proven by `clojure -M:postgresql-interop`
+  (ephemeral PG + TLS + SCRAM guest providers); not embedded in the 54 JVM inject corpus
 - Not signed ops AOT Components (T8.3)
 - Does not replace pure matrix `run-conformance`
 - Not claim T8.4 complete

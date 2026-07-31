@@ -119,6 +119,8 @@
            (com.dylibso.chicory.wasm.types FunctionType MemoryLimits ValType)
            (java.io ByteArrayOutputStream)
            (java.security MessageDigest SecureRandom)
+           (javax.crypto Mac SecretKeyFactory)
+           (javax.crypto.spec PBEKeySpec SecretKeySpec)
            (java.net InetAddress Inet6Address URI)
            (java.net.http HttpClient HttpRequest HttpRequest$Builder HttpRequest$BodyPublishers HttpResponse$BodyHandlers)
            (java.time Duration Instant)
@@ -174,7 +176,7 @@
 ;; call crashing on a Java exception it never gets a chance to handle. ──
 
 (defn- new-limits-state []
-  (atom {:http-posts 0 :http-fetches 0 :llm-infers 0 :kagi-signs 0
+  (atom {:http-posts 0 :http-fetches 0 :llm-infers 0 :kagi-signs 0 :scram-proofs 0
          :log-read-bytes 0 :log-write-bytes 0 :random-bytes 0}))
 
 (defn- within-count-limit? [state-key limit-key caps limits-state]
@@ -1089,6 +1091,71 @@
              (ensure-granted! caps :clock-monotonic)
              (System/currentTimeMillis))))
 
+
+(defn- hmac-sha256 [key data]
+  (let [mac (Mac/getInstance "HmacSHA256")]
+    (.init mac (SecretKeySpec. ^bytes key "HmacSHA256"))
+    (.doFinal mac ^bytes data)))
+
+(defn- scram-sha256-host-fn
+  "Purpose-bound credential operation. The named password stays in the host;
+  the guest supplies PostgreSQL's salt, iteration count and SCRAM auth message,
+  and receives client-proof || server-signature (64 bytes)."
+  [caps limits-state credentials]
+  (host-fn "scram_sha256" (mapv valtype [:i32 :i32 :i32 :i32 :i32 :i32 :i32 :i32 :i32]) ValType/I32
+           (fn [instance args]
+             (ensure-granted! caps :scram-sha256)
+             (if-not (within-count-limit? :scram-proofs :max-scram-proofs caps limits-state)
+               -1
+               (try
+                 (let [ref-len (aget args 1)
+                       salt-len (aget args 3)
+                       iterations (aget args 4)
+                       auth-len (aget args 6)
+                       ref (when (and (pos? ref-len) (<= ref-len 255))
+                             (String. ^bytes (read-bytes! instance (aget args 0) ref-len) "UTF-8"))
+                       allowlist (get-in caps [:limits :scram-credential-allowlist])
+                       credential-map (cond
+                                        (fn? credentials) (credentials)
+                                        (instance? clojure.lang.IDeref credentials)
+                                        @credentials
+                                        :else credentials)
+                       secret (get credential-map ref)]
+                   (if-not (and ref secret (set? allowlist) (contains? allowlist ref)
+                                (pos? salt-len) (<= salt-len 1024)
+                                (<= 4096 iterations 1000000)
+                                (pos? auth-len) (<= auth-len 8192)
+                                (>= (aget args 8) 64))
+                     -1
+                     (let [password (if (string? secret)
+                                      (.toCharArray ^String secret)
+                                      (char-array secret))
+                           salt (read-bytes! instance (aget args 2) salt-len)
+                           auth-message (read-bytes! instance (aget args 5) auth-len)
+                           spec (PBEKeySpec. password salt (int iterations) 256)]
+                       (try
+                         (let [salted (.getEncoded (.generateSecret
+                                                   (SecretKeyFactory/getInstance "PBKDF2WithHmacSHA256")
+                                                   spec))
+                               client-key (hmac-sha256 salted (.getBytes "Client Key" "UTF-8"))
+                               stored-key (.digest (MessageDigest/getInstance "SHA-256") client-key)
+                               client-signature (hmac-sha256 stored-key auth-message)
+                               proof (byte-array 32)
+                               _ (dotimes [i 32]
+                                   (aset-byte proof i
+                                              (unchecked-byte
+                                               (bit-xor (bit-and 255 (aget client-key i))
+                                                        (bit-and 255 (aget client-signature i))))))
+                               server-key (hmac-sha256 salted (.getBytes "Server Key" "UTF-8"))
+                               server-signature (hmac-sha256 server-key auth-message)
+                               result (byte-array (concat proof server-signature))]
+                           (swap! limits-state update :scram-proofs inc)
+                           (write-bytes! instance (aget args 7) (aget args 8) result))
+                         (finally
+                           (.clearPassword spec)
+                           (java.util.Arrays/fill password (char 0)))))))
+                 (catch Exception _ -1))))))
+
 (defn- random-bytes-host-fn
   "`(out-ptr out-cap) -> bytes-written|-1`. Fills out-cap random bytes via
   SecureRandom (CSPRNG). `#{:crypto :write}` — requires grant +
@@ -1228,7 +1295,7 @@
             require-kotoba-compatibility? profile capability-leases
             execution-identity execution-identity-cid lease-now-ms
             http-policy request-purpose credential-provider
-            provider-host-functions]
+            provider-host-functions scram-credentials]
      :as opts
      :or {store (in-memory-store) llm-client (default-llm-client)
           kagi-client {} kagi-decisions [] fuel default-fuel-limit}}]
@@ -1285,6 +1352,7 @@
                      :log-write #(log-write-host-fn caps limits-state store)
                      :clock-monotonic #(clock-monotonic-host-fn caps limits-state)
                      :random-bytes #(random-bytes-host-fn caps limits-state)
+                     :scram-sha256 #(scram-sha256-host-fn caps limits-state scram-credentials)
                      :kagi-sign #(kagi-sign-host-fn caps limits-state
                                                     kagi-client kagi-decisions)
                      :http-fetch #(http-fetch-host-fn caps limits-state)

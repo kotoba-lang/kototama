@@ -44,6 +44,13 @@
   ;; not part of the runtime core. It lives in kotoba-lang/provider-postgres
   ;; and its interop harness went with it. A deployment that wants it adds
   ;; that dependency itself; the tender does not ship a database pool.
+  :postgresql-interop
+  {:extra-deps {io.github.kotoba-lang/kotoba {:local/root "../kotoba"}
+                io.github.kotoba-lang/compiler {:local/root "../compiler"}
+                io.github.kotoba-lang/kotoba-core-contracts
+                {:local/root "../kotoba-core-contracts"}
+                io.github.kotoba-lang/kotoba-lang {:local/root "../kotoba-lang"}}
+   :main-opts ["-m" "kototama.postgresql-interop"]}
   :doctor {:main-opts ["-m" "kototama.cli" "doctor"]}
   :test {:extra-paths ["test"]
          :extra-deps {io.github.cognitect-labs/test-runner
