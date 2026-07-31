@@ -38,7 +38,17 @@
                                (apply str (repeat 64 "0")))
         unpinned (update-in inventory [:tcb/external 0]
                             dissoc :version :git-sha :minimum-version)]
-    (is (= :digest-drift
-           (-> (tcb/validate digest-drift) :errors first :kind)))
-    (is (= :unversioned-external-boundary
-           (-> (tcb/validate unpinned) :errors first :kind)))))
+    ;; Membership, not `first`. Each assertion's claim is "this mutation
+    ;; produces this error kind", not "this is the only error in the
+    ;; inventory" -- and both mutations start from the LIVE inventory, so any
+    ;; unrelated finding in it lands in the same list.
+    ;;
+    ;; Measured 2026-07-31: with four real :digest-drift entries present
+    ;; (kotoba-lang/kototama#117), the `unpinned` assertion failed with
+    ;;   expected :unversioned-external-boundary, got :digest-drift
+    ;; while the unversioned-boundary check itself was working exactly as
+    ;; intended. A test that reports someone else's failure under its own name
+    ;; costs a reader the time it takes to rule it out.
+    (let [kinds #(set (map :kind (:errors (tcb/validate %))))]
+      (is (contains? (kinds digest-drift) :digest-drift))
+      (is (contains? (kinds unpinned) :unversioned-external-boundary)))))
