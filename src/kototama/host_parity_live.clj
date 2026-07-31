@@ -1739,6 +1739,68 @@
       (finally
         ((:close! provider))))))
 
+;; ── :scram-sha256 purpose-bound host (restored kototama#120) ─────────────
+;; Matrix case :scram-sha256-jvm-available (host-parity.edn) was data-only until
+;; this prove. Password never enters guest memory; guest supplies salt / iters /
+;; auth-message and receives client-proof||server-signature (64 bytes).
+
+(def ^:private scram-sha256-wat
+  "Guest calls scram_sha256 with ref=db/primary, salt=saltsalt (8), iters=4096,
+   auth=28-byte placeholder, out-cap=64."
+  "(module
+     (import \"kotoba\" \"scram_sha256\"
+       (func $scram (param i32 i32 i32 i32 i32 i32 i32 i32 i32) (result i32)))
+     (memory (export \"memory\") 1)
+     (data (i32.const 0) \"db/primary\")
+     (data (i32.const 32) \"saltsalt\")
+     (data (i32.const 64) \"n,,n=u,r=r1,r=r2,c=biws,p=x\")
+     (func (export \"main\") (result i64)
+       (i64.extend_i32_s
+         (call $scram
+           (i32.const 0) (i32.const 10)
+           (i32.const 32) (i32.const 8)
+           (i32.const 4096)
+           (i32.const 64) (i32.const 28)
+           (i32.const 128) (i32.const 64)))))")
+
+(defn- prove-scram-sha256-jvm
+  "Live-prove :scram-sha256 via host credentials inject (no live PG / password in guest)."
+  []
+  (let [wasm (wat->wasm scram-sha256-wat)
+        caps (contract/host-caps
+              {:grants [:scram-sha256]
+               :limits {:max-scram-proofs 1
+                        :allow-secret-imports? true
+                        :scram-credential-allowlist #{"db/primary"}}})
+        n (tender/run-main wasm [:scram-sha256] caps
+                           {:scram-credentials {"db/primary" "s3cret"}})]
+    {:ok? (= 64 n)
+     :id :scram-sha256-jvm-available
+     :import :scram-sha256
+     :imports [:scram-sha256]
+     :host :jvm
+     :result n
+     :live? true
+     :note "injected scram-credentials + allowlist; PBKDF2/HMAC host-side → 64"}))
+
+(defn- prove-scram-sha256-jvm-deny
+  "Live-prove :scram-sha256 fail-closed when allowlist/credentials absent → -1."
+  []
+  (let [wasm (wat->wasm scram-sha256-wat)
+        caps (contract/host-caps
+              {:grants [:scram-sha256]
+               :limits {:max-scram-proofs 1
+                        :allow-secret-imports? true}})
+        n (tender/run-main wasm [:scram-sha256] caps {})]
+    {:ok? (= -1 n)
+     :id :scram-sha256-jvm-deny-available
+     :import :scram-sha256
+     :imports [:scram-sha256]
+     :host :jvm
+     :result n
+     :live? true
+     :note "no allowlist/credentials → fail-closed -1"}))
+
 (def jvm-live-corpus
   "Host-parity case ids that this runner can live-prove on JVM tender.
   Ids match lang/host-parity.edn :conformance :cases where listed;
@@ -1928,6 +1990,12 @@
    {:id :pg-close-scram-jvm-inject-available
     :import :pg-close-scram
     :prove prove-pg-close-scram-jvm}
+   {:id :scram-sha256-jvm-available
+    :import :scram-sha256
+    :prove prove-scram-sha256-jvm}
+   {:id :scram-sha256-jvm-deny-available
+    :import :scram-sha256
+    :prove prove-scram-sha256-jvm-deny}
    {:id :http-fetch-jvm-available
     :import :http-fetch
     :prove prove-http-fetch-jvm}
@@ -1995,7 +2063,7 @@
      :failed failed
      :results results
      :case-ids (mapv :id jvm-live-corpus)
-     :note "T8.4: JVM tender live proofs (crypto/clock/log/cbor/json/http-fetch/headers/llm/kagi/transport/pg-pool/wire)."}))
+     :note "T8.4: JVM tender live proofs (crypto/clock/log/cbor/json/http-fetch/headers/llm/kagi/scram-sha256/transport/pg-pool/wire)."}))
 
 (defn run-node-live
   "Shell out to web/verify-host-parity-live.mjs (Node WebAssembly + actor-host).
