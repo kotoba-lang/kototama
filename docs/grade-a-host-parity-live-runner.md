@@ -1,6 +1,6 @@
 # Grade A / T8.4 — live host runners (JVM + Node)
 
-- Status: partial (JVM 56 + Node 16 inject/live; **live SCRAM/PG success via** `clojure -M:postgresql-interop`; **scram-sha256 host crypto live-proven**)
+- Status: partial (JVM 56 + Node 21 inject/live; **live SCRAM/PG success via** `clojure -M:postgresql-interop`; **scram-sha256 host crypto live-proven**)
 - Date: 2026-07-31
 - WBS: T8.4
 
@@ -72,6 +72,11 @@ Node WebAssembly + wasm-webcomponent `actor-host.js` for:
 | `:http-post-node-inject-available` | `:http-post` + inject + allowlist |
 | `:llm-infer-node-available` | `:llm-infer` + inject |
 | `:kagi-sign-node-inject-available` | `:kagi-sign` + kagiSigner/decisions inject |
+| `:transport-connect-node-inject-available` | `:transport-connect` fail-closed (handle 0) |
+| `:tls-open-node-inject-available` | `:tls-open` fail-closed (handle 0) |
+| `:transport-close-node-inject-available` | `:transport-close` fail-closed (-1) |
+| `:transport-write-node-inject-available` | `:transport-write` fail-closed (-1) |
+| `:transport-read-node-inject-available` | `:transport-read` fail-closed (-1) |
 | `:http-fetch-node-inject-available` | `:http-fetch` + inject + allowlist |
 | `:http-post-headers-node-inject-available` | `:http-post-headers` + inject |
 | `:json-extract-field-node-live` | `:json-extract-field` pure host |
@@ -87,7 +92,7 @@ Emits `HOST_PARITY_LIVE_JSON:` for Clojure integration (`run-node-live`).
 
 ## Non-claims
 
-- Not full host-parity table in this runner (pg wire/SCRAM *open* inject fail-closed here)
+- Transport/TLS Node inject fail-closed proven (wasm-webcomponent#17). pg wire/pool/SCRAM Node still residual
 - Live SCRAM-SHA-256-PLUS *session* success is proven by `clojure -M:postgresql-interop`
   (ephemeral PG + TLS + SCRAM guest providers); not embedded in the 56 JVM inject corpus
 - `:scram-sha256` **host crypto** is live-proven in the JVM corpus (credentials inject;
@@ -95,14 +100,14 @@ Emits `HOST_PARITY_LIVE_JSON:` for Clojure integration (`run-node-live`).
 - Not signed ops AOT Components (T8.3)
 - Does not replace pure matrix `run-conformance`
 - Not claim T8.4 complete
-- JVM live corpus: 56 proofs; Node: 16 proofs
+- JVM live corpus: 56 proofs; Node: 21 proofs (incl. transport inject fail-closed)
 - Loopback success is plain TCP (not TLS mutual-auth / production network ABAC)
 - Pool inject uses `fail-closed-inject-provider` (no live PostgreSQL)
 
 ## Evidence
 
 - `test/kototama/host_parity_live_test.clj` (56 JVM live proofs)
-- `node web/verify-host-parity-live.mjs` (16 Node proofs)
+- `node web/verify-host-parity-live.mjs` (21 Node proofs)
 
 ## Related
 
