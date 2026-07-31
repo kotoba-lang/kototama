@@ -46,6 +46,8 @@
    :transport-write "transport_write"
    :transport-read "transport_read"
    :transport-close "transport_close"
+   :pg-cancel-register "pg_cancel_register"
+   :pg-cancel "pg_cancel"
    :pg-pool-open "pg_pool_open"
    :pg-pool-acquire "pg_pool_acquire"
    :pg-pool-query "pg_pool_query"

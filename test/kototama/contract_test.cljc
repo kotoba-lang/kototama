@@ -12,7 +12,7 @@
            :http-fetch :cbor-encode :json-encode :json-extract-field
            :http-post-headers :transport-connect :tls-open
            :tls-server-end-point :transport-write :transport-read
-           :transport-close :pg-pool-open :pg-pool-acquire :pg-pool-query
+           :transport-close :pg-cancel-register :pg-cancel :pg-pool-open :pg-pool-acquire :pg-pool-query
            :pg-pool-release :pg-pool-stats :pg-pool-health :pg-pool-drain
            :pg-pool-close :http-get-stream :object-get-stream
            :object-put-block :object-compare-and-set-ref}

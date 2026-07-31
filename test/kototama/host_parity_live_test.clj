@@ -33,6 +33,8 @@
                 :pg-pool-release-jvm-inject-available
                 :pg-pool-stats-jvm-inject-available
                 :pg-pool-drain-jvm-inject-available
+                :pg-cancel-register-jvm-inject-available
+                :pg-cancel-jvm-inject-available
                 :http-fetch-jvm-available
                 :http-post-headers-jvm-available
                 :json-extract-field-jvm-live]]
@@ -42,15 +44,14 @@
   (let [r (live/run-jvm-live)]
     (is (true? (:ok? r))
         (str "live failures: " (pr-str (:failed r))))
-    (is (= 31 (:total r)))
-    (is (= 31 (:passed r)))
+    (is (= 33 (:total r)))
+    (is (= 33 (:passed r)))
     (is (empty? (:failed r)))
     (doseq [row (:results r)]
       (testing (str (:id row))
         (is (true? (:ok? row)))
         (is (true? (:live? row)))
         (is (= :jvm (:host row)))))))
-
 (deftest report-shape
   (let [rep (live/report {:node? false})]
     (is (= :jvm-and-node-live (:t84-slice rep)))

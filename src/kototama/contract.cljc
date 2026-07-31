@@ -129,6 +129,15 @@
      :import/name "transport-close"
      :import/category :network
      :import/effects #{:network}}
+    ;; PostgreSQL cancel inject (transport-provider). Fail-closed without TLS session.
+    {:import/id :pg-cancel-register
+     :import/name "pg-cancel-register"
+     :import/category :network
+     :import/effects #{:network}}
+    {:import/id :pg-cancel
+     :import/name "pg-cancel"
+     :import/category :network
+     :import/effects #{:network}}
     ;; PostgreSQL opaque pool inject path (kototama.postgresql-pool-provider).
     ;; Not built into tender core — callers pass HostFunctions via
     ;; open-session :provider-host-functions (T8.4 host-parity L5 inject).
@@ -208,6 +217,8 @@
                 :max-transport-read-ms :non-negative-int
                 :max-transport-read-bytes :non-negative-int
                 :max-transport-write-bytes :non-negative-int
+                :max-pg-cancel-handles :non-negative-int
+                :max-pg-cancel-requests :non-negative-int
                 :transport-endpoint-allowlist :set-or-nil
                 :transport-resolved-address-allowlist :set-or-nil
                 :allowed-url-prefixes :vector-of-string-or-nil
@@ -243,6 +254,9 @@
    :max-transport-read-ms 5000
    :max-transport-read-bytes 0
    :max-transport-write-bytes 0
+   ;; PG cancel inject (transport-provider). Default 0 deny-by-default.
+   :max-pg-cancel-handles 0
+   :max-pg-cancel-requests 0
    :transport-endpoint-allowlist nil
    :transport-resolved-address-allowlist nil
    ;; 16 Wasm pages (64 KiB/page) = 1 MiB -- a guest that legitimately
