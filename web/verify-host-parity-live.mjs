@@ -24,7 +24,7 @@ const siblingActorHost = path.resolve(here, '../../wasm-webcomponent/src/actor-h
 // also try when this repo is named kototama (not kototama-t84)
 const siblingActorHostAlt = path.resolve(here, '../../../orgs/kotoba-lang/wasm-webcomponent/src/actor-host.js');
 // Includes actor-host `random-bytes` + `kagi-sign` inject (2026-07-31).
-const WASM_WEBCOMPONENT_COMMIT = 'e5b5c0d14ab89fee570f6d1e8c2aca1fe1747eec';
+const WASM_WEBCOMPONENT_COMMIT = '1c353beaa8eb34d82511c81354f70cf63cf3f46e';
 const SRC_FILES = [
   'src/actor-host.js',
   'src/vendor/curves/ed25519.js',
@@ -478,6 +478,89 @@ const corpus = [
             (i32.const 64) (i32.const 28)
             (i32.const 128) (i32.const 64)))))`,
   },
+
+  {
+    id: 'pg-prepare-node-inject-available',
+    imports: ['pg-prepare'],
+    check: (n) => Number(n) === -1,
+    wat: `(module
+      (import "kotoba" "pg_prepare" (func $f (param i64 i32 i32 i32 i32 i32 i32 i32 i32) (result i32)))
+      (func (export "main") (result i64)
+        (i64.extend_i32_s (call $f (i64.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0)))))`,
+  },
+  {
+    id: 'pg-session-reset-node-inject-available',
+    imports: ['pg-session-reset'],
+    check: (n) => Number(n) === -1,
+    wat: `(module
+      (import "kotoba" "pg_session_reset" (func $f (param i64 i32 i32 i32 i32) (result i32)))
+      (func (export "main") (result i64)
+        (i64.extend_i32_s (call $f (i64.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0)))))`,
+  },
+  {
+    id: 'pg-bind-portal-node-inject-available',
+    imports: ['pg-bind-portal'],
+    check: (n) => Number(n) === -1,
+    wat: `(module
+      (import "kotoba" "pg_bind_portal" (func $f (param i64 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32) (result i32)))
+      (func (export "main") (result i64)
+        (i64.extend_i32_s (call $f (i64.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0)))))`,
+  },
+  {
+    id: 'pg-fetch-portal-node-inject-available',
+    imports: ['pg-fetch-portal'],
+    check: (n) => Number(n) === -1,
+    wat: `(module
+      (import "kotoba" "pg_fetch_portal" (func $f (param i64 i32 i32 i32 i32 i32 i32 i32) (result i32)))
+      (func (export "main") (result i64)
+        (i64.extend_i32_s (call $f (i64.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0)))))`,
+  },
+  {
+    id: 'pg-copy-out-node-inject-available',
+    imports: ['pg-copy-out'],
+    check: (n) => Number(n) === -1,
+    wat: `(module
+      (import "kotoba" "pg_copy_out" (func $f (param i64 i32 i32 i32 i32 i32 i32) (result i32)))
+      (func (export "main") (result i64)
+        (i64.extend_i32_s (call $f (i64.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0)))))`,
+  },
+  {
+    id: 'pg-copy-in-node-inject-available',
+    imports: ['pg-copy-in'],
+    check: (n) => Number(n) === -1,
+    wat: `(module
+      (import "kotoba" "pg_copy_in" (func $f (param i64 i32 i32 i32 i32 i32 i32 i32 i32) (result i32)))
+      (func (export "main") (result i64)
+        (i64.extend_i32_s (call $f (i64.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0)))))`,
+  },
+  {
+    id: 'pg-execute-batch-node-inject-available',
+    imports: ['pg-execute-batch'],
+    check: (n) => Number(n) === -1,
+    wat: `(module
+      (import "kotoba" "pg_execute_batch" (func $f (param i64 i32 i32 i32 i32 i32 i32 i32) (result i32)))
+      (func (export "main") (result i64)
+        (i64.extend_i32_s (call $f (i64.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0)))))`,
+  },
+  {
+    id: 'pg-open-scram-node-inject-available',
+    imports: ['pg-open-scram'],
+    check: (n) => Number(n) === 0,
+    wat: `(module
+      (import "kotoba" "pg_open_scram" (func $f (param i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32) (result i64)))
+      (func (export "main") (result i64)
+        (call $f (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0) (i32.const 0))))`,
+  },
+  {
+    id: 'pg-close-scram-node-inject-available',
+    imports: ['pg-close-scram'],
+    check: (n) => Number(n) === -1,
+    wat: `(module
+      (import "kotoba" "pg_close_scram" (func $f (param i64) (result i32)))
+      (func (export "main") (result i64)
+        (i64.extend_i32_s (call $f (i64.const 0)))))`,
+  },
+
 
 
 ];
