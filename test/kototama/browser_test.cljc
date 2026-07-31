@@ -56,13 +56,27 @@
 (deftest parity-score-ratio
   (let [s (browser/parity-score)]
     ;; Browser-linkable stays at 19 (crypto/log/http/codec/llm/stream).
-    ;; Transport/TLS (6) + kagi-sign (1) + pg-pool (8) + pg-cancel (2) +
-    ;; pg wire (19: open/query/simple/prepare/session/close-stmt/query-state/
-    ;; prepare-typed/execute/portal/copy/batch/scram) intentional browser :no.
-    (is (= 57 (:total s)))
+    ;; Transport/TLS + kagi-sign + pg-pool + pg-cancel + pg wire + scram-sha256
+    ;; intentional browser :no (39). Total 58 after scram-sha256 host-impl row.
+    (is (= 58 (:total s)))
     (is (= 19 (:browser-yes s)))
-    (is (= 38 (:browser-no s)))
-    (is (== (/ 19 57) (:ratio s)))))
+    (is (= 39 (:browser-no s)))
+    (is (== (/ 19 58) (:ratio s)))))
+
+(deftest node-inject-honesty-matches-actor-host
+  "T8.4 / kotoba-lang#356: Node :inject only where wasm-webcomponent actor-host
+  actually implements a provider. transport/tls/pg/scram are :no."
+  (is (= :inject (get-in browser/host-impl [:kagi-sign :node])))
+  (is (= :inject (get-in browser/host-impl [:http-post :node])))
+  (is (= :inject (get-in browser/host-impl [:llm-infer :node])))
+  (is (= :inject (get-in browser/host-impl [:http-fetch :node])))
+  (is (= :no (get-in browser/host-impl [:transport-connect :node])))
+  (is (= :no (get-in browser/host-impl [:tls-open :node])))
+  (is (= :no (get-in browser/host-impl [:pg-open :node])))
+  (is (= :no (get-in browser/host-impl [:scram-sha256 :node])))
+  (is (= :no (get-in browser/host-impl [:pg-pool-open :node])))
+  (is (= :yes (get-in browser/host-impl [:scram-sha256 :jvm]))))
+
 (deftest r2-report-shape
   (let [r (browser/r2-report)]
     (is (= :r2 (:level r)))
