@@ -8,11 +8,14 @@
   (:require [kototama.tender :as tender])
   (:import (com.dylibso.chicory.wasm.types ValType)))
 
+(defn- i32s [n]
+  (vec (repeat n ValType/I32)))
+
 (defn fail-closed-inject-provider
-  "Return `:host-functions` map for core wire imports, each deny-closed.
+  "Return `:host-functions` map for wire imports, each deny-closed.
 
   - `:pg-open` returns handle 0 (i64)
-  - `:pg-query` / `:pg-simple-query` return -1 (i32)"
+  - other i32-result imports return -1"
   []
   (let [deny-i32 (fn [_ _] -1)
         deny-i64 (fn [_ _] 0)
@@ -35,9 +38,30 @@
          [ValType/I32 ValType/I32 ValType/I32 ValType/I32
           ValType/I32 ValType/I32 ValType/I32]
          ValType/I32
+         deny-i32)
+        prepare-fn
+        (tender/host-fn
+         "pg_prepare"
+         (into [ValType/I64] (i32s 8))
+         ValType/I32
+         deny-i32)
+        session-reset-fn
+        (tender/host-fn
+         "pg_session_reset"
+         [ValType/I64 ValType/I32 ValType/I32 ValType/I32 ValType/I32]
+         ValType/I32
+         deny-i32)
+        close-stmt-fn
+        (tender/host-fn
+         "pg_close_statement"
+         (into [ValType/I64] (i32s 6))
+         ValType/I32
          deny-i32)]
     {:host-functions
      {:pg-open open-fn
       :pg-query query-fn
-      :pg-simple-query simple-fn}
+      :pg-simple-query simple-fn
+      :pg-prepare prepare-fn
+      :pg-session-reset session-reset-fn
+      :pg-close-statement close-stmt-fn}
      :close! (fn [])}))
