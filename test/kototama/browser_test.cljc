@@ -57,11 +57,11 @@
   (let [s (browser/parity-score)]
     ;; Browser-linkable stays at 19 (crypto/log/http/codec/llm/stream).
     ;; Transport/TLS (6) + kagi-sign (1) + pg-pool (8) + pg-cancel (2) +
-    ;; pg wire open/query/simple (3) are intentional browser :no (T8.4 inject).
-    (is (= 52 (:total s)))
+    ;; pg wire + SCRAM inject surface are intentional browser :no (T8.4 inject).
+    (is (= 57 (:total s)))
     (is (= 19 (:browser-yes s)))
-    (is (= 33 (:browser-no s)))
-    (is (== (/ 19 52) (:ratio s)))))
+    (is (= 38 (:browser-no s)))
+    (is (== (/ 19 57) (:ratio s)))))
 (deftest r2-report-shape
   (let [r (browser/r2-report)]
     (is (= :r2 (:level r)))

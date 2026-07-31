@@ -1559,6 +1559,191 @@
       (finally
         ((:close! provider))))))
 
+
+(defn- pg-open-scram-wat
+  "pg_open_scram with dummy string segments; fail-closed inject → handle 0."
+  []
+  "(module
+     (import \"kotoba\" \"pg_open_scram\"
+       (func $o (param i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32) (result i64)))
+     (memory (export \"memory\") 1)
+     (data (i32.const 0) \"h\")
+     (data (i32.const 8) \"u\")
+     (data (i32.const 16) \"d\")
+     (data (i32.const 24) \"p\")
+     (data (i32.const 32) \"n\")
+     (func (export \"main\") (result i64)
+       (call $o
+         (i32.const 0) (i32.const 1)
+         (i32.const 5432)
+         (i32.const 8) (i32.const 1)
+         (i32.const 16) (i32.const 1)
+         (i32.const 24) (i32.const 1)
+         (i32.const 32) (i32.const 1))))")
+
+(defn- prove-pg-open-scram-jvm
+  "Live-prove :pg-open-scram inject fail-closed (→ handle 0)."
+  []
+  (let [wasm (wat->wasm (pg-open-scram-wat))
+        caps {:grants #{:pg-open-scram}
+              :limits {:allow-secret-imports? true}}
+        provider (pg-wire/fail-closed-inject-provider)]
+    (try
+      (let [n (tender/run-main wasm [:pg-open-scram] caps
+                               {:provider-host-functions
+                                (:host-functions provider)})]
+        {:ok? (zero? n)
+         :id :pg-open-scram-jvm-inject-available
+         :import :pg-open-scram
+         :imports [:pg-open-scram]
+         :host :jvm
+         :result n
+         :live? true
+         :note "inject SCRAM fail-closed provider; open → handle 0"})
+      (finally
+        ((:close! provider))))))
+
+(defn- pg-open-scram-random-wat
+  []
+  "(module
+     (import \"kotoba\" \"pg_open_scram_random\"
+       (func $o (param i32 i32 i32 i32 i32 i32 i32 i32 i32) (result i64)))
+     (memory (export \"memory\") 1)
+     (data (i32.const 0) \"h\")
+     (data (i32.const 8) \"u\")
+     (data (i32.const 16) \"d\")
+     (data (i32.const 24) \"p\")
+     (func (export \"main\") (result i64)
+       (call $o
+         (i32.const 0) (i32.const 1)
+         (i32.const 5432)
+         (i32.const 8) (i32.const 1)
+         (i32.const 16) (i32.const 1)
+         (i32.const 24) (i32.const 1))))")
+
+(defn- prove-pg-open-scram-random-jvm
+  "Live-prove :pg-open-scram-random inject fail-closed (→ handle 0)."
+  []
+  (let [wasm (wat->wasm (pg-open-scram-random-wat))
+        caps {:grants #{:pg-open-scram-random}
+              :limits {:allow-secret-imports? true}}
+        provider (pg-wire/fail-closed-inject-provider)]
+    (try
+      (let [n (tender/run-main wasm [:pg-open-scram-random] caps
+                               {:provider-host-functions
+                                (:host-functions provider)})]
+        {:ok? (zero? n)
+         :id :pg-open-scram-random-jvm-inject-available
+         :import :pg-open-scram-random
+         :imports [:pg-open-scram-random]
+         :host :jvm
+         :result n
+         :live? true
+         :note "inject SCRAM fail-closed provider; open → handle 0"})
+      (finally
+        ((:close! provider))))))
+
+(defn- pg-open-scram-cancellable-random-wat
+  []
+  "(module
+     (import \"kotoba\" \"pg_open_scram_cancellable_random\"
+       (func $o (param i32 i32 i32 i32 i32 i32 i32 i32 i32 i32 i32) (result i64)))
+     (memory (export \"memory\") 1)
+     (data (i32.const 0) \"h\")
+     (data (i32.const 8) \"u\")
+     (data (i32.const 16) \"d\")
+     (data (i32.const 24) \"p\")
+     (func (export \"main\") (result i64)
+       (call $o
+         (i32.const 0) (i32.const 1)
+         (i32.const 5432)
+         (i32.const 8) (i32.const 1)
+         (i32.const 16) (i32.const 1)
+         (i32.const 24) (i32.const 1)
+         (i32.const 64) (i32.const 4))))")
+
+(defn- prove-pg-open-scram-cancellable-random-jvm
+  "Live-prove :pg-open-scram-cancellable-random inject fail-closed (→ handle 0)."
+  []
+  (let [wasm (wat->wasm (pg-open-scram-cancellable-random-wat))
+        caps {:grants #{:pg-open-scram-cancellable-random}
+              :limits {:allow-secret-imports? true}}
+        provider (pg-wire/fail-closed-inject-provider)]
+    (try
+      (let [n (tender/run-main wasm [:pg-open-scram-cancellable-random] caps
+                               {:provider-host-functions
+                                (:host-functions provider)})]
+        {:ok? (zero? n)
+         :id :pg-open-scram-cancellable-random-jvm-inject-available
+         :import :pg-open-scram-cancellable-random
+         :imports [:pg-open-scram-cancellable-random]
+         :host :jvm
+         :result n
+         :live? true
+         :note "inject SCRAM fail-closed provider; open → handle 0"})
+      (finally
+        ((:close! provider))))))
+
+(defn- pg-cancel-authority-use-wat
+  []
+  "(module
+     (import \"kotoba\" \"pg_cancel_authority_use\"
+       (func $c (param i32) (result i32)))
+     (memory (export \"memory\") 1)
+     (func (export \"main\") (result i64)
+       (i64.extend_i32_s (call $c (i32.const 0)))))")
+
+(defn- prove-pg-cancel-authority-use-jvm
+  "Live-prove :pg-cancel-authority-use inject fail-closed (→ -1)."
+  []
+  (let [wasm (wat->wasm (pg-cancel-authority-use-wat))
+        caps {:grants #{:pg-cancel-authority-use} :limits {}}
+        provider (pg-wire/fail-closed-inject-provider)]
+    (try
+      (let [n (tender/run-main wasm [:pg-cancel-authority-use] caps
+                               {:provider-host-functions
+                                (:host-functions provider)})]
+        {:ok? (= -1 n)
+         :id :pg-cancel-authority-use-jvm-inject-available
+         :import :pg-cancel-authority-use
+         :imports [:pg-cancel-authority-use]
+         :host :jvm
+         :result n
+         :live? true
+         :note "inject SCRAM fail-closed provider → -1"})
+      (finally
+        ((:close! provider))))))
+
+(defn- pg-close-scram-wat
+  []
+  "(module
+     (import \"kotoba\" \"pg_close_scram\"
+       (func $c (param i64) (result i32)))
+     (memory (export \"memory\") 1)
+     (func (export \"main\") (result i64)
+       (i64.extend_i32_s (call $c (i64.const 0)))))")
+
+(defn- prove-pg-close-scram-jvm
+  "Live-prove :pg-close-scram inject fail-closed (→ -1)."
+  []
+  (let [wasm (wat->wasm (pg-close-scram-wat))
+        caps {:grants #{:pg-close-scram} :limits {}}
+        provider (pg-wire/fail-closed-inject-provider)]
+    (try
+      (let [n (tender/run-main wasm [:pg-close-scram] caps
+                               {:provider-host-functions
+                                (:host-functions provider)})]
+        {:ok? (= -1 n)
+         :id :pg-close-scram-jvm-inject-available
+         :import :pg-close-scram
+         :imports [:pg-close-scram]
+         :host :jvm
+         :result n
+         :live? true
+         :note "inject SCRAM fail-closed provider → -1"})
+      (finally
+        ((:close! provider))))))
+
 (def jvm-live-corpus
   "Host-parity case ids that this runner can live-prove on JVM tender.
   Ids match lang/host-parity.edn :conformance :cases where listed;
@@ -1733,6 +1918,21 @@
    {:id :pg-execute-batch-jvm-inject-available
     :import :pg-execute-batch
     :prove prove-pg-execute-batch-jvm}
+   {:id :pg-open-scram-jvm-inject-available
+    :import :pg-open-scram
+    :prove prove-pg-open-scram-jvm}
+   {:id :pg-open-scram-random-jvm-inject-available
+    :import :pg-open-scram-random
+    :prove prove-pg-open-scram-random-jvm}
+   {:id :pg-open-scram-cancellable-random-jvm-inject-available
+    :import :pg-open-scram-cancellable-random
+    :prove prove-pg-open-scram-cancellable-random-jvm}
+   {:id :pg-cancel-authority-use-jvm-inject-available
+    :import :pg-cancel-authority-use
+    :prove prove-pg-cancel-authority-use-jvm}
+   {:id :pg-close-scram-jvm-inject-available
+    :import :pg-close-scram
+    :prove prove-pg-close-scram-jvm}
    {:id :http-fetch-jvm-available
     :import :http-fetch
     :prove prove-http-fetch-jvm}
@@ -1800,7 +2000,7 @@
      :failed failed
      :results results
      :case-ids (mapv :id jvm-live-corpus)
-     :note "T8.4: JVM tender live proofs (crypto/clock/log/cbor/json/http-fetch/headers/llm/kagi/transport/pg-pool/wire)."}))
+     :note "T8.4: JVM tender live proofs (crypto/clock/log/cbor/json/http-fetch/headers/llm/kagi/transport/pg-pool/wire/scram)."}))
 
 (defn run-node-live
   "Shell out to web/verify-host-parity-live.mjs (Node WebAssembly + actor-host).

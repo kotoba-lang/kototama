@@ -1,6 +1,6 @@
 # Grade A / T8.4 — live host runners (JVM + Node)
 
-- Status: partial (JVM 49 + Node 16 live; + pg wire open/query/simple-query inject)
+- Status: partial (JVM 54 + Node 16 live; full wire+SCRAM inject fail-closed)
 - Date: 2026-07-31
 - WBS: T8.4
 
@@ -55,6 +55,11 @@ WAT guests + Chicory tender for:
 | `:pg-session-reset-jvm-inject-available` | `:pg-session-reset` | wire fail-closed inject → -1 |
 | `:pg-execute-params-jvm-inject-available` | `:pg-execute-params` | wire fail-closed → -1 |
 | `:pg-close-statement-jvm-inject-available` | `:pg-close-statement` | wire fail-closed inject → -1 |
+| `:pg-open-scram-jvm-inject-available` | `:pg-open-scram` | SCRAM fail-closed inject → handle 0 |
+| `:pg-open-scram-random-jvm-inject-available` | `:pg-open-scram-random` | SCRAM fail-closed inject → handle 0 |
+| `:pg-open-scram-cancellable-random-jvm-inject-available` | `:pg-open-scram-cancellable-random` | SCRAM fail-closed → handle 0 |
+| `:pg-cancel-authority-use-jvm-inject-available` | `:pg-cancel-authority-use` | SCRAM fail-closed inject → -1 |
+| `:pg-close-scram-jvm-inject-available` | `:pg-close-scram` | SCRAM fail-closed inject → -1 |
 | `:http-fetch-jvm-available` | `:http-fetch` | loopback fail-closed (link+SSRF) |
 | `:http-post-headers-jvm-available` | `:http-post-headers` | loopback fail-closed (link+SSRF) |
 | `:json-extract-field-jvm-live` | `:json-extract-field` | pure host extract `{"x":"ok"}` → 2 |
@@ -85,21 +90,19 @@ Emits `HOST_PARITY_LIVE_JSON:` for Clojure integration (`run-node-live`).
 
 ## Non-claims
 
-- Not full host-parity table (pg component-link / SCRAM surface still open;
-  pg-pool + pg-cancel + core wire (open/query/simple-query) inject fail-closed; no live SCRAM/PG success path here)
+- Not full host-parity table live success: SCRAM/PG success path remains
+  qualification suite only (docs/postgresql-qualification.edn). Inject
+  fail-closed covers pg-pool + pg-cancel + full wire + SCRAM open/close surface.
 - Not signed ops AOT Components (T8.3)
 - Does not replace pure matrix `run-conformance`
 - Not claim T8.4 complete
-- JVM live corpus: 49 proofs; Node: 16 proofs
-- JVM live corpus: 49 proofs; Node: 16 proofs
+- JVM live corpus: 54 proofs; Node: 16 proofs
 - Loopback success is plain TCP (not TLS mutual-auth / production network ABAC)
-- Pool inject uses `fail-closed-inject-provider` (no live PostgreSQL)
+- Pool/wire/SCRAM inject uses `fail-closed-inject-provider` (no live PostgreSQL)
 
 ## Evidence
 
-- `test/kototama/host_parity_live_test.clj` (49 JVM live proofs)
-- `node web/verify-host-parity-live.mjs` (16 Node proofs)
-- `test/kototama/host_parity_live_test.clj` (49 JVM live proofs)
+- `test/kototama/host_parity_live_test.clj` (54 JVM live proofs)
 - `node web/verify-host-parity-live.mjs` (16 Node proofs)
 
 ## Related

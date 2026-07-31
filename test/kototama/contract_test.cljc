@@ -14,7 +14,7 @@
            :tls-server-end-point :transport-write :transport-read
            :transport-close :pg-cancel-register :pg-cancel :pg-pool-open :pg-pool-acquire :pg-pool-query
            :pg-pool-release :pg-pool-stats :pg-pool-health :pg-pool-drain
-           :pg-pool-close :pg-open :pg-query :pg-simple-query :pg-prepare :pg-session-reset :pg-close-statement :pg-query-state :pg-prepare-typed :pg-execute-params2 :pg-execute-params :pg-bind-portal :pg-fetch-portal :pg-close-portal :pg-copy-out :pg-copy-in :pg-execute-batch :http-get-stream :object-get-stream
+           :pg-pool-close :pg-open :pg-query :pg-simple-query :pg-prepare :pg-session-reset :pg-close-statement :pg-query-state :pg-prepare-typed :pg-execute-params2 :pg-execute-params :pg-bind-portal :pg-fetch-portal :pg-close-portal :pg-copy-out :pg-copy-in :pg-execute-batch :pg-open-scram :pg-open-scram-random :pg-open-scram-cancellable-random :pg-cancel-authority-use :pg-close-scram :http-get-stream :object-get-stream
            :object-put-block :object-compare-and-set-ref}
          (set (keys contract/import-by-id))))
   (is (= :log-write (contract/import-id "log-write"))))
