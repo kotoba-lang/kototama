@@ -99,6 +99,10 @@
                     :note "JVM transport-provider inject; browser native boundary"}
    :transport-close {:jvm :inject :browser :no :node :inject
                      :note "JVM transport-provider inject; browser native boundary"}
+   :pg-cancel-register {:jvm :inject :browser :no :node :inject
+                        :note "JVM transport-provider inject; browser native boundary"}
+   :pg-cancel {:jvm :inject :browser :no :node :inject
+               :note "JVM transport-provider inject; browser native boundary"}
    :pg-pool-open {:jvm :inject :browser :no :node :inject
                   :note "JVM postgresql-pool-provider via :provider-host-functions; browser intentional native boundary"}
    :pg-pool-acquire {:jvm :inject :browser :no :node :inject

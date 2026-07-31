@@ -953,6 +953,82 @@
       (finally
         ((:close! provider))))))
 
+(defn- pg-cancel-register-wat
+  "pg_cancel_register on non-TLS handle 0 → 0 (fail-closed)."
+  []
+  "(module
+     (import \"kotoba\" \"pg_cancel_register\"
+       (func $r (param i64 i32 i32) (result i32)))
+     (func (export \"main\") (result i64)
+       (i64.extend_i32_s
+         (call $r (i64.const 0) (i32.const 1) (i32.const 2)))))")
+
+(defn- prove-pg-cancel-register-jvm
+  "Live-prove :pg-cancel-register inject; no TLS session → 0."
+  []
+  (let [wasm (wat->wasm (pg-cancel-register-wat))
+        caps {:grants #{:pg-cancel-register}
+              :limits {:max-pg-cancel-handles 4
+                       :max-pg-cancel-requests 4
+                       :max-transport-connections 1
+                       :max-transport-connect-ms 100
+                       :max-transport-read-ms 100
+                       :max-transport-read-bytes 1024
+                       :max-transport-write-bytes 1024
+                       :transport-endpoint-allowlist #{}}}
+        provider (transport/native-provider caps {})]
+    (try
+      (let [n (tender/run-main wasm [:pg-cancel-register] caps
+                               {:provider-host-functions
+                                (:host-functions provider)})]
+        {:ok? (zero? n)
+         :id :pg-cancel-register-jvm-inject-available
+         :import :pg-cancel-register
+         :imports [:pg-cancel-register]
+         :host :jvm
+         :result n
+         :live? true
+         :note "inject transport-provider; non-TLS handle fail-closed (0)"})
+      (finally
+        ((:close! provider))))))
+
+(defn- pg-cancel-wat
+  "pg_cancel on unknown handle → -1."
+  []
+  "(module
+     (import \"kotoba\" \"pg_cancel\" (func $c (param i32) (result i32)))
+     (func (export \"main\") (result i64)
+       (i64.extend_i32_s (call $c (i32.const 99)))))")
+
+(defn- prove-pg-cancel-jvm
+  "Live-prove :pg-cancel inject; unknown cancel handle → -1."
+  []
+  (let [wasm (wat->wasm (pg-cancel-wat))
+        caps {:grants #{:pg-cancel}
+              :limits {:max-pg-cancel-handles 4
+                       :max-pg-cancel-requests 4
+                       :max-transport-connections 1
+                       :max-transport-connect-ms 100
+                       :max-transport-read-ms 100
+                       :max-transport-read-bytes 1024
+                       :max-transport-write-bytes 1024
+                       :transport-endpoint-allowlist #{}}}
+        provider (transport/native-provider caps {})]
+    (try
+      (let [n (tender/run-main wasm [:pg-cancel] caps
+                               {:provider-host-functions
+                                (:host-functions provider)})]
+        {:ok? (= -1 n)
+         :id :pg-cancel-jvm-inject-available
+         :import :pg-cancel
+         :imports [:pg-cancel]
+         :host :jvm
+         :result n
+         :live? true
+         :note "inject transport-provider; unknown cancel handle → -1"})
+      (finally
+        ((:close! provider))))))
+
 (def jvm-live-corpus
   "Host-parity case ids that this runner can live-prove on JVM tender.
   Ids match lang/host-parity.edn :conformance :cases where listed;
@@ -1073,6 +1149,12 @@
    {:id :pg-pool-drain-jvm-inject-available
     :import :pg-pool-drain
     :prove prove-pg-pool-drain-jvm}
+   {:id :pg-cancel-register-jvm-inject-available
+    :import :pg-cancel-register
+    :prove prove-pg-cancel-register-jvm}
+   {:id :pg-cancel-jvm-inject-available
+    :import :pg-cancel
+    :prove prove-pg-cancel-jvm}
    {:id :http-fetch-jvm-available
     :import :http-fetch
     :prove prove-http-fetch-jvm}
