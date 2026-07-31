@@ -151,7 +151,7 @@ const corpus = [
     // URL must match https allowlist entry (exact host + path prefix).
     limits: {
       maxHttpPosts: 8,
-      httpUrlAllowlist: ['https://example.test/'],
+      allowedUrlPrefixes: ['https://example.test/'],
     },
     inject: { httpPost: () => new TextEncoder().encode('pong') },
     check: (n) => Number(n) === 4,
@@ -204,6 +204,68 @@ const corpus = [
                            (i32.const 32) (i32.const 3)
                            (i32.const 64) (i32.const 64)))))`,
   },
+  {
+    id: 'http-fetch-node-inject-available',
+    imports: ['http-fetch'],
+    limits: {
+      maxHttpFetches: 8,
+      allowedUrlPrefixes: ['https://example.test/'],
+    },
+    // Injected GET — no real network; proves link + inject path.
+    inject: { httpFetch: () => new TextEncoder().encode('pong') },
+    check: (n) => Number(n) === 4,
+    wat: `(module
+      (import "kotoba" "http_fetch" (func $http_fetch (param i32 i32 i32 i32) (result i32)))
+      (memory (export "memory") 1)
+      (data (i32.const 0) "https://example.test/x")
+      (func (export "main") (result i64)
+        (i64.extend_i32_s
+          (call $http_fetch (i32.const 0) (i32.const 22)
+                            (i32.const 200) (i32.const 256)))))`,
+  },
+  {
+    id: 'http-post-headers-node-inject-available',
+    imports: ['http-post-headers'],
+    limits: {
+      maxHttpPosts: 8,
+      allowedUrlPrefixes: ['https://example.test/'],
+    },
+    inject: {
+      httpPostHeaders: (_url, _body, _headers) => new TextEncoder().encode('pong'),
+    },
+    check: (n) => Number(n) === 4,
+    // Headers: key\tvalue (WAT \t → tab). URL length 22, body 4, headers "X-T\t1" = 5.
+    wat: `(module
+      (import "kotoba" "http_post_headers"
+        (func $h (param i32 i32 i32 i32 i32 i32 i32 i32) (result i32)))
+      (memory (export "memory") 1)
+      (data (i32.const 0) "https://example.test/x")
+      (data (i32.const 100) "body")
+      (data (i32.const 200) "X-T\\t1")
+      (func (export "main") (result i64)
+        (i64.extend_i32_s
+          (call $h (i32.const 0) (i32.const 22)
+                   (i32.const 100) (i32.const 4)
+                   (i32.const 200) (i32.const 5)
+                   (i32.const 500) (i32.const 256)))))`,
+  },
+  {
+    id: 'json-extract-field-node-live',
+    imports: ['json-extract-field'],
+    check: (n) => Number(n) === 2,
+    // Extract "ok" from {"x":"ok"} — pure codec, no inject.
+    wat: `(module
+      (import "kotoba" "json_extract_field"
+        (func $j (param i32 i32 i32 i32 i32 i32) (result i32)))
+      (memory (export "memory") 1)
+      (data (i32.const 0) "{\\\"x\\\":\\\"ok\\\"}")
+      (data (i32.const 100) "x")
+      (func (export "main") (result i64)
+        (i64.extend_i32_s
+          (call $j (i32.const 0) (i32.const 11)
+                   (i32.const 100) (i32.const 1)
+                   (i32.const 300) (i32.const 64)))))`,
+  },
 ];
 
 const tmpRoot = await mkdtemp(path.join(tmpdir(), 'kototama-host-parity-live-'));
@@ -252,7 +314,7 @@ try {
           maxLogWriteBytes: 65536,
           maxLogReadBytes: 65536,
           maxHttpPosts: 8,
-          maxHttpGets: 8,
+          maxHttpFetches: 8,
           maxLlmInfers: 2,
           ...(entry.limits || {}),
         },
