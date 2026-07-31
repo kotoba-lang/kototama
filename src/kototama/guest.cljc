@@ -72,6 +72,7 @@
    :pg-copy-out "pg_copy_out"
    :pg-copy-in "pg_copy_in"
    :pg-execute-batch "pg_execute_batch"
+   :scram-sha256 "scram_sha256"
    :pg-open-scram "pg_open_scram"
    :pg-open-scram-random "pg_open_scram_random"
    :pg-open-scram-cancellable-random "pg_open_scram_cancellable_random"

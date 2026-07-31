@@ -151,6 +151,8 @@
              :note "JVM postgresql-wire-provider fail-closed inject; browser native boundary"}
    :pg-execute-batch {:jvm :inject :browser :no :node :inject
              :note "JVM postgresql-wire-provider fail-closed inject; browser native boundary"}
+   :scram-sha256 {:jvm :yes :browser :no :node :no
+             :note "JVM tender purpose-bound SCRAM crypto; password never to guest"}
    :pg-open-scram {:jvm :inject :browser :no :node :inject
              :note "JVM postgresql-wire-provider fail-closed inject; browser native boundary"}
    :pg-open-scram-random {:jvm :inject :browser :no :node :inject

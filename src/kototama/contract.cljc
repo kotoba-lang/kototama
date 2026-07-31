@@ -242,6 +242,12 @@
      :import/name "pg-execute-batch"
      :import/category :network
      :import/effects #{:network :write}}
+    ;; Purpose-bound SCRAM crypto (guest never sees password). Required for
+    ;; live SCRAM success path (pg_scram.kotoba); inject wire uses fail-closed.
+    {:import/id :scram-sha256
+     :import/name "scram-sha256"
+     :import/category :secret
+     :import/effects #{:secret}}
     ;; SCRAM wire inject (T8.4 remaining wire beyond portal/copy/batch).
     {:import/id :pg-open-scram
      :import/name "pg-open-scram"
@@ -307,6 +313,8 @@
                 :max-transport-write-bytes :non-negative-int
                 :max-pg-cancel-handles :non-negative-int
                 :max-pg-cancel-requests :non-negative-int
+                :max-scram-proofs :non-negative-int
+                :scram-credential-allowlist :set-or-nil
                 :transport-endpoint-allowlist :set-or-nil
                 :transport-resolved-address-allowlist :set-or-nil
                 :allowed-url-prefixes :vector-of-string-or-nil
@@ -345,6 +353,9 @@
    ;; PG cancel inject (transport-provider). Default 0 deny-by-default.
    :max-pg-cancel-handles 0
    :max-pg-cancel-requests 0
+   ;; SCRAM crypto proofs. Default 0 deny-by-default until HostCaps raises.
+   :max-scram-proofs 0
+   :scram-credential-allowlist nil
    :transport-endpoint-allowlist nil
    :transport-resolved-address-allowlist nil
    ;; 16 Wasm pages (64 KiB/page) = 1 MiB -- a guest that legitimately
