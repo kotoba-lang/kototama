@@ -175,6 +175,21 @@
      :import/name "pg-pool-close"
      :import/category :network
      :import/effects #{:network}}
+    ;; PostgreSQL wire component-link inject (T8.4 beyond pool/cancel).
+    ;; Real wire is component-linked Wasm + SCRAM; live runner uses
+    ;; postgresql-wire-provider fail-closed stubs.
+    {:import/id :pg-open
+     :import/name "pg-open"
+     :import/category :network
+     :import/effects #{:network}}
+    {:import/id :pg-query
+     :import/name "pg-query"
+     :import/category :network
+     :import/effects #{:network :write}}
+    {:import/id :pg-simple-query
+     :import/name "pg-simple-query"
+     :import/category :network
+     :import/effects #{:network :write}}
     ;; Component-only linear resources. Core-Wasm tenders do not bind these
     ;; names; they are present in HostCaps so the Component adapter can carry
     ;; Aiueos decisions to individual WIT providers without an ambient escape.

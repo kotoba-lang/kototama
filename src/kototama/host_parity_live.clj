@@ -17,6 +17,7 @@
             [kototama.contract :as contract]
             [kototama.tender :as tender]
             [kototama.postgresql-pool-provider :as pg-pool]
+            [kototama.postgresql-wire-provider :as pg-wire]
             [kototama.transport-provider :as transport]))
 
 (defn- wat->wasm
@@ -1029,6 +1030,122 @@
       (finally
         ((:close! provider))))))
 
+
+
+(defn- pg-open-wat
+  "pg_open with dummy host/user/db segments; fail-closed inject → handle 0."
+  []
+  "(module
+     (import \"kotoba\" \"pg_open\"
+       (func $o (param i32 i32 i32 i32 i32 i32 i32) (result i64)))
+     (memory (export \"memory\") 1)
+     (data (i32.const 0) \"h\")
+     (data (i32.const 8) \"u\")
+     (data (i32.const 16) \"d\")
+     (func (export \"main\") (result i64)
+       (call $o
+         (i32.const 0) (i32.const 1)
+         (i32.const 5432)
+         (i32.const 8) (i32.const 1)
+         (i32.const 16) (i32.const 1))))")
+
+(defn- prove-pg-open-jvm
+  "Live-prove :pg-open wire inject fail-closed (no SCRAM/PG → handle 0)."
+  []
+  (let [wasm (wat->wasm (pg-open-wat))
+        caps {:grants #{:pg-open} :limits {}}
+        provider (pg-wire/fail-closed-inject-provider)]
+    (try
+      (let [n (tender/run-main wasm [:pg-open] caps
+                               {:provider-host-functions
+                                (:host-functions provider)})]
+        {:ok? (zero? n)
+         :id :pg-open-jvm-inject-available
+         :import :pg-open
+         :imports [:pg-open]
+         :host :jvm
+         :result n
+         :live? true
+         :note "inject wire fail-closed provider; open → handle 0"})
+      (finally
+        ((:close! provider))))))
+
+(defn- pg-query-wat
+  "pg_query on handle 0; fail-closed → -1."
+  []
+  "(module
+     (import \"kotoba\" \"pg_query\"
+       (func $q (param i64 i32 i32 i32 i32) (result i32)))
+     (memory (export \"memory\") 1)
+     (data (i32.const 0) \"SELECT 1\")
+     (func (export \"main\") (result i64)
+       (i64.extend_i32_s
+         (call $q
+           (i64.const 0)
+           (i32.const 0) (i32.const 8)
+           (i32.const 64) (i32.const 256)))))")
+
+(defn- prove-pg-query-jvm
+  "Live-prove :pg-query wire inject fail-closed (no session → -1)."
+  []
+  (let [wasm (wat->wasm (pg-query-wat))
+        caps {:grants #{:pg-query}
+              :limits {:allow-write-imports? true}}
+        provider (pg-wire/fail-closed-inject-provider)]
+    (try
+      (let [n (tender/run-main wasm [:pg-query] caps
+                               {:provider-host-functions
+                                (:host-functions provider)})]
+        {:ok? (= -1 n)
+         :id :pg-query-jvm-inject-available
+         :import :pg-query
+         :imports [:pg-query]
+         :host :jvm
+         :result n
+         :live? true
+         :note "inject wire fail-closed provider; query → -1"})
+      (finally
+        ((:close! provider))))))
+
+(defn- pg-simple-query-wat
+  "pg_simple_query with baked conn+sql; fail-closed → -1."
+  []
+  "(module
+     (import \"kotoba\" \"pg_simple_query\"
+       (func $q (param i32 i32 i32 i32 i32 i32 i32) (result i32)))
+     (memory (export \"memory\") 1)
+     (data (i32.const 0) \"h\")
+     (data (i32.const 8) \"SELECT 1\")
+     (func (export \"main\") (result i64)
+       (i64.extend_i32_s
+         (call $q
+           (i32.const 0) (i32.const 1)
+           (i32.const 5432)
+           (i32.const 8) (i32.const 8)
+           (i32.const 64) (i32.const 256)))))")
+
+(defn- prove-pg-simple-query-jvm
+  "Live-prove :pg-simple-query wire inject fail-closed → -1."
+  []
+  (let [wasm (wat->wasm (pg-simple-query-wat))
+        caps {:grants #{:pg-simple-query}
+              :limits {:allow-write-imports? true}}
+        provider (pg-wire/fail-closed-inject-provider)]
+    (try
+      (let [n (tender/run-main wasm [:pg-simple-query] caps
+                               {:provider-host-functions
+                                (:host-functions provider)})]
+        {:ok? (= -1 n)
+         :id :pg-simple-query-jvm-inject-available
+         :import :pg-simple-query
+         :imports [:pg-simple-query]
+         :host :jvm
+         :result n
+         :live? true
+         :note "inject wire fail-closed provider; simple-query → -1"})
+      (finally
+        ((:close! provider))))))
+
 (def jvm-live-corpus
   "Host-parity case ids that this runner can live-prove on JVM tender.
   Ids match lang/host-parity.edn :conformance :cases where listed;
@@ -1155,6 +1272,15 @@
    {:id :pg-cancel-jvm-inject-available
     :import :pg-cancel
     :prove prove-pg-cancel-jvm}
+   {:id :pg-open-jvm-inject-available
+    :import :pg-open
+    :prove prove-pg-open-jvm}
+   {:id :pg-query-jvm-inject-available
+    :import :pg-query
+    :prove prove-pg-query-jvm}
+   {:id :pg-simple-query-jvm-inject-available
+    :import :pg-simple-query
+    :prove prove-pg-simple-query-jvm}
    {:id :http-fetch-jvm-available
     :import :http-fetch
     :prove prove-http-fetch-jvm}
@@ -1222,7 +1348,7 @@
      :failed failed
      :results results
      :case-ids (mapv :id jvm-live-corpus)
-     :note "T8.4: JVM tender live proofs (crypto/clock/log/cbor/json/http-fetch/headers/llm/kagi/transport/pg-pool)."}))
+     :note "T8.4: JVM tender live proofs (crypto/clock/log/cbor/json/http-fetch/headers/llm/kagi/transport/pg-pool/wire)."}))
 
 (defn run-node-live
   "Shell out to web/verify-host-parity-live.mjs (Node WebAssembly + actor-host).

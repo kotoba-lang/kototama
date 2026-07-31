@@ -56,12 +56,12 @@
 (deftest parity-score-ratio
   (let [s (browser/parity-score)]
     ;; Browser-linkable stays at 19 (crypto/log/http/codec/llm/stream).
-    ;; Transport/TLS (6) + kagi-sign (1) + pg-pool (8) + pg-cancel (2) are
-    ;; intentional browser :no native boundary — JVM inject / node inject (T8.4).
-    (is (= 36 (:total s)))
+    ;; Transport/TLS (6) + kagi-sign (1) + pg-pool (8) + pg-cancel (2) +
+    ;; pg wire open/query/simple (3) are intentional browser :no (T8.4 inject).
+    (is (= 39 (:total s)))
     (is (= 19 (:browser-yes s)))
-    (is (= 17 (:browser-no s)))
-    (is (== (/ 19 36) (:ratio s)))))
+    (is (= 20 (:browser-no s)))
+    (is (== (/ 19 39) (:ratio s)))))
 (deftest r2-report-shape
   (let [r (browser/r2-report)]
     (is (= :r2 (:level r)))
