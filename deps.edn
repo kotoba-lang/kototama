@@ -20,7 +20,7 @@
         {:git/url "https://github.com/kotoba-lang/kotoba-core-contracts.git"
          :git/sha "2e615d17406ef4b6311401167294becceb5af2a1"}
         io.github.kotoba-lang/abi {:git/url "https://github.com/kotoba-lang/abi.git"
-                                   :git/sha "6b2e5185ff98aa9cfec3f371a019e75b4c089aae"}
+                                   :git/sha "32ee84b2efc92478c846629c8d8319280eed506c"}
         ;; Component admission verifies identity CIDs structurally before
         ;; linking; a leading `b` is not evidence of content addressing.
         io.github.kotoba-lang/io-multiformats
