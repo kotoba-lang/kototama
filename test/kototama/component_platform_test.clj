@@ -4,6 +4,49 @@
             [kototama.component-platform :as platform]
             [multiformats.core :as mf]))
 
+;; --- identities ------------------------------------------------------------
+;; These were "bafy-plan", "bafycomponent" and so on: readable labels that are
+;; not CIDs. `kotoba.abi.contract/cid?` used to be `#"b.+"`, so they passed the
+;; portable contract — while THIS repository's own component-platform check
+;; already decoded the multihash. The gap those fixtures lived in is exactly
+;; the one abi 32ee84b closed (com-junkawasaki ADR-2608100500).
+;;
+;; Each label now resolves to a real CIDv1, derived so the value is
+;; reproducible rather than magic:
+;;
+;;   cidv1-raw(sha2-256("kototama/" + label))
+(def ^:private cids
+  {"artifact" "bafkreiaoor2wcoaq3u7mrbjrhbirx34xzqys3a2q5qhjpgdqwyg6ptrlfy"
+   "basis" "bafkreihsn6mdnvobjlbmjk5vz7ztnjb5miyvol7my3ixlz6xecob42qitq"
+   "clock" "bafkreiezmplwyi7toi4hydjfhnwwx55cvzfnoeswo3ruqj7wew7br2ph7y"
+   "closure" "bafkreie7sgf5oizcxm6ldv3ojinwde7lkwcnhk4wjfb7l3knyabc7dnocy"
+   "compiler" "bafkreid5nekxdlvum3rkqoragyxpeivn3j7ddzorynljvwxbir27w7jhly"
+   "component" "bafkreieyhyecmsmbwccq2y4qfvknhz6m6ydqsmgiklglgho5ldm3de5p24"
+   "componentauthority" "bafkreig3gnp7dytwmbiqyjr3dwcoougkhotkklikcnvqqnfne2mfxpog7a"
+   "componentauthorityhttp" "bafkreielvningeuw4nh7k22q6twdn2lrde55xk2c2ojlwxgrgi6pr6ohfy"
+   "componentflat" "bafkreia3znmizxxhlc4p7dxo6kzbofd7p3kob2thtcwujuy6otradpvriy"
+   "decision" "bafkreiaknav3buhvecbannx2d5mcyh6b5q6r6cmdhsv3ide5hr7srnffny"
+   "execution" "bafkreic7qyrftgfgap62nhskelvq4prffjs4np2semo75nwj7izxm2xw34"
+   "grant" "bafkreiby4j4qg5uqwdtcrxazwv5ldzzbjacotc743swvcat2gbgdz7tauq"
+   "input" "bafkreigmoi3fbt5coqs5ajsq6b6ehopxwmzmexlvcjghmow7ipzwviu4n4"
+   "lease" "bafkreihazedup3nijxru74js7xnltjhcdd6dih3cek7scw7ph6pokbww3q"
+   "lock" "bafkreic26zmsjddegdrv7ikbyoxrafgb7tyrps6wj2aslivthqbn3aczcy"
+   "missing" "bafkreidifls6tixbtvpa5vejfn35eqhgbhh2wgxwmiq6gskwk2siro4xi4"
+   "other" "bafkreifmdvltsfon4orf4cvrfieqxy5bkxb6bxzngmih2sxi47gtqp3o4y"
+   "outcome" "bafkreif7c255ykmnhcl7qhy3y4f747cxky4ha4dyry5gv4vnxeouldlgay"
+   "plan" "bafkreifotqbi536xl5ijkmfetw6boo6yzyrxpcsc5zh4sx4724uqiy273i"
+   "policy" "bafkreibwzjisibgslumbwv2l2ty5r4mlreapyy7g5j4uk7brqcvoczzobe"
+   "runtime" "bafkreihjph4khvpagzlzaxa3cgejh3x56pjkknahjt67zp2tjgtvk3t2vu"
+   "world" "bafkreifqsv77i4q4jxcojmgzgpbajbzwexn7e4qvw6t5gzd6kc2pfjkxrq"})
+
+(defn- cid-of
+  "The real CIDv1 fixture for `label`. Unknown labels fail loudly rather than
+  returning nil, which `cid?` would then reject with a confusing message."
+  [label]
+  (or (get cids label)
+      (throw (ex-info "no CID fixture for label" {:label label}))))
+
+
 (defn cid [value]
   (mf/cidv1-raw (.getBytes ^String value "UTF-8")))
 
@@ -57,8 +100,15 @@
   (is (= :invalid-ability
          (code (assoc-in valid [:abilities :aiueos.component/aiueos-http-post :audit-id] ""))))
   (is (= :invalid-identity (code (assoc valid :identity {}))))
+  ;; What this line tests is that a component-cid must BE a CID. It used to
+  ;; substitute "bafycomponent" and pass, which read as though admission bound
+  ;; the identity to a particular value — it does not, and `validate-identity!`
+  ;; never claimed to. Substituting a well-formed CID is accepted here, and the
+  ;; second assertion says so rather than leaving the reader to infer it.
   (is (= :invalid-identity
-         (code (assoc-in valid [:identity :component-cid] "bafycomponent"))))
+         (code (assoc-in valid [:identity :component-cid] "not-a-cid"))))
+  (is (nil? (code (assoc-in valid [:identity :component-cid] (cid-of "componentflat"))))
+      "structural admission does not bind component-cid to one value")
   (is (= :invalid-budgets (code (assoc valid :budgets {})))))
 
 (deftest async-world-requires-cancellation-and-bounds
