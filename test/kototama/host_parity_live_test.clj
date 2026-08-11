@@ -1,6 +1,7 @@
 (ns kototama.host-parity-live-test
   "T8.4 live host runner — JVM tender proofs for host-parity critical imports."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.string]
+            [clojure.test :refer [deftest is testing]]
             [kototama.host-parity-live :as live]))
 
 (deftest jvm-live-corpus-covers-critical-ids
@@ -88,3 +89,24 @@
     (is (= 38 (:passed r)))
     (is (empty? (:failed r)))
     (is (string? (:source r)))))
+
+;; The five families that moved from `:no` to `:inject` on 2026-07-31
+;; (be65572 / 887a361 / 3ae3665) are the ones whose honesty snapshot in
+;; browser_test went stale. Binding them to the EXECUTED Node corpus is what
+;; that snapshot could not do: this fails if the corpus stops proving a family
+;; while `host-impl` still claims it can inject.
+;;
+;; The join is by the corpus' own id convention, `<import>-node-...`. It is
+;; deliberately applied only to these five: a sweep over every `:node :inject`
+;; row reports 21 imports with no matching case id today, and until each is
+;; checked by hand that number is as likely to be a naming mismatch in this
+;; join as a missing proof. See kototama#… (follow-up).
+(deftest node-inject-claims-for-the-flipped-families-are-proven-live
+  (let [r (live/run-node-live)
+        ids (map name (:case-ids r))]
+    (is (true? (:ok? r)) "the Node live corpus did not run")
+    (doseq [import ["transport-connect" "tls-open" "pg-open"
+                    "scram-sha256" "pg-pool-open"]]
+      (is (some #(clojure.string/starts-with? % (str import "-node")) ids)
+          (str import " is claimed :node :inject but the Node live corpus"
+               " proves no case for it")))))
