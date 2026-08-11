@@ -65,16 +65,29 @@
 
 (deftest node-inject-honesty-matches-actor-host
   "T8.4 / kotoba-lang#356: Node :inject only where wasm-webcomponent actor-host
-  actually implements a provider. transport/tls/pg/scram are :no."
+  actually implements a provider.
+
+  The transport/tls/pg/scram families were `:no` here until 2026-07-31, when
+  three commits flipped them after the actor-host gained the providers:
+  `be65572` (transport/tls, wasm-webcomponent#17, Node corpus 16→21),
+  `887a361` (pg-pool/wire/scram, #18, 21→29) and `3ae3665` (deep wire +
+  SCRAM open, #19, 29→38). Each updated `host_parity_live_test` and the live
+  runner but not this snapshot, so main carried five failing assertions.
+
+  A hand-copied snapshot is what rotted, so the claim is bound to evidence
+  instead: `node-inject-claims-for-the-flipped-families-are-proven-live`
+  (host_parity_live_test) requires a matching case in the executed Node live
+  corpus for each family named here. This test keeps only the cheap,
+  network-free half."
   (is (= :inject (get-in browser/host-impl [:kagi-sign :node])))
   (is (= :inject (get-in browser/host-impl [:http-post :node])))
   (is (= :inject (get-in browser/host-impl [:llm-infer :node])))
   (is (= :inject (get-in browser/host-impl [:http-fetch :node])))
-  (is (= :no (get-in browser/host-impl [:transport-connect :node])))
-  (is (= :no (get-in browser/host-impl [:tls-open :node])))
-  (is (= :no (get-in browser/host-impl [:pg-open :node])))
-  (is (= :no (get-in browser/host-impl [:scram-sha256 :node])))
-  (is (= :no (get-in browser/host-impl [:pg-pool-open :node])))
+  (is (= :inject (get-in browser/host-impl [:transport-connect :node])))
+  (is (= :inject (get-in browser/host-impl [:tls-open :node])))
+  (is (= :inject (get-in browser/host-impl [:pg-open :node])))
+  (is (= :inject (get-in browser/host-impl [:scram-sha256 :node])))
+  (is (= :inject (get-in browser/host-impl [:pg-pool-open :node])))
   (is (= :yes (get-in browser/host-impl [:scram-sha256 :jvm]))))
 
 (deftest r2-report-shape
