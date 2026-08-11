@@ -100,7 +100,7 @@
 ;; deliberately applied only to these five: a sweep over every `:node :inject`
 ;; row reports 21 imports with no matching case id today, and until each is
 ;; checked by hand that number is as likely to be a naming mismatch in this
-;; join as a missing proof. See kototama#… (follow-up).
+;; join as a missing proof. See kototama#127.
 (deftest node-inject-claims-for-the-flipped-families-are-proven-live
   (let [r (live/run-node-live)
         ids (map name (:case-ids r))]
