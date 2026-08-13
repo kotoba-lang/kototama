@@ -1,20 +1,41 @@
 # kototama
 
-**Role: the Kotoba Wasm/Component runtime and engine boundary** — tender / host
-that validates, compiles, links, budgets, and runs guest modules produced by
-the Kotoba compiler. It does **not** own the language, compiler, grant policy,
-or fleet placement.
+`kototama` is the Kotoba **runtime** — 言霊, the spirit of the word when it
+acts. It validates, budgets, **runtime-links**, and runs artifacts that
+[`amu`](https://github.com/kotoba-lang/amu) wove. It does **not** own the
+language, the compiler, grant policy, or fleet placement.
+
+Solo5 called this role a *tender*. That word is a nautical metaphor for the
+attendant host. It is not the product name. The product is kototama.
+Hosts live in sibling repos so the dependency direction stays checkable
+(ADR-2607266000 / ADR-2608139980).
 
 ```text
-kotoba/compiler = language compiler (.kotoba → Core Wasm → Component)
-abi             = WIT, manifest, identity, and conformance contract
-kototama        = runtime / engine (validate, compile, link, run)
-aiueos          = authority (decides grants; supplies named providers)
-murakumo        = cluster control plane (places and observes, never grants)
-fleet           = reusable T6 placement loop (leases/checkpoints/fencing)
+kotoba     言葉      language
+amu        編む      compiler — project link, one closed cloth
+abi        経        WIT / admission contract (no implementation)
+kototama   言霊      runtime — host, budget, runtime link
+aiueos     あいうえお  authority (decides grants; supplies named providers)
+murakumo   叢雲      cluster control plane (places and observes, never grants)
+sahai      差配      T6 placement loop (leases/checkpoints/fencing)
 ```
 
-Stack vocabulary: [ADR-2607022400](https://github.com/com-junkawasaki/root/blob/main/90-docs/adr/2607022400-kototama-unikernel-tender-runtime-vocabulary.md).
+## Hosts (all kototama, not sibling products)
+
+| Host | Repo | What it runs |
+|---|---|---|
+| browser / native Wasm | [`wasm-webcomponent`](https://github.com/kotoba-lang/wasm-webcomponent) | AOT `.wasm` on the host engine. First path. Extracted so other repos can adopt it |
+| native ELF | [`tender-native`](https://github.com/kotoba-lang/tender-native) | `kototama.native.executor` — sealed native artifacts under a capability gate |
+| Component engine | [`tender-component`](https://github.com/kotoba-lang/tender-component) | already-admitted Components via Wasmtime micro-TCB / jco / workerd |
+| JVM compat | `kototama.tender` (this repo) | Chicory harness. Not the first path |
+
+`provider` is the hand kototama may bind after aiueos grants. It is not
+shipped inside this repo.
+
+See [`docs/hosts.md`](docs/hosts.md).
+
+Stack vocabulary: [ADR-2607022400](https://github.com/com-junkawasaki/root/blob/main/90-docs/adr/2607022400-kototama-unikernel-tender-runtime-vocabulary.md)
+(role word *tender*), product naming [ADR-2608139980](https://github.com/com-junkawasaki/root/blob/main/90-docs/adr/2608139980-amu-weaves-kototama-binds.edn).
 Stack topology, the deliberate `kototama → aiueos` dependency direction, the
 browser-parity gate for new `actor:host` imports, and the canonical
 capability-schema plan: [docs/0009](docs/0009-stack-topology-parity-gate-capability-schema.md)
@@ -32,12 +53,12 @@ duplication — just an undocumented spelling split, which this note closes.
 
 ## Role (detail)
 
-In the `kotoba → kototama → aiueos` stack
-([ADR-2607022400](https://github.com/com-junkawasaki/root/blob/main/90-docs/adr/2607022400-kototama-unikernel-tender-runtime-vocabulary.md)),
-kototama is the **Wasm tender runtime**: it hosts the Wasm guests that
-**kotoba** (the language) compiles (`.kotoba` → `kotoba wasm emit` → AOT `.wasm`),
-under capability grants that `aiueos` decides. Solo5's *tender* pattern —
-kototama hosts, the component is guest. **Do not reimplement the compiler here.**
+In the `kotoba → amu → kototama → aiueos` stack, kototama hosts the guests
+that **amu** wove, under capability grants that `aiueos` decides. The
+attendant-host pattern (Solo5 *tender*) still holds: kototama hosts, the
+artifact is guest. **Do not reimplement the compiler here.** Project linking
+(many sources → one cloth) is amu. Runtime linking (imports → granted
+providers) is kototama.
 
 The current portable contract is WIT plus the WebAssembly Component Model on
 WASI 0.3, versioned in [`kotoba-lang/abi`](https://github.com/kotoba-lang/abi).

@@ -9,12 +9,16 @@ topology and the full cross-repo cleanup list live there.
 ## Position in the stack topology
 
 ```
-kotoba    = language + datom model   (compiles guests)
-compiler  = AOT compiler             (foundation; depends on nothing in the stack)
-kototama  = Wasm tender (THIS REPO)  (depends on: aiueos, ed25519, chicory)
-aiueos    = capability OS / broker   (depends on: security, chicory only)
+kotoba    = language + datom model
+amu       = compiler（編む; project link）
+kototama  = runtime（言霊; host + runtime link）  (THIS REPO)
+aiueos    = capability OS / broker
 kotobase  = datom database           (depends on: kotoba, never the reverse)
 ```
+
+Hosts of kototama (not sibling products): `wasm-webcomponent` (browser),
+`tender-native` (native ELF), `tender-component` (Component engine).
+The Solo5 word *tender* is a role, not a product name (ADR-2608139980).
 
 **The `kototama → aiueos` deps.edn edge is deliberate and load-bearing:**
 "aiueos decides, kototama enforces" (ADR-2607022700) is expressed as a real
