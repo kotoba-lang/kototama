@@ -25,8 +25,8 @@ sahai      差配      T6 placement loop (leases/checkpoints/fencing)
 | Host | Repo | What it runs |
 |---|---|---|
 | browser / native Wasm | [`wasm-webcomponent`](https://github.com/kotoba-lang/wasm-webcomponent) | AOT `.wasm` on the host engine. First path. Extracted so other repos can adopt it |
-| native ELF | [`tender-native`](https://github.com/kotoba-lang/tender-native) | `kototama.native.executor` — sealed native artifacts under a capability gate |
-| Component engine | [`tender-component`](https://github.com/kotoba-lang/tender-component) | already-admitted Components via Wasmtime micro-TCB / jco / workerd |
+| native ELF | [`kototama-native`](https://github.com/kotoba-lang/kototama-native) | `kototama.native.executor` — sealed native artifacts under a capability gate |
+| Component engine | [`kototama-component`](https://github.com/kotoba-lang/kototama-component) | already-admitted Components via Wasmtime micro-TCB / jco / workerd |
 | JVM compat | `kototama.tender` (this repo) | Chicory harness. Not the first path |
 
 `provider` is the hand kototama may bind after aiueos grants. It is not
