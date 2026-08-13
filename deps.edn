@@ -89,16 +89,16 @@
                          {:local/root "../org-w3-did"}}
          :main-opts ["-m" "cognitect.test-runner"]
          :exec-fn cognitect.test-runner.api/test}
-       ;; T3 hosts — extra-deps, not core. Product name is kototama;
-       ;; these GitHub names are historical aliases (ADR-2608139980).
+       ;; T3 hosts — extra-deps, not core. Product name is kototama
+       ;; (ADR-2608139980). Old GitHub names tender-* still redirect.
        :native-host
-       {:extra-deps {io.github.kotoba-lang/tender-native
-                     {:git/url "https://github.com/kotoba-lang/tender-native.git"
-                      :git/sha "1915ee10a0a2af7edd252e7a0ffd67c0d4c3a167"}}}
+       {:extra-deps {io.github.kotoba-lang/kototama-native
+                     {:git/url "https://github.com/kotoba-lang/kototama-native.git"
+                      :git/sha "e52b41a68481033f40a511185e3347633612169a"}}}
        :component-host
-       {:extra-deps {io.github.kotoba-lang/tender-component
-                     {:git/url "https://github.com/kotoba-lang/tender-component.git"
-                      :git/sha "d985006d0b07cf9595f89e45cfeb0c62a1360020"}}}
+       {:extra-deps {io.github.kotoba-lang/kototama-component
+                     {:git/url "https://github.com/kotoba-lang/kototama-component.git"
+                      :git/sha "d336ff74494c541566822f3a581956442b6c392f"}}}
        ;; clj-kondo as a Clojars lib (no Homebrew/system install needed).
        :lint {:replace-deps {clj-kondo/clj-kondo {:mvn/version "2024.11.14"}}
          :main-opts ["-m" "clj-kondo.main" "--lint" "src" "test"

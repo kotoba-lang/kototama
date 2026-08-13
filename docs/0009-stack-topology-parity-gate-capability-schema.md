@@ -17,7 +17,7 @@ kotobase  = datom database           (depends on: kotoba, never the reverse)
 ```
 
 Hosts of kototama (not sibling products): `wasm-webcomponent` (browser),
-`tender-native` (native ELF), `tender-component` (Component engine).
+`kototama-native` (native ELF), `kototama-component` (Component engine).
 The Solo5 word *tender* is a role, not a product name (ADR-2608139980).
 
 **The `kototama → aiueos` deps.edn edge is deliberate and load-bearing:**
