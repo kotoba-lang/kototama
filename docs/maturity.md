@@ -39,6 +39,8 @@ clojure -M:cli run test/kototama/fixtures/kotoba-compiled-peak-cells.wasm
 | `kotoba-compiled-cbor-encode-nested.wasm` | `cbor_encode` | 25-byte CBOR map(1) `{"s":{"t":"eip4361","s":"sigvalue"}}` (dotted-path nesting) |
 | `kotoba-compiled-json-encode-nested.wasm` | `json_encode` | `{"s":{"t":"eip4361","s":"sigvalue"},"p":{"resources":["a","b"]}}` |
 | `kotoba-compiled-http-post-headers.wasm` | `http_post_headers` | `-1` (loopback URL refused by the SSRF denylist -- same non-live-network proof as `kotoba-compiled-http-fetch.wasm`) |
+| `amu-compiled-i64-main.wasm` | none | `42` — guest **amu wove** (`wasm32-kotoba-v1`), not `kotoba wasm emit` |
+| `amu-compiled-clock-now.wasm` | `kotoba:cap`/`call` id 7 | wall millis — i64 `clock/now` seed ABI; kit `:wasm-aot` stays pending (variant schema) |
 
 ## R2 acceptance gates
 
