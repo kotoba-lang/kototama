@@ -140,14 +140,21 @@
           n))))
 
 (defn host-fn
-  "One (module \"kotoba\") host import: FIELD, param/result ValTypes, and
-  a Clojure fn [instance long-args] -> long (the single i32/i64 result)."
-  [field params result f]
-  (HostFunction. "kotoba" field
-                 (FunctionType/of params [result])
-                 (reify WasmFunctionHandle
-                   (apply [_ instance args]
-                     (long-array [(f instance args)])))))
+  "One host import: FIELD under MODULE (default \"kotoba\"), param/result
+  ValTypes, and a Clojure fn [instance long-args] -> long (the single
+  i32/i64 result).
+
+  Actor:host guests compiled by the legacy `kotoba wasm emit` import
+  module \"kotoba\". Guests amu weaves for word-typed `typed-cap-call`
+  import `kotoba:cap`/`call` (i64 capability id, i64 request)->i64."
+  ([field params result f]
+   (host-fn "kotoba" field params result f))
+  ([module field params result f]
+   (HostFunction. module field
+                  (FunctionType/of params [result])
+                  (reify WasmFunctionHandle
+                    (apply [_ instance args]
+                      (long-array [(f instance args)]))))))
 
 (def ^:private valtype {:i32 ValType/I32 :i64 ValType/I64})
 
@@ -1091,6 +1098,26 @@
              (ensure-granted! caps :clock-monotonic)
              (System/currentTimeMillis))))
 
+(def ^:private clock-now-capability-id 7)
+
+(defn- cap-call-host-fn
+  "Amu's wasm32-kotoba-v1 backend lowers `(typed-cap-call id :i64 :i64 x)`
+  to import `kotoba:cap`/`call`. Capability 7 is `clock/now` (the i64 seed
+  ABI the compiler actually elaborates, not the variant kit schema). The
+  grant remains `:clock-monotonic` — same host clock the legacy
+  `clock_monotonic` import already uses."
+  [caps _limits-state]
+  (host-fn "kotoba:cap" "call" [ValType/I64 ValType/I64] ValType/I64
+           (fn [_instance args]
+             (let [id (aget args 0)]
+               (cond
+                 (= id clock-now-capability-id)
+                 (do (ensure-granted! caps :clock-monotonic)
+                     (System/currentTimeMillis))
+                 :else
+                 (denied! :cap-call :grant/unknown-capability
+                          {:capability-id id}))))))
+
 
 (defn- hmac-sha256 [key data]
   (let [mac (Mac/getInstance "HmacSHA256")]
@@ -1373,7 +1400,8 @@
                                {:kototama.tender/errors
                                 [{:error :runtime/provider-unavailable
                                   :imports missing-providers}]})))
-           host-fns (mapv (fn [id] ((get fn-by-id id))) (:requested validation))
+           host-fns (into (mapv (fn [id] ((get fn-by-id id))) (:requested validation))
+                          [(cap-call-host-fn caps limits-state)])
            imports (-> (ImportValues/builder)
                       (.addFunction (into-array ImportFunction host-fns))
                       .build)

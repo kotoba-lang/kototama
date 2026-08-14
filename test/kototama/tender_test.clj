@@ -1449,3 +1449,34 @@
           caps (contract/host-caps {:grants [:http-post-headers] :limits {:max-http-posts 1}})
           written (tender/run-main wasm [:http-post-headers] caps)]
       (is (= -1 written) "loopback URL refused by the same denylist the WAT-based tests above verify"))))
+
+;; ---------------------------------------------------------------------------
+;; Guests amu wove (kotoba compile / wasm32-kotoba-v1), not `kotoba wasm emit`.
+;; The checked-in bytes are produced by kotoba-wasm from the KIR amu lowers;
+;; source sits beside each fixture. This is the stack bind ADR-2608139980
+;; names: amu weaves, kototama binds.
+
+(deftest amu-compiled-i64-main-runs-on-the-tender
+  (testing "host-free `(defn main [] 42)` from amu, not WAT or wasm emit"
+    (let [wasm (read-fixture "amu-compiled-i64-main.wasm")
+          inspected (tender/inspect-module wasm)]
+      (is (:has-main? inspected))
+      (is (empty? (:import-names inspected))
+          "this guest is host-free")
+      (is (= 42 (tender/run-main wasm [] {}))))))
+
+(deftest amu-compiled-clock-now-links-kotoba-cap-call
+  (testing "`(clock/now 0)` → kotoba:cap/call id 7, granted as :clock-monotonic"
+    (let [wasm (read-fixture "amu-compiled-clock-now.wasm")
+          inspected (tender/inspect-module wasm)
+          caps (contract/host-caps {:grants [:clock-monotonic]})
+          before (System/currentTimeMillis)
+          n (tender/run-main wasm [:clock-monotonic] caps)
+          after (System/currentTimeMillis)]
+      (is (= [{:module "kotoba:cap" :name "call"}] (:imports inspected)))
+      (is (<= before n after)
+          "host returns wall millis from the same clock_monotonic grant")
+      (is (thrown-with-msg?
+           clojure.lang.ExceptionInfo #"host import denied"
+           (tender/run-main wasm [] {}))
+          "missing :clock-monotonic grant is fail-closed at the call"))))
