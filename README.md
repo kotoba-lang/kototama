@@ -20,6 +20,36 @@ murakumo   叢雲      cluster control plane (places and observes, never grants)
 sahai      差配      T6 placement loop (leases/checkpoints/fencing)
 ```
 
+## What a run leaves behind
+
+Running is the point at which the stack touches the world, so the record of it
+is a first-class value rather than a side effect. Root ADR-2608160200 makes
+that explicit:
+
+- **A receipt is a value, not a line.** `kototama.linear-journal` is a durable
+  at-most-once capability-consumption journal, and that safety property is
+  kept exactly as it is — content addressing is not idempotence, and a CID
+  does not stop a second execution. What changes is that the entry becomes an
+  IPLD value with a CID, so a transaction can cite the receipt that authorised
+  it, and the journal becomes a parent-linked chain instead of an append order.
+  The four required fields (`:receipt/cap`, `:receipt/at`, `:receipt/call`,
+  `:receipt/outcome`) are already specified in `kotoba-lang`'s
+  `lang/capability-semantics.edn`; they become the value's fields unchanged.
+
+- **An execution is addressable**: `{program, input, state, runtime, policy,
+  effects} → CID`. This is the runtime half of what amu already does for
+  builds with `:kotoba.output-set/v1` and its signed provenance.
+
+- **That CID is a memo key only when the effects allow it** — when the effect
+  set is empty, or when the log is complete enough to replay (the external
+  responses, the clock, the randomness are all in the receipt). Otherwise the
+  execution CID is a *receipt*, not a cache key. Treating the two as the same
+  thing builds a cache that never notices the world changed.
+
+Receipts and artifacts live on the same physical plane as database state —
+IPLD blocks in CARv2 packs on the object store (root ADR-2608160100). Small
+frequent values like receipts are exactly what packing is for.
+
 ## Hosts (all kototama, not sibling products)
 
 | Host | Repo | What it runs |
