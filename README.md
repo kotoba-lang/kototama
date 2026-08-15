@@ -168,6 +168,32 @@ Wasm interpreter". Hosting library:
 (`web/` is a consumer). See `web/README.md` for R0 scope.  
 `kotoba wasm run` and `kototama.tender` Chicory paths are **compat / CI**.
 
+## Published site (`index.html`, `docs/index.html`)
+
+GitHub Pages serves this repository from the default branch root, so the demo
+and every document are already public. Both directory addresses used to 404 —
+there was no document at either, and no map of what was published.
+`scripts/generate-site.cljs` builds them from the repository tree: the lead
+paragraph is read out of this README, each document title is that file's own
+`#` heading, each byte count is `stat` on the real file. It is built on
+[`jp-go-dds`](https://github.com/kotoba-lang/jp-go-digital-design-system), the
+workspace's base design system.
+
+```bash
+D=../jp-go-digital-design-system
+nbb --classpath "$D/src:../html/src:../css/src" scripts/generate-site.cljs \
+  --dds-css "$D/resources/jp_go_dds/dds.css"            # regenerate
+nbb --classpath "$D/src:../html/src:../css/src" scripts/generate-site.cljs \
+  --dds-css "$D/resources/jp_go_dds/dds.css" --check    # 1 if hand-edited
+```
+
+The output is generated — do not hand-edit it. `--check` exits 1 when the
+committed HTML and a fresh generation disagree, and the generator refuses
+(exit 1) rather than publish an index with no documents, a demo section with
+no payloads, or a document title it had to invent from a filename. An input
+it cannot read at all exits 2, so "could not run" never looks like "ran and
+found nothing wrong".
+
 ## Maturity
 
 **Current tender level: R2 advanced-partial** (R1 stable). The former R3
