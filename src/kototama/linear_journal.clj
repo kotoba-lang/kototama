@@ -145,3 +145,94 @@
             :else
             {:ok? false :count (count es) :unchained unchained
              :broken-at i :expected prev :found declared}))))))
+
+;; ── outcomes ────────────────────────────────────────────────────────────────
+;;
+;; A claim is written BEFORE the provider runs -- that is what makes the
+;; guarantee at-most-once rather than exactly-once -- so at claim time there
+;; is no outcome to record. The outcome is a second entry, written after, and
+;; `capability-semantics.edn` says what it must carry:
+;; `:receipt/cap`, `:receipt/at`, `:receipt/call`, `:receipt/outcome`.
+;;
+;; That file also declares `:attempt-always-receipted true`. A rule nothing
+;; can check is a wish, so `unreceipted` answers which consumptions have no
+;; outcome recorded -- and a crash between the claim and the receipt is
+;; exactly what it should report, not a case to paper over.
+
+(def required-receipt-keys
+  "From `kotoba-lang`'s `lang/capability-semantics.edn`."
+  #{:receipt/cap :receipt/at :receipt/call :receipt/outcome})
+
+(defn- append-entry!
+  "Append one chained, fsynced entry under the file lock. The chain head is
+   read in the same critical section that writes, so two writers cannot
+   produce two entries claiming the same parent."
+  [^Journal journal entry-fn]
+  (let [lock (:lock journal)]
+    (.lock lock)
+    (try
+      (with-open [raf (RandomAccessFile. (:file journal) "rw")
+                  file-lock (.lock (.getChannel raf))]
+        (let [bytes (byte-array (.length raf))
+              _ (.seek raf 0)
+              _ (.readFully raf bytes)
+              recovered (->> (.split (String. bytes StandardCharsets/UTF_8) "\n")
+                             (remove empty?)
+                             (map edn/read-string))
+              prev (some-> (last recovered) entry-cid)]
+          (when-let [entry (entry-fn (vec recovered))]
+            (let [entry (cond-> entry prev (assoc :prev prev))]
+              (.seek raf (.length raf))
+              (.write raf (.getBytes (str (canonical-line entry) "\n")
+                                     StandardCharsets/UTF_8))
+              (.sync (.getFD raf))
+              (entry-cid entry)))))
+      (finally (.unlock lock)))))
+
+(defn- claims [entries lease-id import]
+  (filterv #(and (= :consume (:op %))
+                 (= lease-id (:lease-id %))
+                 (= import (:import %)))
+           entries))
+
+(defn receipt!
+  "Record the outcome of a consumption. Returns the receipt's CID, or nil if
+   there is no claim to attach it to.
+
+   `receipt` must carry every key in `required-receipt-keys`. A receipt for a
+   consumption that never happened is refused: it would be a record of
+   authority nobody spent."
+  [^Journal journal lease-id import ordinal receipt]
+  (let [missing (remove #(contains? receipt %) required-receipt-keys)]
+    (when (seq missing)
+      (throw (ex-info "linear-journal: incomplete receipt"
+                      {:type :linear-journal/incomplete-receipt
+                       :missing (set missing)}))))
+  (append-entry!
+   journal
+   (fn [entries]
+     (when (some #(= ordinal (:ordinal %)) (claims entries lease-id import))
+       (merge {:op :receipt :lease-id lease-id :import import :ordinal ordinal}
+              (select-keys receipt (into required-receipt-keys [:receipt/value])))))))
+
+(defn receipts
+  "Every recorded outcome for `lease-id`/`import`."
+  [^Journal journal lease-id import]
+  (filterv #(and (= :receipt (:op %))
+                 (= lease-id (:lease-id %))
+                 (= import (:import %)))
+           (entries journal)))
+
+(defn unreceipted
+  "Consumptions with no outcome recorded — the checkable form of
+   `capability-semantics.edn`'s `:attempt-always-receipted`.
+
+   A crash between the claim and the provider returning shows up here, which
+   is the point: the authority was spent and nothing knows what came of it."
+  [^Journal journal]
+  (let [es (entries journal)
+        receipted (set (map (juxt :lease-id :import :ordinal)
+                            (filter #(= :receipt (:op %)) es)))]
+    (filterv #(and (= :consume (:op %))
+                   (not (receipted ((juxt :lease-id :import :ordinal) %))))
+             es)))
