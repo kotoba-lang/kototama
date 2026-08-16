@@ -129,3 +129,88 @@
         (write-lines! path (assoc lines 2 stripped)))
       (is (false? (:ok? (journal/verify-chain j))))
       (Files/deleteIfExists (Path/of path (make-array String 0))))))
+
+;; ── outcomes ────────────────────────────────────────────────────────────────
+;; capability-semantics.edn requires four fields and declares
+;; :attempt-always-receipted. A claim is written BEFORE the provider runs, so
+;; the outcome is necessarily a second entry -- and the gap between them is a
+;; real state, not a case to paper over.
+
+(defn- ok-receipt [call]
+  {:receipt/cap "cap-1" :receipt/at "2026-08-16T00:00:00Z"
+   :receipt/call call :receipt/outcome :ok})
+
+(deftest an-outcome-is-recorded-against-its-claim
+  (let [path (temp-path "linear-receipt-")
+        j (journal/open! path)]
+    (is (journal/claim! j "lease-r" :refund/execute 1))
+    (let [cid (journal/receipt! j "lease-r" :refund/execute 1
+                                (ok-receipt :refund/execute))]
+      (is (string? cid) "the receipt is a value like every other entry")
+      (is (= 1 (count (journal/receipts j "lease-r" :refund/execute))))
+      (is (empty? (journal/unreceipted j)))
+      (is (:ok? (journal/verify-chain j)) "and it extends the same chain"))
+    (Files/deleteIfExists (Path/of path (make-array String 0)))))
+
+(deftest a-receipt-does-not-consume-budget
+  (testing "the at-most-once count must be unaffected by outcome records --
+            otherwise recording what happened would spend authority"
+    (let [path (temp-path "linear-receipt-budget-")
+          j (journal/open! path)]
+      (is (journal/claim! j "lease-b" :clock/now 2))
+      (journal/receipt! j "lease-b" :clock/now 1 (ok-receipt :clock/now))
+      (journal/receipt! j "lease-b" :clock/now 1 (ok-receipt :clock/now))
+      (is (= 1 (journal/consumed j "lease-b" :clock/now))
+          "two receipts, still one consumption")
+      (is (journal/claim! j "lease-b" :clock/now 2) "the second claim is still available")
+      (is (false? (journal/claim! j "lease-b" :clock/now 2)) "and the third is not")
+      (Files/deleteIfExists (Path/of path (make-array String 0))))))
+
+(deftest a-consumption-with-no-outcome-is-reported
+  (testing "a crash between the claim and the provider returning: the
+            authority was spent and nothing knows what came of it"
+    (let [path (temp-path "linear-unreceipted-")
+          j (journal/open! path)]
+      (is (journal/claim! j "lease-u" :net/fetch 2))
+      (is (journal/claim! j "lease-u" :net/fetch 2))
+      (journal/receipt! j "lease-u" :net/fetch 1 (ok-receipt :net/fetch))
+      (let [open (journal/unreceipted j)]
+        (is (= 1 (count open)))
+        (is (= 2 (:ordinal (first open))) "the second attempt is the one with no outcome"))
+      (Files/deleteIfExists (Path/of path (make-array String 0))))))
+
+(deftest an-incomplete-receipt-is-refused
+  (let [path (temp-path "linear-receipt-partial-")
+        j (journal/open! path)]
+    (journal/claim! j "lease-p" :clock/now 1)
+    (doseq [k journal/required-receipt-keys]
+      (is (thrown? Exception
+                   (journal/receipt! j "lease-p" :clock/now 1
+                                     (dissoc (ok-receipt :clock/now) k)))
+          (str "missing " k " is not a receipt")))
+    (is (= 1 (count (journal/unreceipted j))) "and nothing was written")
+    (Files/deleteIfExists (Path/of path (make-array String 0)))))
+
+(deftest a-receipt-for-a-consumption-that-never-happened-is-refused
+  (testing "it would be a record of authority nobody spent"
+    (let [path (temp-path "linear-receipt-phantom-")
+          j (journal/open! path)]
+      (journal/claim! j "lease-x" :clock/now 1)
+      (is (nil? (journal/receipt! j "lease-x" :clock/now 7 (ok-receipt :clock/now)))
+          "ordinal 7 was never claimed")
+      (is (nil? (journal/receipt! j "other-lease" :clock/now 1 (ok-receipt :clock/now))))
+      (is (empty? (journal/receipts j "lease-x" :clock/now)))
+      (Files/deleteIfExists (Path/of path (make-array String 0))))))
+
+(deftest a-source-outcome-can-carry-its-value
+  (testing "kototama.execution refuses to memoise a source whose value was
+            not recorded; this is where that value comes from"
+    (let [path (temp-path "linear-receipt-value-")
+          j (journal/open! path)]
+      (journal/claim! j "lease-v" :clock/now 1)
+      (journal/receipt! j "lease-v" :clock/now 1
+                        (assoc (ok-receipt :clock/now)
+                               :receipt/value "2026-08-16T00:00:00Z"))
+      (is (= "2026-08-16T00:00:00Z"
+             (:receipt/value (first (journal/receipts j "lease-v" :clock/now)))))
+      (Files/deleteIfExists (Path/of path (make-array String 0))))))

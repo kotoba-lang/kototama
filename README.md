@@ -45,12 +45,29 @@ that explicit:
   not a broken chain. Stripping `:prev` from a chained entry is *not*
   accepted as legacy, or the escape hatch would be the forgery route.
 
-  Still to come: dag-cbor rather than raw (so generic tooling can read the
-  fields — it costs a CBOR dependency in a repo that keeps `kototama.contract`
-  and `lib/*` zero-dep, and there is no reader yet), and the four fields
-  `kotoba-lang`'s `lang/capability-semantics.edn` specifies
-  (`:receipt/cap`, `:receipt/at`, `:receipt/call`, `:receipt/outcome`), which
-  this journal does not yet record — it records consumption, not outcome.
+  **Outcomes are recorded too** — *landed 2026-08-16*. A claim is written
+  *before* the provider runs (that is what makes the guarantee at-most-once
+  rather than exactly-once), so at claim time there is no outcome; the
+  outcome is a second entry carrying the four fields
+  `lang/capability-semantics.edn` requires — `:receipt/cap`, `:receipt/at`,
+  `:receipt/call`, `:receipt/outcome` — plus `:receipt/value` for a source,
+  which is exactly what `kototama.execution` needs before it will treat an
+  execution CID as a cache key.
+
+  A receipt never consumes budget, an incomplete one is refused, and a
+  receipt for a consumption that never happened is refused — it would be a
+  record of authority nobody spent.
+
+  `capability-semantics.edn` also declares `:attempt-always-receipted true`,
+  and a rule nothing can check is a wish, so **`unreceipted` answers which
+  consumptions have no outcome recorded**. A crash between the claim and the
+  provider returning shows up there, which is the point: the authority was
+  spent and nothing knows what came of it.
+
+  Still to come: dag-cbor rather than raw, so generic tooling can read the
+  fields. It costs a CBOR dependency in a repo that keeps
+  `kototama.contract` and `lib/*` zero-dep, and there is still no reader
+  asking for it — the condition for paying, not a date.
 
 - **An execution is addressable** — *landed 2026-08-16*, `kototama.execution`:
   `{program, input, state, runtime, policy, effects} → CID`, the runtime half
