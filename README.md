@@ -52,15 +52,28 @@ that explicit:
   (`:receipt/cap`, `:receipt/at`, `:receipt/call`, `:receipt/outcome`), which
   this journal does not yet record — it records consumption, not outcome.
 
-- **An execution is addressable**: `{program, input, state, runtime, policy,
-  effects} → CID`. This is the runtime half of what amu already does for
-  builds with `:kotoba.output-set/v1` and its signed provenance.
+- **An execution is addressable** — *landed 2026-08-16*, `kototama.execution`:
+  `{program, input, state, runtime, policy, effects} → CID`, the runtime half
+  of what amu already does for builds with `:kotoba.output-set/v1` and its
+  signed provenance. Incidental fields (timing, host, duration) are dropped
+  from the canonical form: two runs of the same program on the same input
+  under the same policy are the same execution, and letting them in would
+  make every run unique and the CID useless.
 
-- **That CID is a memo key only when the effects allow it** — when the effect
-  set is empty, or when the log is complete enough to replay (the external
-  responses, the clock, the randomness are all in the receipt). Otherwise the
-  execution CID is a *receipt*, not a cache key. Treating the two as the same
-  thing builds a cache that never notices the world changed.
+- **That CID is a memo key only when the effects allow it** — same landing.
+  `execution-cid` always answers, because an execution that cannot be
+  memoised is still citable. `memo-key` answers **nil** unless the run is
+  replayable, and a caller wanting a key has to come through it — two
+  functions rather than a flag, because a flag is easy to ignore.
+
+  Replayable means: a **source** (clock, randomness, a network read) has its
+  *value* recorded — an outcome of `:ok` says the call happened, not what it
+  returned, and replaying against `:ok` invents the answer; a **sink** has an
+  outcome; and an effect kind nobody classified refuses the memo, which is
+  `capability-semantics.edn`'s `:unknown-kind :deny` applied here so that an
+  unfamiliar effect cannot become cacheable *by* being unfamiliar. The
+  classification is passed in rather than hardcoded, because that vocabulary
+  belongs to `kotoba-lang` and a second copy would drift.
 
 Receipts and artifacts live on the same physical plane as database state —
 IPLD blocks in CARv2 packs on the object store (root ADR-2608160100). Small
