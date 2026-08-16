@@ -1,6 +1,39 @@
 (ns kototama.linear-journal
-  "Durable at-most-once capability consumption journal."
-  (:require [clojure.edn :as edn])
+  "Durable at-most-once capability consumption journal — a parent-linked
+  chain of content-addressed entries.
+
+  The at-most-once property is unchanged and is still the point: one claim is
+  fsynced before the provider runs, so a crash may consume authority without
+  producing a result, but recovery can never replay it.
+
+  What is new is that an entry has an **identity**. Each appended line is
+  addressed by the raw CIDv1 of its own bytes, and carries `:prev`, the CID
+  of the line before it. Root ADR-2608160200 asks for receipts that are
+  values rather than lines, for two reasons a plain append log cannot serve:
+
+  - a transaction elsewhere can then **cite** the consumption that authorised
+    it, by CID, instead of by \"trust the file\";
+  - truncation and edits stop being invisible. Appending is the only edit an
+    append log detects; a chain detects a middle entry being changed, and
+    `verify-chain` says where.
+
+  **Content addressing is not idempotence.** The CID does not stop a second
+  execution — the file lock, the fsync and the count do. Nothing about the
+  linear guarantee moved into the hash.
+
+  The CID is `raw` (0x55) over the exact bytes of the line, so any tool can
+  verify it (`ipfs add --raw-leaves` agrees) without this file teaching it a
+  schema. dag-cbor would additionally let generic tooling read the fields,
+  and is the follow-up when a consumer needs that; it would pull a CBOR
+  dependency into a repo that keeps `kototama.contract` and `lib/*`
+  zero-dep, which is not worth paying before there is a reader.
+
+  **Entries written before this** carry no `:prev`. They are reported as an
+  unchained prefix rather than as corruption: a journal that predates the
+  chain is not a broken chain, and calling it one would make the check
+  useless on every journal that already exists."
+  (:require [clojure.edn :as edn]
+            [multiformats.core :as mf])
   (:import [java.io File RandomAccessFile]
            [java.nio.charset StandardCharsets]
            [java.util.concurrent ConcurrentHashMap]
@@ -19,6 +52,20 @@
                 path-locks (.getCanonicalPath file)
                 (reify Function
                   (apply [_ _] (ReentrantLock.)))))))
+
+(defn canonical-line
+  "The exact string appended for `entry`, without its newline.
+
+  Keys are sorted so the bytes depend on the entry's content and not on the
+  order a map happened to be built in — a CID over a non-canonical encoding
+  addresses the writer's mood as much as the fact."
+  [entry]
+  (pr-str (into (sorted-map) entry)))
+
+(defn entry-cid
+  "Raw CIDv1 of an entry's canonical bytes."
+  [entry]
+  (mf/cidv1-raw (.getBytes ^String (canonical-line entry) StandardCharsets/UTF_8)))
 
 (defn entries [^Journal journal]
   (with-open [reader (java.io.BufferedReader. (java.io.FileReader. (:file journal)))]
@@ -51,12 +98,50 @@
                                   recovered))]
           (if (>= used max-items)
             false
-            (do
+            (let [;; The chain head comes from the same parse the count came
+                  ;; from: one read, one truth. Reading it separately would
+                  ;; leave a window where the count and the link disagree.
+                  prev (some-> (last recovered) entry-cid)
+                  entry (cond-> {:op :consume :lease-id lease-id
+                                 :import import :ordinal (inc used)}
+                          prev (assoc :prev prev))]
               (.seek raf (.length raf))
-              (.write raf (.getBytes
-                           (str (pr-str {:op :consume :lease-id lease-id
-                                        :import import :ordinal (inc used)}) "\n")
-                           StandardCharsets/UTF_8))
+              (.write raf (.getBytes (str (canonical-line entry) "\n")
+                                     StandardCharsets/UTF_8))
               (.sync (.getFD raf))
               true))))
       (finally (.unlock lock)))))
+
+(defn verify-chain
+  "Walk the journal and check that every `:prev` is the CID of the line
+  before it.
+
+  Returns
+
+      {:ok? bool :count n :unchained n :broken-at i :expected cid :found cid}
+
+  `:unchained` counts leading entries written before the chain existed; they
+  are not a failure. `:broken-at` is the index of the first entry whose
+  `:prev` does not match, which is what a truncated or edited middle looks
+  like."
+  [^Journal journal]
+  (let [es (entries journal)]
+    (loop [i 0 prev nil unchained 0]
+      (if (>= i (count es))
+        {:ok? true :count (count es) :unchained unchained}
+        (let [e (nth es i)
+              declared (:prev e)]
+          (cond
+            ;; pre-chain entry: no claim to check, and none to make
+            (and (nil? declared) (zero? i))
+            (recur (inc i) (entry-cid e) (inc unchained))
+
+            (and (nil? declared) (= unchained i))
+            (recur (inc i) (entry-cid e) (inc unchained))
+
+            (= declared prev)
+            (recur (inc i) (entry-cid e) unchained)
+
+            :else
+            {:ok? false :count (count es) :unchained unchained
+             :broken-at i :expected prev :found declared}))))))

@@ -26,15 +26,31 @@ Running is the point at which the stack touches the world, so the record of it
 is a first-class value rather than a side effect. Root ADR-2608160200 makes
 that explicit:
 
-- **A receipt is a value, not a line.** `kototama.linear-journal` is a durable
-  at-most-once capability-consumption journal, and that safety property is
-  kept exactly as it is — content addressing is not idempotence, and a CID
-  does not stop a second execution. What changes is that the entry becomes an
-  IPLD value with a CID, so a transaction can cite the receipt that authorised
-  it, and the journal becomes a parent-linked chain instead of an append order.
-  The four required fields (`:receipt/cap`, `:receipt/at`, `:receipt/call`,
-  `:receipt/outcome`) are already specified in `kotoba-lang`'s
-  `lang/capability-semantics.edn`; they become the value's fields unchanged.
+- **A receipt is a value, not a line** — *landed 2026-08-16*.
+  `kototama.linear-journal` is a durable at-most-once capability-consumption
+  journal, and that safety property is untouched: the file lock, the fsync
+  and the count still own it. **Content addressing is not idempotence** — a
+  CID does not stop a second execution, and nothing about the linear
+  guarantee moved into the hash.
+
+  What changed is that an entry has an identity. Each line is addressed by
+  the raw CIDv1 of its own bytes (`entry-cid`, over `canonical-line`, so
+  anyone can recompute it from the file alone), and carries `:prev`. Two
+  things follow that an append log cannot give: a transaction elsewhere can
+  **cite** the consumption that authorised it, and an edited or removed
+  middle entry stops being invisible — `verify-chain` says where.
+
+  Journals written before this carry no `:prev`. They are reported as an
+  unchained prefix, not as corruption; a journal that predates the chain is
+  not a broken chain. Stripping `:prev` from a chained entry is *not*
+  accepted as legacy, or the escape hatch would be the forgery route.
+
+  Still to come: dag-cbor rather than raw (so generic tooling can read the
+  fields — it costs a CBOR dependency in a repo that keeps `kototama.contract`
+  and `lib/*` zero-dep, and there is no reader yet), and the four fields
+  `kotoba-lang`'s `lang/capability-semantics.edn` specifies
+  (`:receipt/cap`, `:receipt/at`, `:receipt/call`, `:receipt/outcome`), which
+  this journal does not yet record — it records consumption, not outcome.
 
 - **An execution is addressable**: `{program, input, state, runtime, policy,
   effects} → CID`. This is the runtime half of what amu already does for
