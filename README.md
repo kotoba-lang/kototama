@@ -203,7 +203,7 @@ are not considered duplicated work to consolidate.
 - `src/kototama/tender.clj` is the Chicory-based execution runtime (see
   above). `:clj`-only, matching `com.dylibso.chicory`'s own JVM-only
   nature; pulls in `com.dylibso.chicory/{wasm,runtime}` and
-  `kotoba-lang/ed25519` (`kototama.contract` itself stays free of them).
+  `kotoba-lang/org-ietf-ed25519` (`kototama.contract` itself stays free of them).
 - `src/kototama/aiueos_adapter.clj` closes the "aiueos decides, kototama
   enforces" loop for real: calls `aiueos.cli/command-result` (a real
   `io.github.kotoba-lang/aiueos` dependency, in-process — not the

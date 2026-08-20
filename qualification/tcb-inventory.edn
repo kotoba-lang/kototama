@@ -56,8 +56,8 @@
    :role :wasm-parser}
   {:coordinate "com.dylibso.chicory/runtime" :version "1.4.0"
    :role :wasm-runtime}
-  {:coordinate "io.github.kotoba-lang/ed25519"
-   :git-sha "fdcefb9f1b83461fee54d04b63e374fa301ee847"
+  {:coordinate "io.github.kotoba-lang/org-ietf-ed25519"
+   :git-sha "c1ba8322a33b668da1311ca69a8cdde3c7981b52"
    :role :signature-provider}
   {:coordinate "io.github.kotoba-lang/security"
    :git-sha "c83183f7b66afda6a095e690ff617075a39cc0eb"
