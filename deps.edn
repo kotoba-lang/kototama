@@ -60,8 +60,7 @@
   ;; that dependency itself; the tender does not ship a database pool.
   :postgresql-interop
   {:extra-deps {io.github.kotoba-lang/kotoba {:local/root "../kotoba"}
-                ;; renamed `compiler` -> `amu`; coordinate unchanged (see :test)
-                io.github.kotoba-lang/compiler {:local/root "../amu"}
+                io.github.kotoba-lang/amu {:local/root "../amu"}
                 io.github.kotoba-lang/kotoba-core-contracts
                 {:local/root "../kotoba-core-contracts"}
                 io.github.kotoba-lang/kotoba-lang {:local/root "../kotoba-lang"}}
@@ -95,14 +94,16 @@
                       io.github.kotoba-lang/kotoba
                       {:local/root "../kotoba"}
                       ;; The repo was renamed `compiler` -> `amu` (2026-08-10).
-                      ;; The COORDINATE stays `io.github.kotoba-lang/compiler`
-                      ;; on purpose: sibling `kotoba` declares that coordinate
-                      ;; transitively, and an override only wins when the key
-                      ;; matches. Only the path moves. `../compiler` is not in
-                      ;; west.yml at all, so before this the alias could not
-                      ;; build a classpath on a fresh workspace -- it worked
-                      ;; only where a stale pre-rename clone happened to sit.
-                      io.github.kotoba-lang/compiler
+                      ;; The coordinate now says `amu` too. It used to say
+                      ;; `compiler` on purpose, because sibling `kotoba`
+                      ;; declared that coordinate transitively and an override
+                      ;; only wins when the key matches -- but `kotoba` main
+                      ;; now declares `io.github.kotoba-lang/amu`, so holding
+                      ;; the legacy key here stopped overriding anything and
+                      ;; started putting two copies of the same repository on
+                      ;; one classpath. `../amu` is unchanged; `../compiler`
+                      ;; is not in west.yml at all.
+                      io.github.kotoba-lang/amu
                       {:local/root "../amu"}
                       io.github.kotoba-lang/kotoba-core-contracts
                       {:local/root "../kotoba-core-contracts"}
