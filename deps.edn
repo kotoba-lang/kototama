@@ -66,27 +66,72 @@
                 io.github.kotoba-lang/kotoba-lang {:local/root "../kotoba-lang"}}
    :main-opts ["-m" "kototama.postgresql-interop"]}
   :doctor {:main-opts ["-m" "kototama.cli" "doctor"]}
-  ;; The hermetic subset: the namespaces that need nothing but this repo.
+  ;; The hermetic subset: the namespaces that can be checked from this repo's
+  ;; own tree, with no sibling checkout.
   ;;
-  ;; `:test` resolves `:local/root "../kotoba"` and friends, which is right
-  ;; for a workstation inside the west layout and impossible on a fleet node,
-  ;; where only THIS repo's tree is shipped. So the parts that can be checked
-  ;; in isolation are named here and gated
-  ;; (`scripts/fleet-ci/gates/kototama-hermetic-test.cljs` in the
-  ;; superproject), and the parts that cannot are honestly not gated rather
-  ;; than pretended at.
+  ;; `:test` resolves `:local/root "../kotoba"` and friends, which is right for
+  ;; a workstation inside the west layout and impossible on a fleet node, where
+  ;; only THIS repo's tree is shipped. So the parts that can be checked in
+  ;; isolation are named here and gated
+  ;; (`scripts/fleet-ci/gates/kototama-hermetic-test.cljs` in the superproject),
+  ;; and the parts that cannot are honestly not gated rather than pretended at.
   ;;
-  ;; Namespaces are listed explicitly rather than discovered: the runner's
-  ;; default scan loads every test namespace, including the ones that require
-  ;; siblings, and a gate that fails on a missing dependency says nothing
-  ;; about the code under test.
+  ;; This list was two namespaces until it was measured. Every test namespace
+  ;; was loaded and run against a classpath built from this repo alone, and
+  ;; then again against a COPY of the tree filtered to the gate's
+  ;; `:include-ext` -- which is what a node actually receives, and not the same
+  ;; thing (measured 2026-08-20: 29 of 29 loaded, 28 of 29 pass, 205 tests and
+  ;; 1,270 assertions where the two-namespace list ran 28 and 83).
+  ;;
+  ;; The sibling deps were never needed to LOAD any of them. What the filtered
+  ;; tree changes is which FILES are there: the `.wasm`/`.kotoba` emit fixtures
+  ;; `tender-test` runs, the `.mjs` host `host-parity-live-test` drives, and
+  ;; the `workerd/*.mjs` the TCB inventory hashes all sit outside a
+  ;; `.edn/.clj/.cljc/.cljs` filter, so the gate ships those extensions too.
+  ;;
+  ;; `kototama.packaging-test` is the one that stays out, and the reason is
+  ;; structural rather than a judgement about the test: it runs
+  ;; `deploy/validate-packaging.sh`, which requires `README.md` and
+  ;; `deploy/bin/kototama-authority-daemon` -- an EXTENSIONLESS wrapper, which
+  ;; an extension allowlist cannot select at all.
+  ;;
+  ;; Namespaces stay listed explicitly rather than discovered. The runner's
+  ;; default scan would pick up a future namespace that does need a sibling,
+  ;; and a gate that fails on a missing dependency says nothing about the code
+  ;; under test. Adding one here is meant to be a decision.
   :test-hermetic
   {:extra-paths ["test"]
    :extra-deps {io.github.cognitect-labs/test-runner
                 {:git/tag "v0.5.1" :git/sha "dfb30dd"}}
    :main-opts ["-m" "cognitect.test-runner"
+               "-n" "kototama.aiueos-adapter-test"
+               "-n" "kototama.bounded-stream-test"
+               "-n" "kototama.browser-test"
+               "-n" "kototama.cli-test"
+               "-n" "kototama.compatibility-test"
+               "-n" "kototama.component-authority-daemon-test"
+               "-n" "kototama.component-authority-http-test"
+               "-n" "kototama.component-authority-test"
+               "-n" "kototama.component-grant-test"
+               "-n" "kototama.component-platform-test"
+               "-n" "kototama.component-provider-test"
+               "-n" "kototama.contract-test"
+               "-n" "kototama.delivery-semantics-test"
+               "-n" "kototama.execution-test"
+               "-n" "kototama.guest-test"
+               "-n" "kototama.host-parity-live-test"
                "-n" "kototama.linear-journal-test"
-               "-n" "kototama.execution-test"]}
+               "-n" "kototama.maturity-test"
+               "-n" "kototama.network-authority-test"
+               "-n" "kototama.release-evidence-test"
+               "-n" "kototama.runtime-conformance-test"
+               "-n" "kototama.signal-crypto-integration-test"
+               "-n" "kototama.signer-lifecycle-test"
+               "-n" "kototama.tamaki-contract-test"
+               "-n" "kototama.tcb-test"
+               "-n" "kototama.tender-test"
+               "-n" "kototama.transport-provider-test"
+               "-n" "kototama.workerd-core-test"]}
 
   :test {:extra-paths ["test"]
          :extra-deps {io.github.cognitect-labs/test-runner

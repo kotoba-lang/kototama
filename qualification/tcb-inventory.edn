@@ -8,7 +8,7 @@
  [{:path "src/kototama/aiueos_adapter.clj" :role :policy-authority-adapter
    :sha256 "bdd32e696c032a62417b0ad120f51516dd04c6373e2a92710e99e3737c8b390f"}
   {:path "src/kototama/linear_journal.clj" :role :durable-linear-authority
-   :sha256 "8926e85ee26aded77a0bf54e95d2900a8938fc2a2fb443dc3018c2c44b596653"}
+   :sha256 "0339caf412d6745c679e49a02d739bdf7af601d5391d8b2e2bd3333fcf9a69c7"}
   {:path "src/kototama/component_authority.clj" :role :component-epoch-consumer
    :sha256 "e7470553e392db8dd71fa78c78f665bc097be216ca8ebb491367eb0b469d6c32"}
   {:path "src/kototama/component_authority_http.clj" :role :component-authority-transport
@@ -50,7 +50,7 @@
   {:path "src/kototama/tcb.clj" :role :tcb-drift-verifier
    :sha256 "9c7c9a9527d6a7c553ea7b4712bbb3a069aff1958874086537c7dba75aeeee18"}
   {:path "src/kototama/tender.clj" :role :wasm-runtime-host-abi
-   :sha256 "27a55f63d925abcb057fd8337cc4c84e4144920d232fe08f766fda0ec2550580"}]
+   :sha256 "8b9e5ac8895ad6893221e7ba86c13990d8308183eff02339f2c6d90613259bc8"}]
  :tcb/external
  [{:coordinate "com.dylibso.chicory/wasm" :version "1.4.0"
    :role :wasm-parser}
