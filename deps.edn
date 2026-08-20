@@ -7,9 +7,23 @@
  ;; zero-dep/portable.
  :deps {com.dylibso.chicory/wasm     {:mvn/version "1.4.0"}  ; same pin as kotoba-lang/kotoba
         com.dylibso.chicory/runtime {:mvn/version "1.4.0"}
-        io.github.kotoba-lang/ed25519
-        {:git/url "https://github.com/kotoba-lang/ed25519.git"
-         :git/sha "fdcefb9f1b83461fee54d04b63e374fa301ee847"}
+        ;; kotoba-lang/ed25519 was renamed to kotoba-lang/org-ietf-ed25519, and
+        ;; the redirect is why the old coordinate kept resolving. tools.deps
+        ;; dedupes by the coordinate SYMBOL, so this file was putting ed25519
+        ;; on the classpath TWICE: once here as `ed25519` at fdcefb9, and once
+        ;; as `org-ietf-ed25519` at c1ba832, which kotoba-lang/security pulls
+        ;; in. Measured with `clojure -Stree`.
+        ;;
+        ;; The sha moves fdcefb9 -> c1ba832 rather than staying put, because
+        ;; c1ba832 is what the canonical coordinate ALREADY resolved to here.
+        ;; Renaming while keeping fdcefb9 would have made the top-level entry
+        ;; win and quietly walked ed25519 backwards to 2026-06-30, undoing
+        ;; "make JCA Ed25519 calls Graal-static" (#4). fdcefb9 is an ancestor
+        ;; of c1ba832, verified with `git merge-base --is-ancestor` on a full
+        ;; clone, so this is a fast-forward and nothing else in the closure
+        ;; moves.
+        io.github.kotoba-lang/org-ietf-ed25519
+        {:git/sha "c1ba8322a33b668da1311ca69a8cdde3c7981b52"}
         ;; llm-infer-host-fn's Anthropic Messages API request/response
         ;; bodies -- same lib+version kototama-clj's :build-taxonomy/
         ;; :enrich aliases already pin elsewhere in this org.
