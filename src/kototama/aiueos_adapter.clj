@@ -21,8 +21,8 @@
   follow-up specified -- not a second, kototama-owned decision algorithm,
   and not a code-level merge of the two execution namespaces (kototama.
   tender still never decides a grant itself; ADR-2607022700's rule)."
-  (:require [aiueos.cli :as cli]
-            [aiueos.component-abi :as component-abi]
+  (:require [grant.cli :as cli]
+            [grant.component-abi :as component-abi]
             [kototama.contract :as contract]
             [kototama.component-platform :as component-platform]
             [kototama.component-provider :as component-provider]

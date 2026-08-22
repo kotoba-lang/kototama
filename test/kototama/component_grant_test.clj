@@ -21,6 +21,12 @@
          {:capabilities imports}
          {:policy-overlay
           {:aiueos/surface :cloud
+           ;; Network-reaching capabilities require a non-empty origin
+           ;; allowlist since aiueos#144. Before that landed this fixture
+           ;; granted :http/get-stream with no destination bound at all, and
+           ;; the policy said yes -- so the allowlist is not decoration here,
+           ;; it is the thing that makes the grant answerable.
+           :aiueos/net-allow #{"https://example.test"}
            :aiueos/grants
            {:kototama/guest
             #{:http/get-stream :object/get-stream :object/put-block
@@ -34,7 +40,13 @@
 (deftest bounded-provider-authority-needs-grant-and-surface
   (let [artifact {:capabilities
                   #{:aiueos.component/aiueos-http-get-stream}}
-        grant {:aiueos/grants
+        ;; Same allowlist requirement as above (aiueos#144). It rides on
+        ;; `grant` rather than on the surface so the three negative overlays
+        ;; below still fail for the reason this deftest is about -- a missing
+        ;; grant or a wrong surface -- and not incidentally for a missing
+        ;; allowlist.
+        grant {:aiueos/net-allow #{"https://example.test"}
+               :aiueos/grants
                {:kototama/guest #{:http/get-stream}}}]
     (doseq [overlay [grant
                      {:aiueos/surface :cloud}

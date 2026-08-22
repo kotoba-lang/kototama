@@ -40,15 +40,25 @@
         io.github.kotoba-lang/io-multiformats
         {:git/url "https://github.com/kotoba-lang/io-multiformats.git"
          :git/sha "310724803db65840f00d2d98d7887f2b6a512bd3"}
-        ;; kototama.aiueos-adapter calls aiueos.cli/command-result directly
+        ;; kototama.aiueos-adapter calls grant.cli/command-result directly
         ;; (in-process, not the bb-decide subprocess -- see the adapter's
-        ;; namespace docstring for why) to translate a REAL aiueos policy
-        ;; decision into a kototama.contract/host-caps value. aiueos-cljc-
-        ;; contract (a short-lived split of aiueos.cli/etc. into its own
-        ;; repo) has been merged back into kotoba-lang/aiueos.
-        io.github.kotoba-lang/aiueos
-        {:git/url "https://github.com/kotoba-lang/aiueos.git"
-         :git/sha "c1d0a9bb6f2e4ecb6d9a1616f5a39bed6511d481"}}
+        ;; namespace docstring for why) to translate a REAL policy decision
+        ;; into a kototama.contract/host-caps value.
+        ;;
+        ;; This was `io.github.kotoba-lang/aiueos` until 2026-08-22. The
+        ;; namespaces moved when the grant plane left aiueos (root
+        ;; ADR-2608219500), and nothing here reaches aiueos any more -- the
+        ;; adapter wanted the decision, and the decision is what left. Keeping
+        ;; aiueos alongside would also put an operating system, and its
+        ;; Chicory dependency, in this closure to get two namespaces out of it.
+        ;;
+        ;; The old pin was `c1d0a9bb` (2026-07-27), which by then had diverged
+        ;; from aiueos main -- 213 ahead, 1 behind. Advancing it was going to
+        ;; break this build whenever someone got to it; the break is taken here
+        ;; instead, deliberately and with the suite run.
+        io.github.kotoba-lang/grant
+        {:git/url "https://github.com/kotoba-lang/grant.git"
+         :git/sha "7ed742ba1982a60c3140638343dfc02061f979c9"}}
  :aliases
  {:cli  {:main-opts ["-m" "kototama.cli"]}
   :authority-daemon {:main-opts ["-m" "kototama.component-authority-daemon"]}

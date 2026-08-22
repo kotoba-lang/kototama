@@ -6,7 +6,7 @@
   network/database/cryptographic provider boundary."
  :tcb/files
  [{:path "src/kototama/aiueos_adapter.clj" :role :policy-authority-adapter
-   :sha256 "bdd32e696c032a62417b0ad120f51516dd04c6373e2a92710e99e3737c8b390f"}
+   :sha256 "e61e5d886b990b60876dbc5223bd776ab6c05a9f5ce06797d8ab36522dc63392"}
   {:path "src/kototama/linear_journal.clj" :role :durable-linear-authority
    :sha256 "0339caf412d6745c679e49a02d739bdf7af601d5391d8b2e2bd3333fcf9a69c7"}
   {:path "src/kototama/component_authority.clj" :role :component-epoch-consumer
@@ -48,7 +48,7 @@
   {:path "src/kototama/signer_lifecycle.clj" :role :manifest-signer-trust
    :sha256 "f60ff89c6f2c779bc843bb02d1e90efa3e37441343a6d4e230eeed37d6b01f9d"}
   {:path "src/kototama/tcb.clj" :role :tcb-drift-verifier
-   :sha256 "9c7c9a9527d6a7c553ea7b4712bbb3a069aff1958874086537c7dba75aeeee18"}
+   :sha256 "cfb20b6a5c781681b1f93edce2223e1d02cb38632227ccfcc97b5e47aa03104e"}
   {:path "src/kototama/tender.clj" :role :wasm-runtime-host-abi
    :sha256 "8b9e5ac8895ad6893221e7ba86c13990d8308183eff02339f2c6d90613259bc8"}]
  :tcb/external
@@ -60,18 +60,27 @@
    :git-sha "c1ba8322a33b668da1311ca69a8cdde3c7981b52"
    :role :signature-provider}
   {:coordinate "io.github.kotoba-lang/security"
-   :git-sha "c83183f7b66afda6a095e690ff617075a39cc0eb"
+   :git-sha "f409dbade106df076cefe640781b12db558f4135"
    :role :shared-security-primitives}
-  {:coordinate "io.github.kotoba-lang/aiueos"
-   :git-sha "97578d31047aeb7e25d618c217210eb9154d5c7d"
+  ;; Was `io.github.kotoba-lang/aiueos` until 2026-08-22. The policy kernel
+  ;; moved when the grant plane left aiueos (root ADR-2608219500); the role is
+  ;; the same one, in a repository that is only the decision.
+  {:coordinate "io.github.kotoba-lang/grant"
+   :git-sha "7ed742ba1982a60c3140638343dfc02061f979c9"
    :role :policy-kernel}
   {:coordinate "io.github.kotoba-lang/abi"
-   :git-sha "129b0b2fe26ddd1a3917132515bf1b903c7b763d"
+   :git-sha "32ee84b2efc92478c846629c8d8319280eed506c"
    :role :component-admission-contract}
+  ;; Not resolved through deps.edn, and marked so rather than left to be
+  ;; inferred from absence. Without this flag a misspelled coordinate would
+  ;; look exactly like a genuinely external one and skip the deps cross-check
+  ;; below.
   {:coordinate "workerd"
    :version "1.20260723.1"
+   :external-to-deps true
    :role :core-wasm-isolate-engine}
   {:coordinate "java.base" :minimum-version 21
+   :external-to-deps true
    :role :process-crypto-network-concurrency-runtime}]
  :tcb/native-unsafe
  [{:boundary "Chicory Instance.Builder/withUnsafeExecutionListener"
