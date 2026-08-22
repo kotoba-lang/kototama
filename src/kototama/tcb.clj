@@ -23,6 +23,47 @@
 (defn read-inventory []
   (edn/read-string (slurp inventory-path)))
 
+(defn- declared-deps
+  "deps.edn's :deps, keyed by coordinate string."
+  []
+  (into {} (map (fn [[k v]] [(str k) v]))
+        (:deps (edn/read-string (slurp "deps.edn")))))
+
+(defn- external-pin-errors
+  "Every external boundary's recorded pin, against the one deps.edn resolves.
+
+  Until 2026-08-22 this file only asked whether a boundary HAD a version or a
+  git-sha, never whether it named the one actually on the classpath. Measured
+  that day, three of the six recorded pins were wrong -- `security` and `abi`
+  had drifted, and `aiueos` named a SHA that deps.edn had not pinned for
+  weeks -- and the suite was green throughout, because a recorded pin and a
+  resolved pin were never compared.
+
+  `:external-to-deps true` marks the boundaries that genuinely are not
+  Clojure dependencies (the workerd binary, the JDK). It is required rather
+  than inferred from absence: without it, a coordinate with a typo in it
+  would be absent from deps.edn for the wrong reason and skip this check
+  looking exactly like workerd."
+  [external]
+  (let [deps (declared-deps)]
+    (keep (fn [{:keys [coordinate git-sha version external-to-deps] :as boundary}]
+            (let [declared (get deps coordinate)
+                  resolved (or (:git/sha declared) (:mvn/version declared))
+                  recorded (or git-sha version)]
+              (cond
+                external-to-deps
+                (when declared
+                  {:kind :external-marked-not-a-dependency-but-declared
+                   :coordinate coordinate})
+
+                (nil? declared)
+                {:kind :external-not-in-deps :coordinate coordinate}
+
+                (not= (str recorded) (str resolved))
+                {:kind :external-pin-drift :coordinate coordinate
+                 :expected recorded :actual resolved})))
+          external)))
+
 (defn validate
   "Validate completeness metadata, file presence, roles, digests, and external
    boundary records. Trusted code cannot change silently."
@@ -62,7 +103,8 @@
                                            (:minimum-version boundary)))
                           {:kind :unversioned-external-boundary
                            :boundary boundary}))
-                      external)))]
+                      external)
+                (external-pin-errors external)))]
      {:valid? (empty? errors)
       :files (count files)
       :external (count external)
