@@ -4,3 +4,6 @@
 tmp/
 node_modules/
 workerd/fixtures/guest.wasm
+
+# build / cache output (untracked 2026-08-22)
+**/target/
