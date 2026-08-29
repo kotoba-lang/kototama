@@ -103,7 +103,7 @@
   interpretation of the SAME (ptr,len) input bytes grew) closes finding 4
   (no nested-map support), enabling a byte-faithful CACAO wire token and
   a real `com.atproto.repo.createRecord` body from a `.kotoba` guest."
-  (:require [clojure.data.json :as json]
+  (:require [json.data-json :as json]
             [clojure.string :as str]
             [kotoba.security.effect :as effect]
             [kototama.browser :as browser]
@@ -743,7 +743,7 @@
 
 ;; ── minimal JSON object encode + bounded string-field scan. Neither is
 ;; a general JSON codec (see each fn's own docstring for the narrow
-;; scope) -- `clojure.data.json` (already a dep, used by `anthropic-
+;; scope) -- `json.data-json` (already a dep, used by `anthropic-
 ;; infer` below) is deliberately NOT reused for the ENCODE direction:
 ;; it doesn't preserve `parse-flat-pairs`' guest-specified key order
 ;; past 8 entries (`PersistentArrayMap` converts to a hash-map beyond

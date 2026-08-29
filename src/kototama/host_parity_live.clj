@@ -10,7 +10,7 @@
   `web/verify-actor-host.mjs`.
 
   ADR: docs/grade-a-host-parity-live-runner.md"
-  (:require [clojure.data.json :as json]
+  (:require [json.data-json :as json]
             [clojure.java.io :as io]
             [clojure.java.shell :as shell]
             [clojure.string :as str]

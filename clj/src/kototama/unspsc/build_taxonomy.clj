@@ -10,7 +10,7 @@
                           :spec-fields [..] :risk-tags [..] :desc-en :desc-ja}, ...}
 
   Run:  clojure -M:build-taxonomy [registry.json] [enrichment.jsonl] [out.edn]"
-  (:require [clojure.data.json :as json]
+  (:require [json.data-json :as json]
             [clojure.java.io :as io]
             [clojure.string :as str])
   (:gen-class))
