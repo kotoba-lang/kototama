@@ -1,4 +1,4 @@
-{:kototama.q9/whole-component-version 1
+{:kototama.q9/whole-component-version 2
  :as-of "2026-08-30"
  :status :accepted-policy-migration-not-started
 
@@ -15,6 +15,7 @@
   :mechanical-extension-rename false
   :complete-public-surface-required true
   :transitive-source-closure-required true
+  :jvm-dependency-forbidden true
   :native-behavior :declared-capability-provider-import
   :ambient-host-fallback false}
 
@@ -24,10 +25,26 @@
   :kotoba-cli
   {:check "kotoba check --safe <entry.cljk>"
    :compile "kotoba compile <entry.cljk> --target <target> --output <cli-artifact>"
-   :package "kotoba rad build --project <repository> --profile release"}
+   :package "kotoba rad build --project <repository> --profile release"
+   :runtime :verified-native-executable
+   :jvm-launcher-forbidden true}
   :amu
-  {:check "amu check <entry.cljk>"
-   :compile "amu compile <entry.cljk> --target <target> --output <amu-artifact>"}
+  {:check "amu check <entry.cljk> --jvm-free"
+   :compile "amu compile <entry.cljk> --target <target> --jvm-free --output <amu-artifact>"
+   :runtime :nbb-node
+   :jvm-fallback :fail-closed
+   :unsupported-target :migration-blocked}
+  :acceptance-environment
+  {:jvm-installed :not-required
+   :java-home :invalid-or-unset
+   :forbidden-processes ["java" "javac" "clojure" "clj"]
+   :process-trace-required true
+   :dependency-lock-required true}
+  :oracle-parity
+  {:jvm-required false
+   :retained-cljc-runtime :nbb-cljs
+   :other-oracles [:content-addressed-golden-vectors :native :wasm]
+   :jvm-observations :historical-non-gating}
   :internal-compiler-entry-accepted false
   :artifact-equivalence
   [:payload-cid :definition-cids :exports :imports :effects :resource-bounds]}
@@ -85,6 +102,7 @@
   :kotoba-cli-build
   :amu-check
   :amu-compile
+  :jvm-free-process-proof
   :artifact-equivalence
   :whole-public-surface-parity
   :capability-denial
@@ -92,8 +110,16 @@
   :rollback
   :soak]
 
+ :toolchain
+ {:kotoba :native-release-binary
+  :amu {:entry "bin/amu"
+        :required-mode "--jvm-free"
+        :minimum-feature-commit "47feca70c7cffb59c1b86f9735e499370eb0f472"
+        :selected-commit-must-contain-feature-commit true
+        :project-linker-without-jvm :not-yet-supported
+        :rule :block-rather-than-fallback}}
+
  :authorization
  {:consumer-cutover false
   :legacy-source-deletion false
   :production-deploy false}}
-

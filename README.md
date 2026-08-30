@@ -56,6 +56,8 @@ direct Amu compile path, and the resulting manifests must agree. The accepted
 decision is [ADR 0012](docs/adr/0012-whole-component-kotoba-migration.md); the
 machine-readable adoption gate is
 [`qualification/q9-whole-component-build.edn`](qualification/q9-whole-component-build.edn).
+Both acceptance paths are JVM-free: `kotoba` is a verified native executable,
+and Amu runs with `--jvm-free`, which fails instead of invoking `clojure`.
 
 ## What a run leaves behind
 

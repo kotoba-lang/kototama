@@ -3,9 +3,11 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "check:q9-migration": "nbb scripts/check-q9-migration-policy.cljs",
     "test:workerd": "bash workerd/verify-e2e.sh"
   },
   "devDependencies": {
+    "nbb": "1.5.211",
     "workerd": "1.20260723.1"
   }
 }

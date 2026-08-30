@@ -61,14 +61,33 @@ For every declared target, the repository records and runs:
 kotoba check --safe <entry.cljk>
 kotoba compile <entry.cljk> --target <target> --output <cli-artifact>
 kotoba rad build --project <repository> --profile release
-amu check <entry.cljk>
-amu compile <entry.cljk> --target <target> --output <amu-artifact>
+amu check <entry.cljk> --jvm-free
+amu compile <entry.cljk> --target <target> --jvm-free --output <amu-artifact>
 ```
 
 The public Kotoba path is `kotoba compile` plus the package-level
 `kotoba rad build`; the direct compiler path is `amu compile`. Calling an
 internal compiler namespace or a test-only KIR evaluator satisfies neither
 build gate.
+
+### The migration gate is JVM-free
+
+The `kotoba` command is the verified native release executable. It is not a
+Java launcher, `clojure -M` wrapper or development classpath. Amu executes its
+nbb/Node compiler entry with `--jvm-free`; dependency-lock failure,
+project-linker use or an unsupported target stops the migration instead of
+falling back to Clojure/JVM.
+
+Acceptance runs with `JAVA_HOME` unset or invalid and denies and traces
+`java`, `javac`, `clojure` and `clj`. The retained `.cljc` surface is compared
+under CLJS/nbb, native or Wasm. When a portable executable oracle is not
+available, content-addressed golden vectors replace a live JVM oracle. JVM
+observations may remain historical diagnostics but cannot be required to make
+the migration pass.
+
+The repository gate pins the first fail-closed Amu implementation as feature
+commit `47feca70c7cffb59c1b86f9735e499370eb0f472`. The selected Amu release or
+commit must contain it; a local branch alone does not satisfy the build gate.
 
 For locked inputs, the two paths must report the same payload CID, definition
 CIDs, exports, imports, effects and resource bounds. Wrapper provenance may
@@ -80,6 +99,9 @@ The retained `.cljc` component is the rollback oracle. Parity covers every
 public export and externally visible refusal, effect, receipt and state
 transition. A successful function-level test cannot authorize consumer
 cutover, source deletion or deployment.
+
+“Retained oracle” here means its content and behavior contract; it does not
+require executing Clojure on the JVM during acceptance.
 
 The historical `clj/wasm/prior_shortcut.kotoba` experiment remains compiler
 evidence only. It receives no new production consumer and is eventually
@@ -93,6 +115,7 @@ absorbed into the complete `kototama.unspsc.life` component.
   the language surface plan.
 - Clojure and ClojureScript consumers select one component rather than
   spelling capabilities around every extracted predicate.
+- Migration build and parity gates require Node/nbb and native/Wasm tooling,
+  but no JDK or Clojure CLI.
 - No current consumer is cut over, no legacy source is deleted and no
   deployment is authorized by this ADR.
-
