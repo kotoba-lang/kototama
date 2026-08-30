@@ -1,0 +1,257 @@
+{:schema :kototama.vm/spec-v1
+ :name :kototama
+ :version 1
+ :status :normative
+ :definition
+ {:kind :content-addressed-abstract-machine
+  :statement
+  "Kototama is the deterministic Kotoba virtual-machine contract. Engines, hosts, bytecode interpreters and JITs implement Kototama; none of them defines it."
+  :not [:consensus-protocol
+        :compiler
+        :ambient-host-api
+        :grant-authority
+        :evm-opcode-set
+        :filecoin-network]
+  :implementation-independent true}
+
+ :transition
+ {:notation "K |- <program,message,state,authority,budget> => <outcome,state',events,receipt>"
+  :inputs [:program :message :state :authority :budget]
+  :outputs [:outcome :state :events :receipt]
+  :success {:state :commit-overlay}
+  :revert {:state :discard-overlay
+           :outcome :value}
+  :resource-exhaustion {:state :discard-overlay
+                        :outcome :value
+                        :must-not :uncatchable-host-trap}
+  :storage-integrity-fault {:class :host-fault
+                            :state :discard-overlay}
+  :attempt-always-receipted true}
+
+ :planes
+ {:reduction
+  {:language :closed-s-expression
+   :semantics [:lexical-scope
+               :immutable-persistent-values
+               :structural-equality
+               :explicit-continuations
+               :bounded-recursion]
+   :host-eval false
+   :reflection false
+   :ambient-ffi false}
+  :state
+  {:model :ipld-actor-world
+   :identity :cid
+   :mutation :message-local-overlay
+   :nested-calls :snapshot-and-revert
+   :transport :carv2
+   :car-is-authority false}
+  :logic
+  {:language :bounded-function-free-datalog
+   :facts :closed-n-ary-tuples
+   :rules :range-restricted
+   :host-predicates false
+   :provenance-required true
+   :token-facts-may-impersonate-trusted-origins false}
+  :authority
+  {:grant-format :biscuit
+   :biscuit-role :delegated-grant
+   :allow-decision :local-authorizer-only
+   :capability-materialization :successful-five-origin-join
+   :raw-bearer-in-car false
+   :raw-bearer-in-receipt false}
+  :evidence
+  {:artifact :ipld
+   :receipt :ipld
+   :archive :carv2
+   :signature :executor
+   :content-addressed true}}
+
+ :program
+ {:source-form :lisp-list
+  :source-dialects [:kotoba :clojure :clojurescript]
+  :canonical-form :tagged-dag-cbor-vector
+  :macros :compile-time-only
+  :symbols :compile-time-resolved
+  :closures {:representation [:code-cid :environment]
+             :environment :bounded-value-map}
+  :instructions
+  {:pure [:const :let :if :loop :recur :call :return
+          :list :vector :map :set :get :assoc :dissoc :match
+          :add :sub :mul :div :mod :compare :hash]
+   :actor [:self :caller :address :method :params :value
+           :call :static-call :delegate-call :create :emit]
+   :state [:root :open :read :write :link :stat :set-state]
+   :logic [:assert-fact :query :authorize]
+   :effect [:request-capability :invoke-capability]}}
+
+ :values
+ {:portable [:nil :boolean :integer :bytes :text :keyword
+             :list :vector :map :set :cid :address :result]
+  :integer {:core :arbitrary-precision-bounded-by-budget
+            :evm-profile :unsigned-256-modular}
+  :canonical-equality :value
+  :canonical-order :dag-cbor-byte-order
+  :host-object false}
+
+ :message
+ {:required [:chain-id :sender :recipient :method :params
+             :value :nonce :fuel-limit :epoch]
+  :optional [:intent :parent-receipt :profile]
+  :identity :cid-of-canonical-message
+  :nested-call-depth-bounded true}
+
+ :authority
+ {:effective-capability
+  [:intersection
+   :amu-static-effect
+   :vm-requested-intent
+   :biscuit-delegated-grant
+   :local-policy-allow
+   :runtime-availability]
+ :trusted-origins
+  {:amu ["amu:requires" "amu:world"]
+   :vm ["vm:runs" "vm:requests"]
+   :grant ["grant:right"]
+   :policy ["policy:allows"]
+   :runtime ["runtime:world" "runtime:available"]}
+  :eligibility-rule
+  {:head ["kotoba:eligible" ?actor ?kind ?resource]
+   :body [["vm:runs" ?actor ?definition]
+          ["amu:requires" ?definition ?kind]
+          ["amu:world" ?definition ?world]
+          ["vm:requests" ?actor ?kind ?resource]
+          ["grant:right" ?actor ?kind ?resource]
+          ["policy:allows" ?actor ?kind ?resource]
+          ["runtime:world" ?world]
+          ["runtime:available" ?kind ?resource]]}
+  :missing-origin :deny
+  :unknown-effect :deny
+  :revocation :runtime-check
+  :capability {:kind :invocation-local-unforgeable-value
+               :serializable false}}
+
+ :state
+ {:world-root :cid
+  :actor-record [:address :code-cid :state-cid :nonce :balance]
+  :code :content-addressed
+  :read :verify-cid-before-decode
+  :write :canonical-bytes-before-cid
+  :commit :atomic-root-replacement
+  :revert :original-world-root}
+
+ :receipt
+ {:schema :kototama.vm/receipt-v1
+  :required [:machine-spec
+             :implementation
+             :profile
+             :message-cid
+             :program-cid
+             :state-before
+             :state-after
+             :outcome
+             :fuel-used
+             :events
+             :authority-decision]
+  :authority-decision [:manifest-cid :grant-ids :policy-id :world :epoch]
+  :optional [:return :revert-data :parent-receipt :child-receipts]
+  :forbidden [:raw-biscuit :private-key :ambient-host-handle]
+  :failed-attempts-included true}
+
+ :profiles
+ {:core/v1
+  {:purpose :native-kotoba-execution
+   :requires [:closed-s-expression
+              :ipld-state
+              :bounded-datalog
+              :five-origin-authority
+              :deterministic-receipt]
+   :does-not-require [:wasm :jvm :evm-bytecode :filecoin-protocol]}
+
+  :fvm-actor/v1
+  {:purpose :fvm-shaped-actor-compatibility
+   :pins [:fvm-network-version :actor-abi-version :gas-schedule]
+   :requires [:actor-address
+              :numeric-method
+              :ipld-blockstore
+              :actor-state-root
+              :send
+              :exit-code
+              :gas-accounting
+              :message-overlay]
+   :levels [:message :actor-abi :state]
+   :does-not-imply [:filecoin-consensus :proof-of-replication :proof-of-spacetime]}
+
+  :evm/v1
+  {:purpose :ethereum-virtual-machine-compatibility
+   :pins [:chain-spec :hardfork :gas-schedule :precompile-set]
+   :requires [:u256
+              :twenty-byte-address
+              :calldata-returndata
+              :stack-depth-1024
+              :byte-addressed-memory
+              :separate-code
+              :account-code-storage-nonce-balance
+              :call-staticcall-delegatecall
+              :create-create2
+              :return-revert
+              :logs
+              :keccak256]
+   :levels
+   {:message [:transaction-and-abi-projection]
+    :semantic [:observable-result :state-delta :logs :gas]
+    :bytecode [:accepts-valid-evm-bytecode]
+    :state [:canonical-ethereum-receipt :trie-root]}}
+
+  :fevm/v1
+  {:purpose :evm-over-fvm-actor-compatibility
+   :composes [{:profile :fvm-actor/v1
+               :levels [:message :actor-abi :state]}
+              {:profile :evm/v1
+               :levels [:message :bytecode]}]
+   :pins [:filecoin-network-version
+          :fevm-actor-version
+          :ethereum-hardfork
+          :gas-mapping
+          :precompile-set]
+   :requires [:delegated-address-mapping
+              :ethereum-address-manager
+              :evm-calldata-in-fvm-message
+              :fvm-exit-to-evm-status
+              :event-log-mapping
+              :ethereum-json-rpc
+              :system-actor-boundary
+              :documented-ethereum-divergences]
+   :gas {:meter :filecoin
+         :ethereum-gas-equality false
+         :mapping-version-required true}}}
+
+ :compatibility
+ {:claim-must-name [:profile :level :version :implementation :evidence]
+  :floating-evm-claim-forbidden true
+  :floating-fvm-claim-forbidden true
+  :differential-tests-required [:semantic :bytecode :state]
+  :reference-vectors-content-addressed true
+  :core-is-not-automatically-evm-compatible true
+  :core-is-not-automatically-fvm-compatible true}
+
+ :conformance
+ {:implementation-declaration-schema :kototama.vm/implementation-profile-v1
+  :implementation-declaration
+  {:required [:spec :implementation :profiles :non-claims]
+   :profile-required [:status :omissions]
+   :evidence-required-for [:conformant :partial :shape-only]
+   :statuses [:conformant :partial :shape-only :not-implemented]
+   :empty-levels-required-for [:shape-only :not-implemented]}
+  :required-suites [:transition
+                    :determinism
+                    :fuel
+                    :overlay-revert
+                    :ipld-integrity
+                    :authority-provenance
+                    :receipt]
+  :profile-suites
+  {:fvm-actor/v1 [:fvm-message-vectors :actor-abi-vectors]
+   :evm/v1 [:ethereum-general-state-tests :differential-execution]
+   :fevm/v1 [:fevm-message-vectors :fvm-evm-differential-execution]}
+  :partial-conformance-must-list-omissions true}}

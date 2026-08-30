@@ -1,9 +1,11 @@
 # kototama
 
-`kototama` is the Kotoba **runtime** — 言霊, the spirit of the word when it
-acts. It validates, budgets, **runtime-links**, and runs artifacts that
-[`amu`](https://github.com/kotoba-lang/amu) wove. It does **not** own the
-language, the compiler, grant policy, or fleet placement.
+`kototama` is the Kotoba **virtual-machine contract** — 言霊, the spirit of
+the word when it acts. It defines the deterministic transition from closed
+Lisp data, an IPLD world, bounded Datalog authority and a message to a new
+world and receipt. Runtime engines validate, budget, **runtime-link**, and run
+artifacts that [`amu`](https://github.com/kotoba-lang/amu) wove. Kototama does
+**not** own the language, compiler, grant policy, consensus or fleet placement.
 
 Solo5 called this role a *tender*. That word is a nautical metaphor for the
 attendant host. It is not the product name. The product is kototama.
@@ -14,11 +16,32 @@ Hosts live in sibling repos so the dependency direction stays checkable
 kotoba     言葉      language
 amu        編む      compiler — project link, one closed cloth
 abi        経        WIT / admission contract (no implementation)
-kototama   言霊      runtime — host, budget, runtime link
+kototama   言霊      VM contract — reduction, state, authority, receipt
 aiueos     あいうえお  authority (decides grants; supplies named providers)
 murakumo   叢雲      cluster control plane (places and observes, never grants)
 sahai      差配      T6 placement loop (leases/checkpoints/fencing)
 ```
+
+## Kototama as the Kotoba VM
+
+Kototama occupies the architectural role that EVM and FVM occupy in their
+ecosystems, without making one concrete engine or opcode encoding normative.
+Its native instruction form is a closed S-expression; its state is IPLD; its
+authorization plane is bounded Datalog with Biscuit delegation; its outputs
+are content-addressed receipts.
+
+The normative specification is
+[`docs/kototama-virtual-machine.md`](docs/kototama-virtual-machine.md), with a
+machine-readable contract at
+[`spec/kototama-vm-v1.edn`](spec/kototama-vm-v1.edn). Compatibility is
+declared through versioned `core/v1`, `fvm-actor/v1`, `evm/v1` and `fevm/v1`
+profiles. An implementation must say whether it provides message, semantic,
+bytecode or state compatibility and attach conformance evidence; an unqualified
+“EVM compatible” claim is not valid.
+
+This repository also contains host contracts and a historical JVM compatibility
+tender. They are implementations of Kototama surfaces, not the definition of
+the VM.
 
 ## What a run leaves behind
 

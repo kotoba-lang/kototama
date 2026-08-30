@@ -2,6 +2,9 @@
 
 Status: accepted
 Date: 2026-07-24
+Amended: 2026-08-30 by `docs/kototama-virtual-machine.md`. The host/runtime
+responsibilities below remain valid, but they are now explicitly one
+implementation surface of the wider Kototama VM contract.
 Root authority: `com-junkawasaki/root` ADR-2607241100 (kotoba stack topology
 and design cleanup). This ADR is the kototama-repo mirror; the canonical
 topology and the full cross-repo cleanup list live there.
@@ -11,7 +14,7 @@ topology and the full cross-repo cleanup list live there.
 ```
 kotoba    = language + datom model
 amu       = compiler（編む; project link）
-kototama  = runtime（言霊; host + runtime link）  (THIS REPO)
+kototama  = VM contract（言霊; reduction + state + authority + receipt）
 aiueos    = capability OS / broker
 kotobase  = datom database           (depends on: kotoba, never the reverse)
 ```

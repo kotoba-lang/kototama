@@ -3,9 +3,12 @@
 Product name: **kototama**. The Solo5 word *tender* names the attendant-host
 role, not a product. Root authority: `com-junkawasaki/root` ADR-2608139980.
 
-This repository owns the contract, admission envelope, budget, and
-`kototama → aiueos` grant translation. Concrete hosts stay in sibling
-repos so kototama core does not ship an engine, a loader, or a provider.
+This repository owns the abstract VM contract, admission envelope, budget, and
+`kototama → aiueos` grant translation. Concrete hosts implement artifact
+execution profiles of that VM and stay in sibling repos so kototama core does
+not ship an engine, a loader, or a provider. The Lisp/IPLD/Datalog transition
+contract and EVM/FVM/FEVM profiles are defined in
+[`kototama-virtual-machine.md`](kototama-virtual-machine.md).
 
 | Host | Repository | Artifact | Why it is not this tree |
 |---|---|---|---|
