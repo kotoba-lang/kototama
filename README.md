@@ -43,6 +43,22 @@ This repository also contains host contracts and a historical JVM compatibility
 tender. They are implementations of Kototama surfaces, not the definition of
 the VM.
 
+## Kotoba / CLJ Kotoba refactor
+
+Q9 migration from the historical `lib/` and `clj/` trees is whole-component
+only. A predicate or decision-core extraction is compiler research, not a
+migration. Each component must move its complete public surface and transitive
+Kotoba source closure, with native mechanisms represented as declared provider
+imports rather than used as a reason to shrink the migration unit.
+
+Every declared target must pass both the public Kotoba CLI build path and the
+direct Amu compile path, and the resulting manifests must agree. The accepted
+decision is [ADR 0012](docs/adr/0012-whole-component-kotoba-migration.md); the
+machine-readable adoption gate is
+[`qualification/q9-whole-component-build.edn`](qualification/q9-whole-component-build.edn).
+Both acceptance paths are JVM-free: `kotoba` is a verified native executable,
+and Amu runs with `--jvm-free`, which fails instead of invoking `clojure`.
+
 ## What a run leaves behind
 
 Running is the point at which the stack touches the world, so the record of it
