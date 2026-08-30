@@ -1,0 +1,99 @@
+{:kototama.q9/whole-component-version 1
+ :as-of "2026-08-30"
+ :status :accepted-policy-migration-not-started
+
+ :authority
+ {:canonical-repository "kotoba-lang/kotoba-lang"
+  :canonical-rule "lang/q9-migration.edn"
+  :canonical-decision "docs/adr/ADR-q9-whole-component-build-migration.md"
+  :repository-decision "docs/adr/0012-whole-component-kotoba-migration.md"}
+
+ :scope
+ {:migration-unit :whole-component
+  :decision-only-slices-accepted false
+  :function-parity-is-migration-proof false
+  :mechanical-extension-rename false
+  :complete-public-surface-required true
+  :transitive-source-closure-required true
+  :native-behavior :declared-capability-provider-import
+  :ambient-host-fallback false}
+
+ :build-contract
+ {:required-paths [:kotoba-cli-build :amu-compile]
+  :for-every-declared-target true
+  :kotoba-cli
+  {:check "kotoba check --safe <entry.cljk>"
+   :compile "kotoba compile <entry.cljk> --target <target> --output <cli-artifact>"
+   :package "kotoba rad build --project <repository> --profile release"}
+  :amu
+  {:check "amu check <entry.cljk>"
+   :compile "amu compile <entry.cljk> --target <target> --output <amu-artifact>"}
+  :internal-compiler-entry-accepted false
+  :artifact-equivalence
+  [:payload-cid :definition-cids :exports :imports :effects :resource-bounds]}
+
+ :components
+ [{:component :kototama.leash
+   :source "lib/kototama/leash.cljc"
+   :target-entry "kotoba/kototama/leash.cljk"
+   :disposition :clj-kotoba
+   :public-surface
+   [{:name leash :kind :function}
+    {:name valid? :kind :function}
+    {:name write-author :kind :function}
+    {:name revoked? :kind :function}]
+   :native-boundaries
+   [{:mechanism :delegation-token-verification
+     :current-role :not-performed-present-only-data
+     :future-role :declared-capability-provider-import}]
+   :status :not-started}
+
+  {:component :kototama.unspsc.life
+   :source "clj/src/kototama/unspsc/life.cljc"
+   :target-entry "kotoba/kototama/unspsc/life.cljk"
+   :disposition :clj-kotoba
+   :public-surface
+   [{:name base-joucho :kind :value}
+    {:name event-vocab :kind :value}
+    {:name event-deltas :kind :value}
+    {:name joucho-from-events :kind :function}
+    {:name mood-label :kind :function}
+    {:name cadence-secs :kind :function}
+    {:name heartbeat-due? :kind :function}
+    {:name unknown-event-kinds :kind :function}
+    {:name prior-consensus :kind :function}
+    {:name prior-shortcut? :kind :function}]
+   :transitive-private-surface [clamp cadences status-frequencies input-matches?]
+   :native-boundaries []
+   :status :not-started}]
+
+ :legacy-decision-slices
+ [{:source "clj/wasm/prior_shortcut.kotoba"
+   :adapter "clj/src/kototama/unspsc/prior_shortcut_kotoba.clj"
+   :status :historical-compiler-evidence-only
+   :new-consumer-cutover false
+   :expansion false
+   :successor :kototama.unspsc.life}]
+
+ :required-evidence
+ [:complete-source-and-api-baseline
+  :declared-targets
+  :closed-source-set
+  :declared-imports-exports
+  :declared-effects-resource-bounds
+  :kotoba-cli-check
+  :kotoba-cli-build
+  :amu-check
+  :amu-compile
+  :artifact-equivalence
+  :whole-public-surface-parity
+  :capability-denial
+  :consumer-shadow-selection
+  :rollback
+  :soak]
+
+ :authorization
+ {:consumer-cutover false
+  :legacy-source-deletion false
+  :production-deploy false}}
+

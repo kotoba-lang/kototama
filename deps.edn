@@ -133,6 +133,7 @@
                "-n" "kototama.linear-journal-test"
                "-n" "kototama.maturity-test"
                "-n" "kototama.network-authority-test"
+               "-n" "kototama.q9-migration-policy-test"
                "-n" "kototama.release-evidence-test"
                "-n" "kototama.runtime-conformance-test"
                "-n" "kototama.signal-crypto-integration-test"
