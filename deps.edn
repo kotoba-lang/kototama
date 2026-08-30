@@ -141,6 +141,7 @@
                "-n" "kototama.tcb-test"
                "-n" "kototama.tender-test"
                "-n" "kototama.transport-provider-test"
+               "-n" "kototama.vm-spec-test"
                "-n" "kototama.workerd-core-test"]}
 
   :test {:extra-paths ["test"]
