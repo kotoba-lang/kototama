@@ -134,6 +134,7 @@
                "-n" "kototama.maturity-test"
                "-n" "kototama.network-authority-test"
                "-n" "kototama.release-evidence-test"
+               "-n" "kototama.runtime-lifecycle-test"
                "-n" "kototama.runtime-conformance-test"
                "-n" "kototama.signal-crypto-integration-test"
                "-n" "kototama.signer-lifecycle-test"
