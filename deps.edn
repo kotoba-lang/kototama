@@ -58,7 +58,15 @@
         ;; instead, deliberately and with the suite run.
         io.github.kotoba-lang/grant
         {:git/url "https://github.com/kotoba-lang/grant.git"
-         :git/sha "7ed742ba1982a60c3140638343dfc02061f979c9"}}
+         :git/sha "7ed742ba1982a60c3140638343dfc02061f979c9"}
+        ;; The EVM plane. `kototama.evm-tender` discharges the tender role
+        ;; over EVM bytecode the way `kototama.tender` does over Wasm;
+        ;; `:evm/v1` has been a profile in spec/kototama-vm-v1.edn since it
+        ;; was written, and `:core-is-not-automatically-evm-compatible true`
+        ;; means something has to discharge it.
+        io.github.kotoba-lang/kotoba-vm
+        {:git/url "https://github.com/kotoba-lang/kotoba-vm.git"
+         :git/sha "1412270b84b23882429b4614381d2f5a1b24f7c3"}}
  :aliases
  {:cli  {:main-opts ["-m" "kototama.cli"]}
   :authority-daemon {:main-opts ["-m" "kototama.component-authority-daemon"]}
@@ -127,6 +135,7 @@
                "-n" "kototama.component-provider-test"
                "-n" "kototama.contract-test"
                "-n" "kototama.delivery-semantics-test"
+               "-n" "kototama.evm-tender-test"
                "-n" "kototama.execution-test"
                "-n" "kototama.guest-test"
                "-n" "kototama.host-parity-live-test"
