@@ -29,6 +29,7 @@
      exact JVM ABI shapes, independent quotas and the shared session authority.
    - kgraph-*: separate surface (kgraph.js), not actor:host"
   (:require [kototama.contract :as contract]
+            [kototama.denial :as denial]
             [kototama.wasm-fields :as fields]))
 
 (def host-impl
@@ -243,13 +244,26 @@
      :configured (set configured) :checks checks :errors errors}))
 
 (defn admit-host!
-  "Return admission or throw before guest instantiation."
+  "Return admission or throw before guest instantiation.
+
+   The throw is the one denial shape (`kototama.denial`, koto-h5): reason
+   `:host-surface-rejected` under both names, the REQUESTED surface as the
+   refused value, and HOST naming itself -- so the JVM tender (which calls
+   this with :jvm) and the browser/Node hosts refuse the same input with maps
+   that differ only in `:kototama.tender/host`. The historical
+   `:kototama.host/code` / `:kototama.host/admission` keys stay beside the
+   shape for the readers that pin them.
+
+   A HOST that `kototama.denial/hosts` does not register is a caller bug
+   (there is no host to attribute the denial to) and surfaces as
+   `denial`'s own \"unknown host\" ex-info, not as a denial of the guest;
+   `host-admission` (no bang) still reports it as `:unknown-host` data."
   [host requested opts]
   (let [result (host-admission host requested opts)]
     (when-not (:ok? result)
-      (throw (ex-info "kototama.browser: host surface rejected before execution"
-                      {:kototama.host/code :host-surface-rejected
-                       :kototama.host/admission result})))
+      (denial/deny! host :host-surface-rejected requested
+                    {:kototama.host/code :host-surface-rejected
+                     :kototama.host/admission result}))
     result))
 
 (defn parity-matrix

@@ -1485,8 +1485,8 @@
 ;; Denials used to come in four shapes: `{:kototama.tender/problem k}`,
 ;; `{:kototama.tender/denied id :kototama.tender/reason k}`,
 ;; `{:kototama.tender/rejected .. :kototama.tender/errors ..}` and, from the
-;; browser admission, `{:kototama.host/code k}` (that one is koto-h5, the
-;; next commit). One reader could not tell a
+;; browser admission, `{:kototama.host/code k}` (that one landed as koto-h5,
+;; see kototama.denial-parity-test). One reader could not tell a
 ;; denial from a bug without knowing which path it came from. Every path now
 ;; carries the same four keys (`kototama.denial/shape-keys`); the old keys
 ;; stay beside them for the readers that pin them (sahai / fleet store
@@ -1551,3 +1551,86 @@
         (is (= :clock-monotonic (:kototama.tender/value d))))
       (let [d (ex-data-of #(tender/instantiate (byte-array 0) [:http-post] caps))]
         (is (vector? (:kototama.tender/errors d)))))))
+
+;; ── koto-h1: fuel is a per-call budget on a session, not a lifetime cap ──
+;; Measured on the base of this change (kotoba-compiled-fact.wasm, `main`
+;; costs 59 instructions): three `session-call-main` on ONE session reported
+;; :fuel-used 59, 118, 177 -- the counter was created once per Instance in
+;; `open-session` and never restarted, so a long-lived actor died of fuel at
+;; whatever later call happened to cross the cap. `spec/kototama-vm-v1.edn`
+;; makes `budget` an input of ONE transition and every `:message` carries its
+;; own `:fuel-limit`; the EVM tender already gets that for free (a fresh
+;; machine with the full gas per `run-report`). The JVM tender now matches:
+;; a session's budget window restarts at every `session-call-*`, and the
+;; scope is a named, validated option (`:fuel-scope` :call | :instance)
+;; that every fuel denial reports.
+
+(deftest fuel-is-budgeted-per-call-on-a-session
+  (let [caps (contract/host-caps {})
+        fact (read-fixture "kotoba-compiled-fact.wasm")
+        c (:fuel-used (tender/run-report fact [] caps))
+        n 3
+        ;; c < cap < 2c: one call fits, two do not, so a lifetime cap dies
+        ;; at the second call and a per-call budget never does.
+        cap (+ c (quot c 2))]
+    (is (pos? c))
+    (is (< c cap (* 2 c)))
+    (testing "default scope :call -- N calls each costing c under cap < N*c all succeed"
+      (let [s (tender/open-session fact [] caps {:fuel cap})]
+        (is (= :call (:fuel-scope s)))
+        (dotimes [i n]
+          (is (= 120 (tender/session-call-main s)) (str "call " (inc i)))
+          (is (= c @(:fuel-used s)) "the window restarts at every call"))
+        (is (= {:fuel-scope :call :fuel-limit cap :fuel-used c
+                :fuel-total (* n c) :fuel-calls n}
+               (tender/fuel-report s))
+            "replenish arithmetic: window = c, total = N*c, calls = N")))
+    (testing "explicit :instance scope -- the same session dies at the second call and says so"
+      (let [s (tender/open-session fact [] caps {:fuel cap :fuel-scope :instance})
+            _ (is (= 120 (tender/session-call-main s)))
+            d (ex-data-of #(tender/session-call-main s))]
+        (is (= :fuel-exhausted (:kototama.tender/reason d) (:kototama.tender/problem d)))
+        (is (= :jvm (:kototama.tender/host d)))
+        (is (= :instance (:kototama.tender/fuel-scope d)))
+        (is (= 2 (:kototama.tender/calls d)) "died at call 2 of the lifetime cap")
+        (is (= (inc cap) (:kototama.tender/fuel-used d)))
+        (is (= cap (:kototama.tender/fuel-limit d)))))
+    (testing "the Instance-only entry is lifetime by construction and its denial says so"
+      (let [inst (tender/instantiate fact [] caps {:fuel cap})
+            _ (is (= 120 (tender/call-main inst)))
+            d (ex-data-of #(tender/call-main inst))]
+        (is (= :fuel-exhausted (:kototama.tender/reason d)))
+        (is (= :instance (:kototama.tender/fuel-scope d)))
+        (is (not (contains? d :kototama.tender/calls))
+            "no session counts the calls on a bare Instance, so none is claimed")))
+    (testing "the Instance-only entry cannot promise per-call replenish -- refused, not ignored"
+      (let [d (ex-data-of #(tender/instantiate fact [] caps {:fuel cap :fuel-scope :call}))]
+        (is (= :invalid-fuel-scope (:kototama.tender/reason d)))
+        (is (= :call (:kototama.tender/value d)))
+        (is (= :instantiate (:kototama.tender/entry d)))))
+    (testing "budget and scope are validated before any Wasm is parsed (EVM parity: :invalid-budget)"
+      (doseq [bad [0 -1 nil "5" 1.5]]
+        (let [d (ex-data-of #(tender/open-session (byte-array 0) [] caps {:fuel bad}))]
+          (is (= :invalid-budget (:kototama.tender/reason d)) (str "fuel " (pr-str bad)))
+          (is (= bad (:kototama.tender/value d)))))
+      (let [d (ex-data-of #(tender/open-session (byte-array 0) [] caps {:fuel-scope :forever}))]
+        (is (= :invalid-fuel-scope (:kototama.tender/reason d)))
+        (is (= :forever (:kototama.tender/value d)))
+        (is (= #{:call :instance} (:kototama.tender/known-scopes d)))))
+    (testing "run-report names the scope it ran under"
+      (let [r (tender/run-report fact [] caps)]
+        (is (= :call (:fuel-scope r)))
+        (is (= 1 (:fuel-calls r)))
+        (is (= c (:fuel-used r)))))))
+
+(deftest dispatch-on-a-session-is-budgeted-per-trigger
+  (let [caps (contract/host-caps {})
+        multi (wat->wasm multi-export-wat)
+        c (:fuel-used (tender/run-report multi [] caps))
+        s (tender/open-session multi [] caps {:fuel (+ c (quot c 2))})]
+    (is (pos? c))
+    (dotimes [_ 3]
+      (is (= {:dispatched? true :result 222} (tender/session-dispatch-trigger s :http)))
+      (is (= {:dispatched? false} (tender/session-dispatch-trigger s :tick))
+          "a non-event is not a call and spends no window"))
+    (is (= 3 (:fuel-calls (tender/fuel-report s))))))

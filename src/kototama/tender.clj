@@ -1224,18 +1224,70 @@
     {:read-fn (fn [] @state)
      :append-fn (fn [bs] (swap! state #(byte-array (concat % bs))))}))
 
+(def fuel-scopes
+  "What one `:fuel` budget is a budget FOR (koto-h1).
+
+     :call      the budget window restarts at every `session-call-*` /
+                `session-dispatch-trigger` on the session. This is what
+                `spec/kototama-vm-v1.edn` says a budget is -- an input of
+                ONE transition, named per `:message` as `:fuel-limit` --
+                and what the EVM tender already does by construction (a
+                fresh machine with the full gas per `run-report`). The host
+                decides how many calls a session gets; the guest cannot
+                call itself, so per-call fuel bounds the guest's CPU per
+                host decision, which is the axis a budget is meant to bound.
+     :instance  one budget for the Instance's whole life. Every call
+                draws down the same counter and the session dies of fuel
+                at whichever later call crosses the cap -- legible only
+                because the denial now reports the scope and the call
+                number. This is the only scope a bare `instantiate`d
+                Instance can have (no session, no window boundary), and
+                it stays selectable for a caller who wants a lifetime cap."
+  #{:call :instance})
+
+(def default-fuel-scope
+  "A session's budget is per call unless the caller says otherwise. Measured
+   on the tree before this default existed (kotoba-compiled-fact.wasm, `main`
+   = 59 instructions): three calls on one session reported :fuel-used 59,
+   118, 177 -- a lifetime cap nobody had chosen."
+  :call)
+
 (defn fuel-listener*
   "Returns `[listener counter-atom]` so a session can report how many
-   Wasm instructions were executed (maturity R1 observability)."
-  [limit]
-  (let [n (atom 0)
-        listener (reify ExecutionListener
-                   (onExecution [_ _instruction _stack]
-                     (when (> (swap! n inc) limit)
-                       (deny! :fuel-exhausted @n
-                              {:kototama.tender/fuel-limit limit
-                               :kototama.tender/fuel-used @n}))))]
-    [listener n]))
+   Wasm instructions were executed (maturity R1 observability).
+
+   OPTS `:scope` (a `fuel-scopes` member, default :instance -- a listener
+   with no session to restart it IS a lifetime counter) and `:calls` (the
+   session's call-count atom, when a session is counting) go into the
+   `:fuel-exhausted` denial as `:kototama.tender/fuel-scope` and
+   `:kototama.tender/calls`, so a reader can tell 'died at call 7 of a
+   lifetime cap' from 'one call overran its own budget'."
+  ([limit] (fuel-listener* limit {}))
+  ([limit {:keys [scope calls] :or {scope :instance}}]
+   (let [n (atom 0)
+         listener (reify ExecutionListener
+                    (onExecution [_ _instruction _stack]
+                      (when (> (swap! n inc) limit)
+                        (deny! :fuel-exhausted @n
+                               (cond-> {:kototama.tender/fuel-limit limit
+                                        :kototama.tender/fuel-used @n
+                                        :kototama.tender/fuel-scope scope}
+                                 calls (assoc :kototama.tender/calls @calls))))))]
+     [listener n])))
+
+(defn- validate-fuel!
+  "FUEL must be a positive integer and SCOPE a `fuel-scopes` member -- refused
+   before any host admission or Wasm parsing. The EVM tender refuses `:gas`
+   the same way under the same reason (`:invalid-budget`); before this check a
+   `:fuel -1` reached Chicory and surfaced as `:fuel-exhausted` at the first
+   instruction -- an exhaustion of a budget that never existed."
+  [fuel scope]
+  (when-not (and (integer? fuel) (pos? fuel))
+    (deny! :invalid-budget fuel {:kototama.tender/fuel fuel}))
+  (when-not (contains? fuel-scopes scope)
+    (deny! :invalid-fuel-scope scope
+           {:kototama.tender/fuel-scope scope
+            :kototama.tender/known-scopes fuel-scopes})))
 
 (defn fuel-listener
   "Same `ExecutionListener` per-instruction counting hook
@@ -1310,8 +1362,14 @@
    Returns:
      {:instance      Chicory Instance
       :limits-state  atom of RuntimeLimits counters (http-posts, llm-infers, …)
-      :fuel-used     atom of instruction count so far
+      :fuel-used     atom of instruction count in the CURRENT budget window
+                     (the whole life under :fuel-scope :instance)
       :fuel-limit    long
+      :fuel-scope    :call | :instance (`fuel-scopes`; default `default-fuel-scope`)
+      :fuel-calls    atom of `session-call-*` / `session-dispatch-trigger`
+                     invocations so far
+      :fuel-total    atom of instructions charged in CLOSED windows; see
+                     `fuel-report` for the lifetime total
       :caps          normalized HostCaps
       :requested     vector of granted import ids wired into the Instance
       :validation    contract/validate-import-surface result}
@@ -1321,7 +1379,7 @@
    HostCaps `:max-memory-pages`. Maturity R1 (ADR-2607101200).
 
    opts: :store, :llm-client, :kagi-client, :kagi-decisions, :fuel,
-   and :provider-host-functions.
+   :fuel-scope, and :provider-host-functions.
    The latter is an explicit map of import id → Chicory HostFunction for
    inject-path ABIs (transport-provider etc.); missing bindings for
    requested inject imports fail closed before instantiation.
@@ -1330,14 +1388,16 @@
   ([wasm-bytes requested-imports host-caps]
    (open-session wasm-bytes requested-imports host-caps {}))
   ([wasm-bytes requested-imports host-caps
-    {:keys [store llm-client kagi-client kagi-decisions fuel
+    {:keys [store llm-client kagi-client kagi-decisions fuel fuel-scope
             require-kotoba-compatibility? profile capability-leases
             execution-identity execution-identity-cid lease-now-ms
             http-policy request-purpose credential-provider
             provider-host-functions scram-credentials]
      :as opts
      :or {store (in-memory-store) llm-client (default-llm-client)
-          kagi-client {} kagi-decisions [] fuel default-fuel-limit}}]
+          kagi-client {} kagi-decisions [] fuel default-fuel-limit
+          fuel-scope default-fuel-scope}}]
+   (validate-fuel! fuel fuel-scope)
    (let [configured (cond-> #{}
                       (contains? opts :store) (conj :store)
                       (contains? opts :llm-client) (conj :llm-client)
@@ -1419,7 +1479,12 @@
                       .build)
            module (Parser/parse ^bytes wasm-bytes)
            mem-limits (memory-limits-for module (:max-memory-pages (:limits caps)))
-           [listener fuel-used] (fuel-listener* fuel)
+           fuel-calls (atom 0)
+           ;; A bare Instance (`instantiate`) discards the session, so
+           ;; nothing counts its calls; its denial must not claim a count.
+           [listener fuel-used] (fuel-listener* fuel {:scope fuel-scope
+                                                      :calls (when-not (::instance-only opts)
+                                                               fuel-calls)})
            builder (-> (Instance/builder module)
                       (.withImportValues imports)
                       (.withUnsafeExecutionListener listener))
@@ -1428,6 +1493,9 @@
         :limits-state limits-state
         :fuel-used fuel-used
         :fuel-limit fuel
+        :fuel-scope fuel-scope
+        :fuel-calls fuel-calls
+        :fuel-total (atom 0)
         :caps caps
         :authority-state authority-state
         :requested (:requested validation)
@@ -1484,11 +1552,26 @@
 
 (defn instantiate
   "Backward-compatible Instance-only entry. Prefer `open-session` /
-   `run-report` for maturity R1 observability."
+   `run-report` for maturity R1 observability.
+
+   An Instance has no session to restart its budget window, so its fuel is
+   `:fuel-scope :instance` by construction -- one budget for the Instance's
+   life, however many times the caller invokes an export on it. That is what
+   this entry sets; a caller asking it for `:fuel-scope :call` is asking for a
+   promise it cannot keep and is refused (`:invalid-fuel-scope`) rather than
+   handed a lifetime cap labelled per-call."
   ([wasm-bytes requested-imports host-caps]
    (instantiate wasm-bytes requested-imports host-caps {}))
   ([wasm-bytes requested-imports host-caps opts]
-   (:instance (open-session wasm-bytes requested-imports host-caps opts))))
+   (let [scope (get opts :fuel-scope :instance)]
+     (when-not (= :instance scope)
+       (deny! :invalid-fuel-scope scope
+              {:kototama.tender/fuel-scope scope
+               :kototama.tender/known-scopes #{:instance}
+               :kototama.tender/entry :instantiate}))
+     (:instance (open-session wasm-bytes requested-imports host-caps
+                              (assoc opts :fuel-scope :instance
+                                     ::instance-only true))))))
 
 (defn call-export
   "Invoke an already-built Instance's 0-arity EXPORT-NAME and return its
@@ -1529,6 +1612,15 @@
   imply today's mesh guests are already hostable here."
   {:run "run" :http "on-http" :tick "on-tick" :kse "on-kse"})
 
+(defn- trigger-export!
+  "The export name for TRIGGER-KIND, or the `:unknown-trigger-kind` denial
+  (a caller bug, not a guest shape question)."
+  [trigger-kind]
+  (or (get trigger->export trigger-kind)
+      (deny! :unknown-trigger-kind trigger-kind
+             {:kototama.tender/trigger-kind trigger-kind
+              :kototama.tender/known-kinds (set (keys trigger->export))})))
+
 (defn dispatch-trigger
   "Invoke the export for TRIGGER-KIND (one of `(keys trigger->export)`)
   if INSTANCE has it. Returns `{:dispatched? true :result <long>}`, or
@@ -1536,21 +1628,65 @@
   -- not an error, the same non-event kotoba-server's own route table
   represents when a component isn't bound to a given trigger kind.
   Throws for an unrecognised TRIGGER-KIND (a caller bug, not a guest
-  shape question)."
+  shape question). Instance-level: no budget window is opened (see
+  `session-dispatch-trigger` for the budgeted form)."
   [instance trigger-kind]
-  (let [export-name (get trigger->export trigger-kind)]
-    (when-not export-name
-      (deny! :unknown-trigger-kind trigger-kind
-             {:kototama.tender/trigger-kind trigger-kind
-              :kototama.tender/known-kinds (set (keys trigger->export))}))
+  (let [export-name (trigger-export! trigger-kind)]
     (if (has-export? instance export-name)
       {:dispatched? true :result (call-export instance export-name)}
       {:dispatched? false})))
 
+(defn- begin-call!
+  "Count one invocation on SESSION and, under `:fuel-scope :call`, close the
+   current budget window (its spend rolls into `:fuel-total`) and open a
+   fresh one. Under `:instance` only the count moves."
+  [{:keys [fuel-scope fuel-calls fuel-used fuel-total]}]
+  (swap! fuel-calls inc)
+  (when (= :call fuel-scope)
+    (swap! fuel-total + @fuel-used)
+    (reset! fuel-used 0)))
+
+(defn session-call-export
+  "Invoke EXPORT-NAME on an `open-session` map as ONE budgeted call: the
+   session's call count moves and, under `:fuel-scope :call`, the fuel window
+   restarts before the export runs. Returns the i32/i64 result."
+  [session export-name]
+  (begin-call! session)
+  (call-export (:instance session) export-name))
+
 (defn session-call-main
-  "Invoke `main` on an `open-session` map; returns the i32/i64 result."
+  "Invoke `main` on an `open-session` map as one budgeted call; returns the
+   i32/i64 result."
   [session]
-  (call-main (:instance session)))
+  (session-call-export session "main"))
+
+(defn session-dispatch-trigger
+  "`dispatch-trigger` on an `open-session` map, as one budgeted call when the
+   guest implements the trigger. A `{:dispatched? false}` non-event is not a
+   call: it moves neither the count nor the window."
+  [session trigger-kind]
+  (let [export-name (trigger-export! trigger-kind)]
+    (if (has-export? (:instance session) export-name)
+      {:dispatched? true :result (session-call-export session export-name)}
+      {:dispatched? false})))
+
+(defn fuel-report
+  "The session's budget arithmetic, as values:
+
+     {:fuel-scope :call | :instance
+      :fuel-limit n        the per-window (or lifetime) cap
+      :fuel-used  n        instructions in the current window
+      :fuel-total n        instructions over the session's whole life
+      :fuel-calls n        budgeted invocations so far}
+
+   Under :call, `:fuel-total` = the sum of every window; under :instance the
+   one window IS the life, so `:fuel-total` = `:fuel-used`."
+  [{:keys [fuel-scope fuel-limit fuel-used fuel-total fuel-calls]}]
+  {:fuel-scope fuel-scope
+   :fuel-limit fuel-limit
+   :fuel-used @fuel-used
+   :fuel-total (+ @fuel-total @fuel-used)
+   :fuel-calls @fuel-calls})
 
 (defn run-main
   "`instantiate` + `call-main` in one call. See `instantiate` for the
@@ -1605,6 +1741,7 @@
   "`open-session` + `call-main` with a structured post-run report.
 
    Returns {:ok? true :result long :fuel-used n :fuel-limit n
+            :fuel-scope k :fuel-calls 1
             :limits {...} :requested [...] :caps HostCaps}
    or {:ok? false :error ex-data-or-message ...} on denial/fuel/trap."
   ([wasm-bytes requested-imports host-caps]
@@ -1617,6 +1754,8 @@
         :result result
         :fuel-used @(:fuel-used session)
         :fuel-limit (:fuel-limit session)
+        :fuel-scope (:fuel-scope session)
+        :fuel-calls @(:fuel-calls session)
         :limits @(:limits-state session)
         :requested (:requested session)
         :caps (:caps session)})
