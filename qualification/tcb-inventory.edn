@@ -16,9 +16,9 @@
   {:path "src/kototama/component_authority_daemon.clj" :role :component-authority-daemon
    :sha256 "fd399b2f2e0c7dbd5ed51ea1d3cd2151a144c173b3cba6f7aa16cb590b006834"}
   {:path "src/kototama/browser.cljc" :role :host-support-admission
-   :sha256 "80530f7927bfc12e6ce7d5cf1b2bb762d17606d8f01e431a55ab079a557ad02e"}
+   :sha256 "4f15d2c79b25c1ae58bbe4cd23c2bebcd5eb114d1740cb12ac5e57e704a1d810"}
   {:path "src/kototama/cli.clj" :role :operator-entrypoint
-   :sha256 "ff9e5af59a8a5fc7ee5e3f01b3eed0d50bc30a1472b875ef861e08673ffdac0b"}
+   :sha256 "1c7d8968625b6683f2280a90ddfca20e506f89a77848d86d729f1016cfe89dec"}
   {:path "src/kototama/compatibility.clj" :role :artifact-admission
    :sha256 "789401eb1066a7870371a48f8ccfd4a7c020aaef825ff92e388b0c919154c911"}
   {:path "src/kototama/component_platform.clj" :role :component-world-admission
@@ -34,13 +34,13 @@
   {:path "src/kototama/denial.cljc" :role :denial-shape
    :sha256 "12f06a9c8d60799ec7511c3bda653ece28d213b4a8a9bb749a954c0d00225e02"}
   {:path "src/kototama/guest.cljc" :role :guest-abi-mapping
-   :sha256 "fc857dccff289dea26259497e22439e14ef729e3cb4f741ad4522897e5978e53"}
+   :sha256 "999fd1afe836ff8a7b2644edf88be7a7a509497959e5c195b5c0b57e0df74a59"}
   {:path "src/kototama/linker.clj" :role :postgresql-link-boundary
    :sha256 "6cf53a05c9a7329f220cb062464007060c83ea357ed27f9c1776dc592e905641"}
   {:path "src/kototama/network_authority.clj" :role :network-provider-authority
    :sha256 "d679c1615880d95f16481775490aea086978124feae413e488f352b97e6793cd"}
   {:path "src/kototama/release_evidence.clj" :role :release-attestation-builder
-   :sha256 "5f1f0cb60ea2f1eb5d05d5d86722f8365575c5b6c8178ef015de05875d0d08c3"}
+   :sha256 "9a811fea2632f40b4650b0c9ffcaa930d76e937a0639c617cf970cde0b142602"}
   {:path "src/kototama/signal_crypto.clj" :role :signal-cryptography
    :sha256 "7d28d2ade88029d68746209dea9ba9ba63fda97ed4ed4f0c8536372a6b847c14"}
   {:path "src/kototama/signal_protocol.clj" :role :signal-authentication
