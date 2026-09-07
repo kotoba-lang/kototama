@@ -1485,8 +1485,8 @@
 ;; Denials used to come in four shapes: `{:kototama.tender/problem k}`,
 ;; `{:kototama.tender/denied id :kototama.tender/reason k}`,
 ;; `{:kototama.tender/rejected .. :kototama.tender/errors ..}` and, from the
-;; browser admission, `{:kototama.host/code k}` (that one is koto-h5, the
-;; next commit). One reader could not tell a
+;; browser admission, `{:kototama.host/code k}` (that one landed as koto-h5,
+;; see kototama.denial-parity-test). One reader could not tell a
 ;; denial from a bug without knowing which path it came from. Every path now
 ;; carries the same four keys (`kototama.denial/shape-keys`); the old keys
 ;; stay beside them for the readers that pin them (sahai / fleet store

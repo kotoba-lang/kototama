@@ -18,7 +18,8 @@
      :kototama.tender/value    the offending value -- what was asked for
                                and refused (an import id, a deadline, a
                                requested surface, an instruction count)
-     :kototama.tender/host     which host refused: :jvm | :browser | :evm
+     :kototama.tender/host     which host refused: :jvm | :browser | :node
+                               | :evm
 
    plus whatever detail the path adds (`:kototama.tender/fuel-limit`,
    `:kototama.tender/errors`, ...). The historical keys of the four old
@@ -38,6 +39,10 @@
   "Host -> the message prefix that host's denials have always carried."
   {:jvm "kototama.tender"
    :browser "kototama.browser"
+   ;; The same JS module under Node (`kototama.browser/host-impl`'s :node
+   ;; column); its admission is `kototama.browser/admit-host!` too, so its
+   ;; denials have always carried that prefix.
+   :node "kototama.browser"
    :evm "kototama.evm-tender"})
 
 (def reasons
