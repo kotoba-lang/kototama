@@ -32,7 +32,7 @@
   {:path "src/kototama/contract.cljc" :role :authority-schema
    :sha256 "4234ec6679bcf8a95a6a46e4b9b401cefc6ff88f4d42ab47a7ec20f49e6da22a"}
   {:path "src/kototama/denial.cljc" :role :denial-shape
-   :sha256 "12f06a9c8d60799ec7511c3bda653ece28d213b4a8a9bb749a954c0d00225e02"}
+   :sha256 "ff6884694393e6375aa3cbee98dac6894b51e16f6252b971c7c455c006fba40a"}
   {:path "src/kototama/guest.cljc" :role :guest-abi-mapping
    :sha256 "999fd1afe836ff8a7b2644edf88be7a7a509497959e5c195b5c0b57e0df74a59"}
   {:path "src/kototama/linker.clj" :role :postgresql-link-boundary
@@ -52,7 +52,7 @@
   {:path "src/kototama/tcb.clj" :role :tcb-drift-verifier
    :sha256 "cfb20b6a5c781681b1f93edce2223e1d02cb38632227ccfcc97b5e47aa03104e"}
   {:path "src/kototama/tender.clj" :role :wasm-runtime-host-abi
-   :sha256 "3866bd3eb4539d3a502ec90249d87af2c32fed7cf164ec7265ced0e5986e23b5"}]
+   :sha256 "e6a9ed30b62dc7430feb81c07acdb89861b1dd816a8be32e7e5649a4fe5ba26c"}]
  :tcb/external
  [{:coordinate "com.dylibso.chicory/wasm" :version "1.4.0"
    :role :wasm-parser}

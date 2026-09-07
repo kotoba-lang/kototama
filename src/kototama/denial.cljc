@@ -57,6 +57,7 @@
    ;; budget
    :fuel-exhausted "wasm execution exceeded fuel limit"
    :invalid-budget "budget must be a positive integer"
+   :invalid-fuel-scope "fuel-scope must be :call or :instance"
    ;; admission
    :signed-manifest-required "signed manifest required in production"
    :artifact-digest-mismatch "manifest artifact digest mismatch"
