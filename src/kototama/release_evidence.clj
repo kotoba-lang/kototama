@@ -1,7 +1,7 @@
 (ns kototama.release-evidence
   "Deterministic release artifact, SBOM, provenance, signing, and verification."
   (:require [json.data-json :as json]
-            [clojure.edn :as edn]
+            [kotoba.lang.edn :as edn]
             [clojure.java.io :as io]
             [clojure.string :as str]
             [ed25519.core :as ed])

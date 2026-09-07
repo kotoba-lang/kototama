@@ -1,6 +1,6 @@
 #!/usr/bin/env nbb
 (ns check-q9-migration-policy
-  (:require [clojure.edn :as edn]
+  (:require [kotoba.lang.edn :as edn]
             ["node:fs" :as fs]))
 
 (def policy

@@ -1,6 +1,6 @@
 (ns kototama.tcb
   "Machine-verifiable trusted-computing-base inventory for the tender."
-  (:require [clojure.edn :as edn]
+  (:require [kotoba.lang.edn :as edn]
             [clojure.java.io :as io])
   (:import [java.security MessageDigest]))
 

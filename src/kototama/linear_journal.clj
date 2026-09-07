@@ -32,7 +32,7 @@
   unchained prefix rather than as corruption: a journal that predates the
   chain is not a broken chain, and calling it one would make the check
   useless on every journal that already exists."
-  (:require [clojure.edn :as edn]
+  (:require [kotoba.lang.edn :as edn]
             [multiformats.core :as mf])
   (:import [java.io File RandomAccessFile]
            [java.nio.charset StandardCharsets]

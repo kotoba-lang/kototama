@@ -13,7 +13,7 @@
     merge       — overlay generated enrichment (data/enrichment/*.json) onto the
                   taxonomy EDN and rewrite resources/unspsc-taxonomy.edn"
   (:require [json.data-json :as json]
-            [clojure.edn :as edn]
+            [kotoba.lang.edn :as edn]
             [clojure.java.io :as io]
             [clojure.string :as str])
   (:gen-class))

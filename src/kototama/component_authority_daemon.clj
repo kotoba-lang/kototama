@@ -1,6 +1,6 @@
 (ns kototama.component-authority-daemon
   "Production configuration and lifecycle for the Component authority receiver."
-  (:require [clojure.edn :as edn]
+  (:require [kotoba.lang.edn :as edn]
             [clojure.java.io :as io]
             [kototama.component-authority :as authority]
             [kototama.component-authority-http :as http])

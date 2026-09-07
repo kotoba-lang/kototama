@@ -6,7 +6,7 @@
   attempts -- so that 'peer execution plane' means the same contract, not a
   second contract with the same name."
   (:require [clojure.test :refer [deftest is testing]]
-            [clojure.edn :as edn]
+            [kotoba.lang.edn :as edn]
             [clojure.java.io :as io]
             [kototama.evm-tender :as evm-tender]))
 
