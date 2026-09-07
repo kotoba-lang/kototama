@@ -7,6 +7,13 @@
  ;; zero-dep/portable.
  :deps {com.dylibso.chicory/wasm     {:mvn/version "1.4.0"}  ; same pin as kotoba-lang/kotoba
         com.dylibso.chicory/runtime {:mvn/version "1.4.0"}
+        ;; Bounded, hardened EDN reader replaces ad-hoc `clojure.edn`
+        ;; (size/depth/node-count limits, dispatch forms forbidden) --
+        ;; kototama.unspsc/, release_evidence, linear_journal, tcb,
+        ;; component_authority_* require kotoba.lang.edn.
+        io.github.kotoba-lang/edn
+        {:git/url "https://github.com/kotoba-lang/edn.git"
+         :git/sha "250f4dafa5f5c7fb3109703496a52866e2a62dcd"}
         ;; kotoba-lang/ed25519 was renamed to kotoba-lang/org-ietf-ed25519, and
         ;; the redirect is why the old coordinate kept resolving. tools.deps
         ;; dedupes by the coordinate SYMBOL, so this file was putting ed25519

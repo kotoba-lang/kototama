@@ -8,13 +8,13 @@
  [{:path "src/kototama/aiueos_adapter.clj" :role :policy-authority-adapter
    :sha256 "e61e5d886b990b60876dbc5223bd776ab6c05a9f5ce06797d8ab36522dc63392"}
   {:path "src/kototama/linear_journal.clj" :role :durable-linear-authority
-   :sha256 "0339caf412d6745c679e49a02d739bdf7af601d5391d8b2e2bd3333fcf9a69c7"}
+   :sha256 "ab7da31db7226f5c9b30ba0c9aac3f6eb795dc2b25bb206b098184cbd463a01f"}
   {:path "src/kototama/component_authority.clj" :role :component-epoch-consumer
    :sha256 "e7470553e392db8dd71fa78c78f665bc097be216ca8ebb491367eb0b469d6c32"}
   {:path "src/kototama/component_authority_http.clj" :role :component-authority-transport
-   :sha256 "3d947faeb854c41ced55f9b95ce3edab03ff8a2512a0964727f832afb2614645"}
+   :sha256 "3334c0defcd84bb0af117f5d4cd15eaf0f6defd7921e01cfcf7cdf8f0d5e1a3b"}
   {:path "src/kototama/component_authority_daemon.clj" :role :component-authority-daemon
-   :sha256 "fd399b2f2e0c7dbd5ed51ea1d3cd2151a144c173b3cba6f7aa16cb590b006834"}
+   :sha256 "7c1b14b5fd6f90e2b8afaa5d92234e9f5156da22c16546ba4b70d5957e40e078"}
   {:path "src/kototama/browser.cljc" :role :host-support-admission
    :sha256 "90cd2ddf8ef74d12a8ab48a1f2bdb9b451a4668bf714afddc7d7b8ba36b6c87f"}
   {:path "src/kototama/cli.clj" :role :operator-entrypoint
@@ -40,7 +40,7 @@
   {:path "src/kototama/network_authority.clj" :role :network-provider-authority
    :sha256 "d679c1615880d95f16481775490aea086978124feae413e488f352b97e6793cd"}
   {:path "src/kototama/release_evidence.clj" :role :release-attestation-builder
-   :sha256 "9a811fea2632f40b4650b0c9ffcaa930d76e937a0639c617cf970cde0b142602"}
+   :sha256 "751659aa964f8d67d08e9f1476b120a227e8896326af5b4f7fc134159474341c"}
   {:path "src/kototama/signal_crypto.clj" :role :signal-cryptography
    :sha256 "7d28d2ade88029d68746209dea9ba9ba63fda97ed4ed4f0c8536372a6b847c14"}
   {:path "src/kototama/signal_protocol.clj" :role :signal-authentication
@@ -50,7 +50,7 @@
   {:path "src/kototama/signer_lifecycle.clj" :role :manifest-signer-trust
    :sha256 "f60ff89c6f2c779bc843bb02d1e90efa3e37441343a6d4e230eeed37d6b01f9d"}
   {:path "src/kototama/tcb.clj" :role :tcb-drift-verifier
-   :sha256 "cfb20b6a5c781681b1f93edce2223e1d02cb38632227ccfcc97b5e47aa03104e"}
+   :sha256 "6733ec06eb871aeac4592577291d3d5ae5e0a48f579d2cdfdcd9182abafcc515"}
   {:path "src/kototama/tender.clj" :role :wasm-runtime-host-abi
    :sha256 "e6a9ed30b62dc7430feb81c07acdb89861b1dd816a8be32e7e5649a4fe5ba26c"}]
  :tcb/external

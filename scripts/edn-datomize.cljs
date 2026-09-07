@@ -7,7 +7,7 @@
 ;;   nbb edn-datomize.cljs wrap-map-keep-ns <path> <ns>
 ;;   nbb edn-datomize.cljs adr-dir <dir>
 ;;   nbb edn-datomize.cljs adr-file <path>
-(require '[clojure.edn :as edn]
+(require '[kotoba.lang.edn :as edn]
          '[clojure.string :as str])
 
 (def fs (js/require "node:fs"))

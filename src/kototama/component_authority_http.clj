@@ -1,6 +1,6 @@
 (ns kototama.component-authority-http
   "Bounded HTTP receiver for signed Murakumo Component authority envelopes."
-  (:require [clojure.edn :as edn]
+  (:require [kotoba.lang.edn :as edn]
             [kototama.component-authority :as authority])
   (:import [com.sun.net.httpserver HttpExchange HttpHandler HttpServer
             HttpsConfigurator HttpsServer]

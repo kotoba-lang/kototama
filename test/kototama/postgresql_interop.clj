@@ -1,5 +1,5 @@
 (ns kototama.postgresql-interop
-  (:require [clojure.edn :as edn]
+  (:require [kotoba.lang.edn :as edn]
             [clojure.java.shell :as shell]
             [kotoba.runtime :as kotoba-runtime]
             [kototama.contract :as contract]

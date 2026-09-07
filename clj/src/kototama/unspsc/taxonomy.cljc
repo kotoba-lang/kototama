@@ -5,7 +5,7 @@
     - JVM   : `ensure-loaded!` reads resources/unspsc-taxonomy.edn off the classpath.
     - Browser/cljs : the host fetches the EDN and injects it via `set-table!`
                      (clojure.core/format and java.io are avoided here)."
-  #?(:clj (:require [clojure.edn :as edn]
+  #?(:clj (:require [kotoba.lang.edn :as edn]
                     [clojure.java.io :as io])))
 
 (defonce ^:private table* (atom nil))

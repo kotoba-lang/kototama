@@ -1,5 +1,5 @@
 (ns kototama.component-authority-http-test
-  (:require [clojure.edn :as edn]
+  (:require [kotoba.lang.edn :as edn]
             [clojure.test :refer [deftest is]]
             [ed25519.core :as ed]
             [kotoba.abi.contract :as abi]
@@ -92,7 +92,8 @@
                       (str "http://127.0.0.1:" port http/default-path)))
                     (.header "content-type" "application/edn")
                     (.POST (HttpRequest$BodyPublishers/ofString
-                            (pr-str value)))
+                            (binding [*print-namespace-maps* false]
+                                              (pr-str value))))
                     .build)]
     (.send (HttpClient/newHttpClient) request
            (HttpResponse$BodyHandlers/ofString))))
