@@ -93,8 +93,20 @@
 (deftest r2-report-shape
   (let [r (browser/r2-report)]
     (is (= :r2 (:level r)))
-    (is (= :qualified (:status r)))
+    ;; :status is derived from the score, never a literal. Until this test
+    ;; was rewritten (2026-09-07) it pinned :qualified while parity-score-ratio
+    ;; above pinned 19/58 -- two truths in one file.
+    (is (= (browser/r2-status (:score r)) (:status r)))
+    (is (= :advanced-partial (:status r))
+        "19 of 58 linkable is partial; a change here must come from host-impl")
     (is (seq (:verify r)))))
+
+(deftest r2-status-is-a-function-of-the-score-only
+  (is (= :planned (browser/r2-status {:browser-yes 0 :total 0})))
+  (is (= :planned (browser/r2-status {:browser-yes 0 :total 5})))
+  (is (= :advanced-partial (browser/r2-status {:browser-yes 1 :total 5})))
+  (is (= :qualified (browser/r2-status {:browser-yes 5 :total 5})))
+  (is (= "19/58" (browser/r2-ratio-text {:browser-yes 19 :total 58}))))
 
 (deftest production-host-admission-fails-closed
   (testing "browser conditional imports require concrete runtime evidence"

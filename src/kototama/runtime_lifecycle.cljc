@@ -53,11 +53,23 @@
                :candidate nil :kernel-reboot? false)
         (update :failures inc))))
 
-(defn begin-invocation [runtime]
+(defn begin-invocation
+  "Enter :running from :ready. Any other state refuses the invocation, and the
+   refusal is a real transition: the runtime goes :degraded with
+   :reason :runtime-not-ready and the failure is counted.
+
+   Until 2026-09-07 the not-ready branch only stamped :reason and left
+   :state, :failures and everything else untouched, so a caller that kept
+   invoking a stopped or degraded runtime produced receipts whose :from and
+   :to were identical and whose failure count never moved -- a refused call
+   was indistinguishable from no call at all."
+  [runtime]
   (if (= :ready (:state runtime))
     (-> runtime (assoc :state :running :reason nil)
         (update :invocations inc))
-    (assoc runtime :reason :runtime-not-ready)))
+    (-> runtime
+        (assoc :state :degraded :reason :runtime-not-ready :kernel-reboot? false)
+        (update :failures inc))))
 
 (defn invocation-complete [runtime]
   (if (= :running (:state runtime))
@@ -83,12 +95,24 @@
 (defn stop [runtime]
   (assoc runtime :state :stopped :reason nil :kernel-reboot? false))
 
-(defn receipt [before after action]
+(defn receipt
+  "The record of one transition. Every field is read from AFTER (or, for
+   :from, from BEFORE); none is a literal.
+
+   Until 2026-09-07 :kernel-reboot? was the literal `false` and :reason was
+   dropped, so a receipt said \"no kernel reboot\" regardless of what the
+   transition had actually recorded, and a degraded outcome carried no
+   reason. `:kernel-reboot?` is deliberately NOT wrapped in `boolean` -- a
+   transition that forgets to set it yields nil here, which is a visible
+   defect rather than a silent `false`."
+  [before after action]
   {:schema schema
    :action action
    :from (:state before)
    :to (:state after)
+   :reason (:reason after)
    :bundle-id (get-in after [:bundle :bundle-id])
    :epoch (:epoch after)
    :restarts (:restarts after)
-   :kernel-reboot? false})
+   :failures (:failures after)
+   :kernel-reboot? (:kernel-reboot? after)})

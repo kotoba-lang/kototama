@@ -10,83 +10,27 @@
    Execution still goes through `kototama.tender` (JVM/Chicory). This ns does
    not parse Wasm itself (see tender/inspect-module for that)."
   (:require [clojure.string :as str]
-            [kototama.contract :as contract]))
+            [kototama.browser :as browser]
+            [kototama.contract :as contract]
+            [kototama.wasm-fields :as fields]))
+
 
 ;; ── wasm field names (kotoba module) ────────────────────────────────────────
+;; The table itself lives in kototama.wasm-fields (so kototama.browser can
+;; read it without depending on this namespace); both names are re-exported
+;; here unchanged for existing callers.
 
 (def wasm-field-by-import-id
   "Map contract import id → field name under module \"kotoba\".
-   Must match kototama.tender host-fn field strings and kotoba wasm emit."
-  {:gen-keypair "gen_keypair"
-   :sign "sign"
-   :verify "verify"
-   :sha256-hex "sha256_hex"
-   :http-post "http_post"
-   :log-read "log_read"
-   :log-write "log_write"
-   :clock-monotonic "clock_monotonic"
-   :random-bytes "random_bytes"
-   :kagi-sign "kagi_sign"
-   :llm-infer "llm_infer"
-   ;; Second wave (com-junkawasaki/root ADR-2607230943). :http-fetch's
-   ;; field matches kotoba-core-contracts' pre-existing "http/fetch"
-   ;; (id 205) entry verbatim -- see contract.cljc's :http-fetch comment.
-   :http-fetch "http_fetch"
-   :cbor-encode "cbor_encode"
-   :json-encode "json_encode"
-   :json-extract-field "json_extract_field"
-   ;; Third wave (com-junkawasaki/root, this ADR). A SEPARATE field name
-   ;; from :http-post's own "http_post" -- see contract.cljc's
-   ;; :http-post-headers comment for why this couldn't just widen
-   ;; http-post's own arity.
-   :http-post-headers "http_post_headers"
-   :transport-connect "transport_connect"
-   :tls-open "tls_open"
-   :tls-server-end-point "tls_server_end_point"
-   :transport-write "transport_write"
-   :transport-read "transport_read"
-   :transport-close "transport_close"
-   :pg-cancel-register "pg_cancel_register"
-   :pg-cancel "pg_cancel"
-   :pg-pool-open "pg_pool_open"
-   :pg-pool-acquire "pg_pool_acquire"
-   :pg-pool-query "pg_pool_query"
-   :pg-pool-release "pg_pool_release"
-   :pg-pool-stats "pg_pool_stats"
-   :pg-pool-health "pg_pool_health"
-   :pg-pool-drain "pg_pool_drain"
-   :pg-pool-close "pg_pool_close"
-   :pg-open "pg_open"
-   :pg-query "pg_query"
-   :pg-simple-query "pg_simple_query"
-   :pg-prepare "pg_prepare"
-   :pg-session-reset "pg_session_reset"
-   :pg-close-statement "pg_close_statement"
-   :pg-query-state "pg_query_state"
-   :pg-prepare-typed "pg_prepare_typed"
-   :pg-execute-params2 "pg_execute_params2"
-   :pg-execute-params "pg_execute_params"
-   :pg-bind-portal "pg_bind_portal"
-   :pg-fetch-portal "pg_fetch_portal"
-   :pg-close-portal "pg_close_portal"
-   :pg-copy-out "pg_copy_out"
-   :pg-copy-in "pg_copy_in"
-   :pg-execute-batch "pg_execute_batch"
-   :scram-sha256 "scram_sha256"
-   :pg-open-scram "pg_open_scram"
-   :pg-open-scram-random "pg_open_scram_random"
-   :pg-open-scram-cancellable-random "pg_open_scram_cancellable_random"
-   :pg-cancel-authority-use "pg_cancel_authority_use"
-   :pg-close-scram "pg_close_scram"
-   :http-get-stream "http_get_stream"
-   :object-get-stream "object_get_stream"
-   :object-put-block "object_put_block"
-   :object-compare-and-set-ref "object_compare_and_set_ref"})
+   Must match kototama.tender host-fn field strings and kotoba wasm emit.
+   Owned by kototama.wasm-fields; re-exported."
+  fields/wasm-field-by-import-id)
 
 (defn wasm-field-name
   "Canonical Wasm import field for a contract import id, or nil."
   [id]
-  (get wasm-field-by-import-id (contract/import-id id)))
+  (fields/wasm-field-name id))
+
 
 ;; ── .kotoba source lint (emit pitfalls) ─────────────────────────────────────
 
@@ -147,17 +91,14 @@
    :r0  contract-only / dry-run membrane (pre-tender)
    :r1  tender runs real .wasm (host-free + actor:host imports), fuel + memory
         limits, session report, source lint, checked-in emit fixtures
-   :r2  browser-native host parity matrix + host-free web fixtures
-        (9/14 linkable; http-post real in a cross-origin-isolated tab via a
-        Worker-hosted SAB+Atomics bridge (wasm-webcomponent PR #8);
-        llm-infer now real too via the SAME bridge, through a
-        caller-supplied proxy URL (wasm-webcomponent PR #11); the
-        ADR-2607230943 second wave -- http-fetch/cbor-encode/json-encode/
-        json-extract-field -- and the third wave -- http-post-headers --
-        are JVM-only so far, an honest gap, not yet ported to
-        wasm-webcomponent's actor-host.js)
-   Fleet placement maturity is reported by the independent kotoba-lang/fleet
-   repository; it consumes this tender rather than being part of it."
+   :r2  browser-native host parity matrix + host-free web fixtures. The entry
+        is `kototama.browser/r2-level`, derived from `browser/parity-score`
+        -- status and note are computed, not written here, so this ladder,
+        `browser/r2-report` and `clojure -M:cli doctor` cannot disagree.
+   R3 (fleet multi-tenant tender) was retired from this ladder when the
+   shared-store fleet moved to kotoba-lang/fleet; placement maturity is
+   reported there (T6), which consumes this tender rather than being part
+   of it. ADR-0008's ':current :r3' consequence no longer holds here."
   {:r0 {:id :r0
         :title "Contract / dry-run"
         :status :stable
@@ -166,10 +107,7 @@
         :title "Tender execution (JVM/Chicory)"
         :status :stable
         :note "kototama.tender + aiueos adapter + real kotoba-emitted fixtures."}
-   :r2 {:id :r2
-        :title "Browser-native host parity"
-        :status :advanced-partial
-        :note "9/14 linkable; http-post and llm-infer both real via Worker-hosted SAB+Atomics bridge (needs COOP/COEP; llm-infer additionally needs a caller-supplied proxy URL); the ADR-2607230943 second wave (http-fetch/cbor-encode/json-encode/json-extract-field) and third wave (http-post-headers) are JVM-only so far; see kototama.browser."}})
+   :r2 (browser/r2-level)})
 
 (defn host-free?
   "True when the guest requests no host imports (pure compute)."
@@ -201,7 +139,8 @@
    Placement detail lives in kotoba-lang/fleet."
   []
   {:current :r2
-   :current-note "R1 stable + R2 advanced-partial; T6 placement is external"
+   :current-note (str "R1 stable + R2 " (name (get-in maturity-levels [:r2 :status]))
+                      "; T6 placement is external")
    :levels maturity-levels
    :import-surface (mapv :import/id (:abi/imports contract/import-surface))
    :wasm-fields wasm-field-by-import-id

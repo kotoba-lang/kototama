@@ -1,6 +1,13 @@
 # ADR-0008: R3 stable — shared-store multi-tenant fleet (not Raft)
 
-**Status**: accepted  
+**Status**: superseded (2026-09-07) — R3 is retired from this repo's ladder. The
+shared-store fleet implementation and its `fleet-gate` moved to
+[`kotoba-lang/fleet`](https://github.com/kotoba-lang/fleet) (T6 placement,
+external to this tender). `kototama.guest/maturity-levels` has no `:r3` and
+`kototama.guest-test/maturity-report-shape` asserts its absence, so the
+"Doctor reports `:current :r3`" consequence below no longer holds; doctor
+reports `:current :r2` with the status derived from
+`kototama.browser/parity-score`. Kept for history; do not cite as current.  
 **Date**: 2026-07-10  
 **Landed on main**: `3b24afa` (merge `feat/r3-advanced-partial`)
 

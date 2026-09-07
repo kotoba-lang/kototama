@@ -8,8 +8,11 @@
   them without any operator consent. `cmd-run` must require an explicit
   `--grant` for every import a guest declares; a guest asking for
   capabilities it wasn't granted must be denied, not self-served."
-  (:require [clojure.test :refer [deftest is testing]]
-            [kototama.cli :as cli]))
+  (:require [clojure.java.io :as io]
+            [clojure.test :refer [deftest is testing]]
+            [kototama.browser :as browser]
+            [kototama.cli :as cli]
+            [kototama.tender :as tender]))
 
 (def ^:private gen-keypair-wasm
   "test/kototama/fixtures/kotoba-compiled-gen-keypair.wasm")
@@ -53,3 +56,81 @@
     (let [report (cli/cmd-run gen-keypair-wasm ["--grant" "http-post" "--grant" "gen-keypair"])]
       (is (true? (:ok? report)))
       (is (= #{:http-post :gen-keypair} (get-in report [:caps :grants]))))))
+
+;; ── doctor / parity compute their verdict ───────────────────────────────────
+;;
+;; Both commands returned a literal {:ok? true} until 2026-09-07, so the R1
+;; gate `clojure -M:doctor` and the R2 gate `clojure -M:cli parity` had never
+;; been red. These tests pin the three outcomes apart: pass, fail, and
+;; "could not run" (:unmeasured, exit 2).
+
+(defn- quiet
+  "Run a CLI command with its pretty-printed report discarded."
+  [f]
+  (binding [*out* (java.io.StringWriter.)] (f)))
+
+(def ^:private maturity-md-present?
+  ;; The fleet gate ships this repo filtered to an extension allowlist with
+  ;; no .md; there the fixture table cannot be read and doctor must say so.
+  (.exists (io/file cli/maturity-doc-path)))
+
+(deftest fixture-table-parses-host-free-rows
+  (is (= [{:name "kotoba-compiled-fact.wasm" :imports "none"
+           :expected "`120` (= 5!)" :host-free? true :expected-main 120}
+          {:name "kotoba-compiled-sha256-hex.wasm" :imports "`sha256_hex`"
+           :expected "writes empty-string digest" :host-free? false :expected-main nil}]
+         (cli/parse-fixture-table
+          (str "| Guest | Imports | Expected `main` |\n|---|---|---|\n"
+               "| `kotoba-compiled-fact.wasm` | none | `120` (= 5!) |\n"
+               "| `kotoba-compiled-sha256-hex.wasm` | `sha256_hex` | writes empty-string digest |\n")))))
+
+(deftest doctor-computes-its-verdict-from-the-checked-in-tree
+  (let [result (quiet cli/cmd-doctor)]
+    (if maturity-md-present?
+      (do (is (true? (:ok? result))
+              (pr-str (select-keys result [:failures :unmeasured])))
+          (is (< 10 (:checks result))
+              "every fixture row of docs/maturity.md plus the parity/R2 checks ran")
+          (is (= 0 (cli/exit-code result))))
+      (do (is (false? (:ok? result)))
+          (is (some #(= :maturity-doc (:check %)) (:unmeasured result))
+              "no table to read is reported, not passed")
+          (is (= 2 (cli/exit-code result)))))))
+
+(deftest doctor-goes-red-when-a-report-disagrees
+  (with-redefs [browser/r2-report (fn [] {:level :r2 :status :bogus})]
+    (let [result (quiet cli/cmd-doctor)]
+      (is (false? (:ok? result)))
+      (is (some #(= :r2-status (:check %)) (:failures result)))
+      (is (= 1 (cli/exit-code result))))))
+
+(deftest doctor-goes-red-when-a-host-free-fixture-returns-another-value
+  (when maturity-md-present?
+    (with-redefs [tender/run-report (fn [& _] {:ok? true :result 999})]
+      (let [result (quiet cli/cmd-doctor)
+            fixture-failures (filter #(= :fixture (:check %)) (:failures result))]
+        (is (false? (:ok? result)))
+        (is (some #(= "kotoba-compiled-fact.wasm" (:name %)) fixture-failures)
+            "fact.wasm's table value 120 vs 999 must be a failure")
+        (is (= 1 (cli/exit-code result)))))))
+
+(deftest doctor-says-unmeasured-not-red-when-a-fixture-is-missing
+  (when maturity-md-present?
+    (with-redefs [cli/fixture-file
+                  (fn [n] (io/file "test/kototama/fixtures/does-not-exist" n))]
+      (let [result (quiet cli/cmd-doctor)]
+        (is (false? (:ok? result)) "absent is not ok")
+        (is (seq (:unmeasured result)))
+        (is (empty? (filter #(= :fixture (:check %)) (:failures result)))
+            "a missing fixture is not a failing fixture")
+        (is (= 2 (cli/exit-code result)) "could-not-run is exit 2, not 0 and not 1")))))
+
+(deftest parity-goes-red-when-statuses-disagree
+  (let [ok (quiet cli/cmd-parity)]
+    (is (true? (:ok? ok)) (pr-str (:failures ok)))
+    (is (= 0 (cli/exit-code ok))))
+  (with-redefs [browser/r2-report (fn [] {:level :r2 :status :bogus})]
+    (let [bad (quiet cli/cmd-parity)]
+      (is (false? (:ok? bad)))
+      (is (= [:r2-status] (mapv :check (:failures bad))))
+      (is (= 1 (cli/exit-code bad))))))
