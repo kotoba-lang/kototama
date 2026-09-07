@@ -34,9 +34,55 @@
     (is (= 1 (:restarts restarted)))
     (is (false? (:kernel-reboot? restarted)))
     (is (= {:schema lifecycle/schema :action :restart-runtime
-            :from :degraded :to :ready :bundle-id "bafk-runtime"
-            :epoch 2 :restarts 1 :kernel-reboot? false}
+            :from :degraded :to :ready :reason nil :bundle-id "bafk-runtime"
+            :epoch 2 :restarts 1 :failures 1 :kernel-reboot? false}
            (lifecycle/receipt failed restarted :restart-runtime)))))
+
+;; ── receipts are derived from the state, not written as literals ────────────
+;;
+;; koto-h9. Until 2026-09-07 `receipt` hardcoded :kernel-reboot? false and
+;; dropped :reason, and the not-ready branch of `begin-invocation` changed no
+;; state and counted no failure. Measured on that tree: a refused invocation
+;; produced a runtime equal to its input except for :reason, and a receipt with
+;; no :reason / :failures keys at all.
+
+(deftest refused-invocation-leaves-a-refusing-receipt
+  (let [stopped (lifecycle/stop (ready-runtime))
+        refused (lifecycle/begin-invocation stopped)
+        r (lifecycle/receipt stopped refused :invoke)]
+    (testing "the refusal is a transition, not a no-op with a note"
+      (is (= :stopped (:state stopped)))
+      (is (= :degraded (:state refused)))
+      (is (= :runtime-not-ready (:reason refused)))
+      (is (= 1 (:failures refused)) "a refused invocation is a counted failure")
+      (is (= 0 (:invocations refused)) "and not a counted invocation")
+      (is (false? (:kernel-reboot? refused))))
+    (testing "the receipt says so, from the state it describes"
+      (is (= {:schema lifecycle/schema :action :invoke
+              :from :stopped :to :degraded :reason :runtime-not-ready
+              :bundle-id "bafk-runtime" :epoch 1 :restarts 0 :failures 1
+              :kernel-reboot? false}
+             r)))))
+
+(deftest receipt-reports-kernel-reboot-from-after-not-a-literal
+  ;; Break evidence: mutating `restart` to set :kernel-reboot? true must show
+  ;; up in the receipt. Asserted directly here so the derivation itself is
+  ;; pinned, independent of which transition a caller happens to run.
+  (let [before (ready-runtime)
+        after (assoc (lifecycle/restart before) :kernel-reboot? true)]
+    (is (true? (:kernel-reboot? (lifecycle/receipt before after :restart-runtime)))
+        "a receipt must report what the transition recorded, not `false`")
+    (is (nil? (:kernel-reboot? (lifecycle/receipt before (dissoc after :kernel-reboot?) :restart-runtime)))
+        "a transition that forgot the flag yields nil, not a comforting false")))
+
+(deftest receipt-carries-the-degradation-reason
+  (let [ready (ready-runtime)
+        failed (-> ready lifecycle/begin-invocation
+                   (lifecycle/invocation-failed :softmax-nonfinite))
+        r (lifecycle/receipt ready failed :invoke)]
+    (is (= :softmax-nonfinite (:reason r)))
+    (is (= 1 (:failures r)))
+    (is (= :degraded (:to r)))))
 
 (deftest admission-and-health-fail-closed
   (testing "unsigned bytes never become a candidate"
