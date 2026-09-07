@@ -40,6 +40,7 @@
   See `qualification/implementation-declaration-kototama-evm-tender.edn`."
   (:require [clojure.string :as str]
             [kototama.contract :as contract]
+            [kototama.denial :as denial]
             [kotoba.vm.evm.core :as evm]
             [kotoba.vm.fvm.mapping :as fvm]
             [multiformats.core :as mf]))
@@ -144,11 +145,13 @@
          ;; Measured 2026-09-06: #{:no-such-capability} normalises to #{} and
          ;; validate-import-surface returns {:ok? true :errors []}.
          unknown-grants (into #{} (remove contract/import-id) requested-grants)
+         ;; One denial shape across hosts (kototama.denial, koto-h6); the
+         ;; `:kototama.evm-tender/*` keys stay beside it for their readers.
          _ (when (seq unknown-grants)
-             (throw (ex-info "kototama.evm-tender: rejected by contract"
-                             {:kototama.evm-tender/errors
-                              [{:error :grants/unknown
-                                :grants (vec (sort (map str unknown-grants)))}]})))
+             (denial/deny! :evm :grants/unknown (vec (sort (map str unknown-grants)))
+                           {:kototama.evm-tender/errors
+                            [{:error :grants/unknown
+                              :grants (vec (sort (map str unknown-grants)))}]}))
          caps (contract/host-caps {:grants requested-grants
                                    :limits (contract/runtime-limits (or limits {}))})
          ;; EVM bytecode names no imports, so the requested surface is empty.
@@ -162,12 +165,12 @@
                       :abi/imports []}
                      caps)]
      (when-not (:ok? validation)
-       (throw (ex-info "kototama.evm-tender: rejected by contract"
-                       {:kototama.evm-tender/errors (:errors validation)})))
+       (denial/deny! :evm :import-surface-rejected requested-grants
+                     {:kototama.evm-tender/errors (:errors validation)}))
      (when-not (and (integer? gas) (pos? gas))
-       (throw (ex-info "kototama.evm-tender: budget must be a positive integer"
-                       {:kototama.evm-tender/problem :invalid-budget
-                        :kototama.evm-tender/gas gas})))
+       (denial/deny! :evm :invalid-budget gas
+                     {:kototama.evm-tender/problem :invalid-budget
+                      :kototama.evm-tender/gas gas}))
      {:code (vec code)
       :gas gas
       :calldata (vec calldata)

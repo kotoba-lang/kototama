@@ -1480,3 +1480,74 @@
            clojure.lang.ExceptionInfo #"host import denied"
            (tender/run-main wasm [] {}))
           "missing :clock-monotonic grant is fail-closed at the call"))))
+
+;; ── koto-h6: one denial shape, carried by every denial path ─────────────
+;; Denials used to come in four shapes: `{:kototama.tender/problem k}`,
+;; `{:kototama.tender/denied id :kototama.tender/reason k}`,
+;; `{:kototama.tender/rejected .. :kototama.tender/errors ..}` and, from the
+;; browser admission, `{:kototama.host/code k}` (that one is koto-h5, the
+;; next commit). One reader could not tell a
+;; denial from a bug without knowing which path it came from. Every path now
+;; carries the same four keys (`kototama.denial/shape-keys`); the old keys
+;; stay beside them for the readers that pin them (sahai / fleet store
+;; tests read `[:error :kototama.tender/problem]`).
+
+(def ^:private denial-shape-keys
+  #{:kototama.tender/problem :kototama.tender/reason
+    :kototama.tender/value :kototama.tender/host})
+
+(defn- ex-data-of
+  "The ex-data THUNK throws, or ::no-throw."
+  [thunk]
+  (try (thunk) ::no-throw
+       (catch clojure.lang.ExceptionInfo e (ex-data e))))
+
+(deftest every-denial-path-returns-the-one-denial-shape
+  (let [caps (contract/host-caps {})
+        loop-wasm (wat->wasm infinite-loop-wat)
+        multi (tender/instantiate (wat->wasm multi-export-wat) [] caps)
+        clock-now (read-fixture "amu-compiled-clock-now.wasm")
+        paths
+        {:fuel-exhausted
+         #(tender/run-main loop-wasm [] caps {:fuel 100})
+         :invalid-deadline
+         #(tender/run-main-bounded (byte-array 0) [] caps {:deadline-ms 0})
+         :unknown-trigger-kind
+         #(tender/dispatch-trigger multi :bogus)
+         :import-surface-rejected
+         #(tender/instantiate (byte-array 0) [:http-post] caps)
+         :signed-manifest-required
+         #(tender/open-session loop-wasm [] caps {:profile :production})
+         ;; every open-session has an authority-state, so an ungranted
+         ;; import reaches `ensure-granted!`'s atomic swap and is
+         ;; :grant/inactive there (:grant/missing is the no-authority-state
+         ;; path, reachable only by calling a host fn outside a session)
+         :grant/inactive
+         #(tender/run-main clock-now [] {})}]
+    (doseq [[reason thunk] paths]
+      (testing (str reason)
+        (let [d (ex-data-of thunk)]
+          (is (map? d) "must throw ex-info")
+          (when (map? d)
+            (is (= denial-shape-keys
+                   (set (filter denial-shape-keys (keys d))))
+                (str "all four shape keys present; got " (pr-str (keys d))))
+            (is (= reason (:kototama.tender/reason d) (:kototama.tender/problem d))
+                "reason literal, under both names")
+            (is (= :jvm (:kototama.tender/host d)))))))
+    (testing "the returned (not thrown) operational denials carry the same shape"
+      (let [r (tender/run-report-bounded (byte-array 0) [] caps {:deadline-ms 0})]
+        (is (false? (:ok? r)))
+        (is (= denial-shape-keys
+               (set (filter denial-shape-keys (keys (:error r))))))
+        (is (= :invalid-deadline
+               (get-in r [:error :kototama.tender/reason])
+               (get-in r [:error :kototama.tender/problem])))
+        (is (= 0 (get-in r [:error :kototama.tender/value])))))
+    (testing "the old shapes' keys are still there for the readers that pin them"
+      (let [d (ex-data-of #(tender/run-main clock-now [] {}))]
+        (is (= :clock-monotonic (:kototama.tender/denied d))
+            "cap-call id 7 is the :clock-monotonic grant")
+        (is (= :clock-monotonic (:kototama.tender/value d))))
+      (let [d (ex-data-of #(tender/instantiate (byte-array 0) [:http-post] caps))]
+        (is (vector? (:kototama.tender/errors d)))))))
