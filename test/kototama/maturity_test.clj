@@ -1,7 +1,9 @@
 (ns kototama.maturity-test
   "R1 maturity gates: host-free pure guests, session report, inspect-module."
   (:require [clojure.java.io :as io]
+            [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
+            [kototama.browser :as browser]
             [kototama.contract :as contract]
             [kototama.guest :as guest]
             [kototama.tender :as tender]))
@@ -67,3 +69,54 @@
     (let [src (slurp (io/resource (str "kototama/fixtures/" name)))
           r (guest/lint-kotoba-source src)]
       (is (true? (:ok? r)) (str name " " (pr-str r))))))
+
+;; ── R2 status has exactly one source ────────────────────────────────────────
+;;
+;; Before 2026-09-07 three R2 statuses coexisted: docs/maturity.md said
+;; `qualified` 14/14, guest/maturity-levels said :advanced-partial "9/14",
+;; browser/r2-report said :qualified -- while browser/parity-score measured
+;; 19/58. Nothing compared them. These two tests do.
+
+(deftest r2-status-agrees-between-report-and-ladder
+  (let [score (browser/parity-score)
+        derived (browser/r2-status score)]
+    (is (= derived (:status (browser/r2-report))))
+    (is (= derived (get-in guest/maturity-levels [:r2 :status])))
+    (is (= derived (get-in (guest/maturity-report) [:levels :r2 :status])))
+    (is (str/includes? (get-in guest/maturity-levels [:r2 :note])
+                       (browser/r2-ratio-text score))
+        "the ladder note quotes the measured ratio, not a hand-copied one")))
+
+(def ^:private maturity-md "docs/maturity.md")
+
+(defn- md-r2-row
+  "The `| **R2** | ... |` row of docs/maturity.md split into trimmed cells."
+  [md]
+  (some (fn [line]
+          (when (str/starts-with? line "| **R2** |")
+            (mapv str/trim (rest (butlast (str/split line #"\|" -1))))))
+        (str/split-lines md)))
+
+(deftest maturity-md-r2-row-quotes-the-derived-status-and-ratio
+  (let [f (io/file maturity-md)]
+    (if-not (.exists f)
+      ;; The fleet gate ships this repo filtered to an extension allowlist
+      ;; that has no `.md` (superproject scripts/fleet-ci/gates.edn,
+      ;; `kototama-hermetic`). Nothing to compare against there; say so on
+      ;; stderr rather than counting a silent pass. On a workstation, and via
+      ;; `clojure -M:doctor` (exit 2), the absence is reported as unmeasured.
+      (binding [*out* *err*]
+        (println "SKIPPED kototama.maturity-test/maturity-md-r2-row-quotes-the-derived-status-and-ratio:"
+                 maturity-md "absent (filtered tree?) -- not measured"))
+      (let [score (browser/parity-score)
+            status (name (browser/r2-status score))
+            ratio (browser/r2-ratio-text score)
+            cells (md-r2-row (slurp f))]
+        (is (vector? cells) "docs/maturity.md has no `| **R2** |` row")
+        (when cells
+          (is (= (str "**" status "**") (nth cells 2 nil))
+              (str "R2 status cell must be **" status "** (derived from parity-score)"))
+          (is (str/includes? (nth cells 3 "") (str ratio " browser-linkable"))
+              (str "R2 row must quote " ratio " browser-linkable")))
+        (is (str/includes? (slurp f) (str "**Current tender level: R2 " status "**"))
+            "the summary line quotes the same status")))))

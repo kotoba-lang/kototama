@@ -9,11 +9,19 @@ guest = Wasm component). Not a marketing scorecard.
 |---|---|---|---|
 | **R0** | Contract / dry-run | **stable** | `kototama.contract` HostCaps + import surface; organism membrane refuses live publish |
 | **R1** | Tender execution (JVM/Chicory) | **stable** | `kototama.tender` runs real `.wasm`; fuel + memory limits; aiueos adapter; session report; source lint; host-free + host-import fixtures from `kotoba wasm emit` |
-| **R2** | Browser-native host parity | **qualified** | parity matrix; 14/14 browser-linkable under one session authority; network imports use explicit inject or the shared Worker+SAB bridge (`wasm-webcomponent` PR #15); host-free web fixtures |
+| **R2** | Browser-native host parity | **advanced-partial** | parity matrix; 19/58 browser-linkable (derived from `kototama.browser/parity-score` -- the 39 browser `:no` are the transport/TLS, pg wire/pool, scram-sha256 and kagi-sign imports, each an explicit native-boundary waiver in `host-impl`); network imports use explicit inject or the shared Worker+SAB bridge (`wasm-webcomponent` PR #15); host-free web fixtures |
+| ~~R3~~ | Fleet multi-tenant tender | **retired** | moved out of this repo 2026-07 to `kotoba-lang/fleet` (shared-store fleet, ADR-0008 superseded); `guest/maturity-levels` has no `:r3` and `guest-test` asserts its absence |
 | T6 placement | `kotoba-lang/fleet` | **external** | stable shared-store gate consumes this tender |
 
-**Current tender level: R2 qualified** (R1 stable underneath). Fleet placement
-is independently versioned and gated in `kotoba-lang/fleet`.
+**Current tender level: R2 advanced-partial** (R1 stable underneath). Fleet
+placement is independently versioned and gated in `kotoba-lang/fleet`.
+
+The R2 status and ratio above are not written by hand: `kototama.browser/r2-status`
+derives them from `parity-score` (`:qualified` only when every contract import
+is browser-linkable), `kototama.guest/maturity-levels` embeds
+`browser/r2-level`, and `kototama.maturity-test` fails when this row disagrees
+with the computed value. `clojure -M:doctor` exits 2 (not 0, not 1) when this
+file is absent, because "could not compare" is not "compared and agreed".
 
 ## R1 acceptance gates
 
@@ -64,7 +72,10 @@ clojure -M:cli parity           # JVM vs browser import matrix
 | http-fetch (ADR-2607230943) | yes | **yes** (shared SAB network bridge) | inject |
 | http-post-headers (com-junkawasaki/root, third wave) | yes | **yes** (shared SAB network bridge) | inject |
 
-Score today: **14/14** browser-linkable. The three pure-computation codec
+Score today: **19/58** browser-linkable (`clojure -M:cli parity` prints the
+matrix; the earlier "14/14" here counted only the first three waves of
+actor:host imports, before the transport/TLS, pg and scram families -- 39
+explicit browser `:no` -- joined the contract surface). The three pure-computation codec
 imports (`cbor-encode`/`json-encode`/`json-extract-field`) are now a
 byte-for-byte JS port in `wasm-webcomponent`'s `actor-host.js`, with byte
 parity against the JVM outputs locked by that repo's
@@ -233,7 +244,7 @@ bash deploy/staging-smoke.sh
 R1: .kotoba --lint--> wasm emit --> .wasm --> tender/run-report (Chicory)
 R2: .wasm --> browser/Node WebAssembly + actor-host.js | host-free {}
 R3: lease --> governor --> plan-tick --> (inject tender) --> apply-tick-result
-           --> checkpoint EDN
+           --> checkpoint EDN          (retired here; lives in kotoba-lang/fleet)
 ```
 
 ## What we deliberately do **not** claim

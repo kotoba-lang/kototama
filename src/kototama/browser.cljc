@@ -29,7 +29,7 @@
      exact JVM ABI shapes, independent quotas and the shared session authority.
    - kgraph-*: separate surface (kgraph.js), not actor:host"
   (:require [kototama.contract :as contract]
-            [kototama.guest :as guest]))
+            [kototama.wasm-fields :as fields]))
 
 (def host-impl
   "Per-import availability by host kind.
@@ -184,7 +184,7 @@
       {:import id
        :host host
        :status (get row host)
-       :wasm-field (guest/wasm-field-name id)
+       :wasm-field (fields/wasm-field-name id)
        :note (:note row)})))
 
 (def production-requirements
@@ -261,7 +261,7 @@
              :jvm (:jvm row)
              :browser (:browser row)
              :node (:node row)
-             :wasm-field (guest/wasm-field-name id)
+             :wasm-field (fields/wasm-field-name id)
              :note (:note row)}))
         (map :import/id (:abi/imports contract/import-surface))))
 
@@ -309,13 +309,64 @@
      :llm-infer-paths {:inject :implemented
                        :sab-coop-via-proxy :implemented}}))
 
-(defn r2-report
-  "Aggregate R2 snapshot for CLI doctor."
+(defn r2-status
+  "The R2 status, derived from a `parity-score` and from nothing else.
+
+   :qualified        every actor:host import in the contract surface is
+                     browser-linkable (:yes / :coop-or-inject / :inject)
+   :advanced-partial some are, some are an explicit browser :no
+   :planned          none are, or there is no surface to score
+
+   Three hand-copied statuses used to coexist (this fn's :qualified,
+   guest/maturity-levels' :advanced-partial, docs/maturity.md's
+   \"qualified 14/14\") while parity-score measured something else. The
+   score is the one thing that is computed, so it is the one source."
+  [{:keys [browser-yes total]}]
+  (cond
+    (or (nil? total) (nil? browser-yes) (zero? total)) :planned
+    (= browser-yes total) :qualified
+    (pos? browser-yes) :advanced-partial
+    :else :planned))
+
+(defn r2-ratio-text
+  "\"19/58\" -- the literal docs/maturity.md's R2 row must quote."
+  [{:keys [browser-yes total]}]
+  (str browser-yes "/" total))
+
+(defn r2-note
+  "Human-readable R2 note generated from a `parity-score`; the guest ladder
+   quotes this rather than carrying its own prose copy."
+  [{:keys [browser-no missing] :as score}]
+  (str (r2-ratio-text score) " browser-linkable (:yes/:coop-or-inject/:inject); "
+       browser-no " intentional browser :no ("
+       (count (filter #(re-find #"^(transport|tls)" (name %)) missing)) " transport/TLS, "
+       (count (filter #(re-find #"^pg-" (name %)) missing)) " pg, "
+       (count (remove #(re-find #"^(transport|tls|pg-)" (name %)) missing))
+       " other: " (pr-str (vec (remove #(re-find #"^(transport|tls|pg-)" (name %)) missing)))
+       "). http-post and llm-infer are real in a cross-origin-isolated tab via a "
+       "Worker-hosted SAB+Atomics bridge (llm-infer additionally needs a "
+       "caller-supplied proxy URL); see kototama.browser/host-impl."))
+
+(defn r2-level
+  "The R2 entry of the maturity ladder, derived from `parity-score`.
+   `kototama.guest/maturity-levels` embeds this value."
   []
+  (let [score (parity-score)]
+    {:id :r2
+     :title "Browser-native host parity"
+     :status (r2-status score)
+     :score (select-keys score [:total :browser-yes :browser-no :ratio])
+     :note (r2-note score)}))
+
+(defn r2-report
+  "Aggregate R2 snapshot for CLI doctor. :status is `r2-status` of the
+   score below -- never a literal."
+  []
+  (let [score (parity-score)]
   {:level :r2
-   :status :qualified
+   :status (r2-status score)
    :title "Browser-native host parity"
-   :score (parity-score)
+   :score score
    :matrix (parity-matrix)
    :host-free-guests ["web/host-free-fact.wasm"
                       "web/host-free-peak-cells.wasm"
@@ -330,4 +381,4 @@
             "npm run test:llm-infer-browser  ; in wasm-webcomponent"]
    :notes ["Policy re-enforcement at load: actor-host.js yes; kgraph.js no"
            "http-post: real in a cross-origin-isolated tab via a Worker-hosted SAB+Atomics bridge; inject (Node) also available"
-           "llm-infer: real in a cross-origin-isolated tab via the SAME bridge as http-post, through a caller-supplied proxy URL (never a provider key embedded client-side); inject (Node) also available"]})
+           "llm-infer: real in a cross-origin-isolated tab via the SAME bridge as http-post, through a caller-supplied proxy URL (never a provider key embedded client-side); inject (Node) also available"]}))
