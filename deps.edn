@@ -135,6 +135,7 @@
                "-n" "kototama.component-provider-test"
                "-n" "kototama.contract-test"
                "-n" "kototama.delivery-semantics-test"
+               "-n" "kototama.denial-test"
                "-n" "kototama.evm-tender-test"
                "-n" "kototama.execution-test"
                "-n" "kototama.guest-test"

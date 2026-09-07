@@ -109,6 +109,7 @@
             [kototama.browser :as browser]
             [kototama.compatibility :as compatibility]
             [kototama.contract :as contract]
+            [kototama.denial :as denial]
             [kototama.network-authority :as network]
             [kototama.signer-lifecycle :as signer]
             [kotoba.abi.contract :as abi]
@@ -160,17 +161,26 @@
 
 ;; ── fail-closed denial (same shape as kotoba.wasm-exec's guard pattern) ───
 
+(defn deny!
+  "Throw a JVM-tender denial of REASON for VALUE -- the one denial shape
+  (`kototama.denial/shape-keys`, koto-h6) every refusal in this namespace
+  goes through. DETAIL is merged beside the shape keys."
+  ([reason value] (denial/deny! :jvm reason value {} nil))
+  ([reason value detail] (denial/deny! :jvm reason value detail nil))
+  ([reason value detail cause] (denial/deny! :jvm reason value detail cause)))
+
 (defn denied!
   "Throws the standard kototama tender denial for a structural authority
   violation -- `:grant/missing`, the import id isn't in HostCaps'
   :grants (checked both pre-flight and per-call; a guest was never
   supposed to reach this at all, so this aborts the call, it does not
-  hand the guest an in-band error to react to)."
+  hand the guest an in-band error to react to).
+
+  Same shape as every other denial (`deny!`); `:kototama.tender/denied`
+  is kept beside `:kototama.tender/value` for the readers that pin it."
   [import-id reason info]
-  (throw (ex-info "kototama.tender: host import denied"
-                  (merge {:kototama.tender/denied import-id
-                          :kototama.tender/reason reason}
-                         info))))
+  (deny! reason import-id
+         (merge {:kototama.tender/denied import-id} info)))
 
 ;; ── RuntimeLimits enforcement (Chicory has no native notion of "N calls
 ;; of category X" — this is kototama's own responsibility, per-instance
@@ -256,25 +266,24 @@
   (cond
     (nil? leases) {}
     (not (map? leases))
-    (throw (ex-info "kototama.tender: capability leases must be a map"
-                    {:kototama.tender/problem :invalid-capability-leases}))
+    (deny! :invalid-capability-leases leases)
     (not= (set requested) (set (keys leases)))
-    (throw (ex-info "kototama.tender: leases must exactly cover requested imports"
-                    {:kototama.tender/problem :lease-import-mismatch}))
+    (deny! :lease-import-mismatch (vec (keys leases))
+           {:kototama.tender/requested (vec requested)})
     :else
     (do (when-not (and (abi/valid-execution-identity? execution-identity)
                        (string? execution-identity-cid)
                        (re-matches #"b.+" execution-identity-cid))
-          (throw (ex-info "kototama.tender: capability leases require an exact execution identity"
-                          {:kototama.tender/problem :missing-execution-identity})))
+          (deny! :missing-execution-identity execution-identity-cid
+                 {:kototama.tender/execution-identity execution-identity}))
         (doseq [[id lease] leases]
           (when-not (and (contract/import-id id) (abi/valid-capability-lease? lease)
                          (= execution-identity-cid (:execution-identity-cid lease))
                          (= (:component-cid execution-identity) (:component-cid lease))
                          (lease-live? lease now-ms))
-            (throw (ex-info "kototama.tender: invalid capability lease"
-                            {:kototama.tender/problem :invalid-capability-lease
-                             :kototama.tender/import id}))))
+            (deny! :invalid-capability-lease id
+                   {:kototama.tender/import id
+                    :kototama.tender/lease lease})))
         leases)))
 
 ;; ── the 9 kototama.contract/import-surface host functions ──────────────────
@@ -1223,10 +1232,9 @@
         listener (reify ExecutionListener
                    (onExecution [_ _instruction _stack]
                      (when (> (swap! n inc) limit)
-                       (throw (ex-info "kototama.tender: wasm execution exceeded fuel limit"
-                                       {:kototama.tender/problem :fuel-exhausted
-                                        :kototama.tender/fuel-limit limit
-                                        :kototama.tender/fuel-used @n})))))]
+                       (deny! :fuel-exhausted @n
+                              {:kototama.tender/fuel-limit limit
+                               :kototama.tender/fuel-used @n}))))]
     [listener n]))
 
 (defn fuel-listener
@@ -1262,14 +1270,18 @@
     (do
       (when-not (and signer-registry (map? signed-manifest)
                      (integer? manifest-now-ms) (ifn? verify-manifest-fn))
-        (throw (ex-info "kototama.tender: signed manifest required in production"
-                        {:kototama.tender/problem :signed-manifest-required})))
+        (deny! :signed-manifest-required profile
+               {:kototama.tender/missing
+                (cond-> []
+                  (nil? signer-registry) (conj :signer-registry)
+                  (not (map? signed-manifest)) (conj :signed-manifest)
+                  (not (integer? manifest-now-ms)) (conj :manifest-now-ms)
+                  (not (ifn? verify-manifest-fn)) (conj :verify-manifest-fn))}))
       (let [actual (artifact-sha256 wasm-bytes)
             declared (:manifest/artifact-sha256 signed-manifest)]
         (when-not (= actual declared)
-          (throw (ex-info "kototama.tender: manifest artifact digest mismatch"
-                          {:kototama.tender/problem :artifact-digest-mismatch
-                           :declared declared :actual actual})))
+          (deny! :artifact-digest-mismatch declared
+                 {:declared declared :actual actual}))
         (assoc (signer/authorize-manifest!
                 signer-registry signed-manifest manifest-now-ms
                 verify-manifest-fn)
@@ -1364,9 +1376,9 @@
                     :lease-now-ms (or lease-now-ms #(System/currentTimeMillis)))
          validation (contract/validate-import-surface requested-imports caps)]
      (when-not (:ok? validation)
-       (throw (ex-info "kototama.tender: import surface rejected by contract"
-                       {:kototama.tender/rejected requested-imports
-                        :kototama.tender/errors (:errors validation)})))
+       (deny! :import-surface-rejected requested-imports
+              {:kototama.tender/rejected requested-imports
+               :kototama.tender/errors (:errors validation)}))
      (let [limits-state (new-limits-state)
            fn-by-id {:gen-keypair #(gen-keypair-host-fn caps limits-state)
                      :sign #(sign-host-fn caps limits-state)
@@ -1396,10 +1408,10 @@
                                  provider-host-functions))
            missing-providers (vec (remove fn-by-id (:requested validation)))
            _ (when (seq missing-providers)
-               (throw (ex-info "kototama.tender: provider binding unavailable"
-                               {:kototama.tender/errors
-                                [{:error :runtime/provider-unavailable
-                                  :imports missing-providers}]})))
+               (deny! :provider-unavailable missing-providers
+                      {:kototama.tender/errors
+                       [{:error :runtime/provider-unavailable
+                         :imports missing-providers}]}))
            host-fns (into (mapv (fn [id] ((get fn-by-id id))) (:requested validation))
                           [(cap-call-host-fn caps limits-state)])
            imports (-> (ImportValues/builder)
@@ -1430,17 +1442,16 @@
   [session]
   (if-let [state (:authority-state session)]
     @state
-    (throw (ex-info "kototama.tender: session has no authority state"
-                    {:kototama.tender/problem :missing-authority-state}))))
+    (deny! :missing-authority-state (select-keys session [:requested]))))
 
 (defn- deactivate-import!
   [session import-id disposition reason]
   (let [id (contract/import-id import-id)
         state (:authority-state session)]
     (when-not (and id state)
-      (throw (ex-info "kototama.tender: cannot deactivate import"
-                      {:kototama.tender/problem :invalid-deactivation
-                       :kototama.tender/import import-id})))
+      (deny! :invalid-deactivation import-id
+             {:kototama.tender/import import-id
+              :kototama.tender/has-authority-state? (some? state)}))
     (swap! state
            (fn [current]
              (-> current
@@ -1529,9 +1540,9 @@
   [instance trigger-kind]
   (let [export-name (get trigger->export trigger-kind)]
     (when-not export-name
-      (throw (ex-info "kototama.tender: unknown trigger kind"
-                      {:kototama.tender/trigger-kind trigger-kind
-                       :kototama.tender/known-kinds (set (keys trigger->export))})))
+      (deny! :unknown-trigger-kind trigger-kind
+             {:kototama.tender/trigger-kind trigger-kind
+              :kototama.tender/known-kinds (set (keys trigger->export))}))
     (if (has-export? instance export-name)
       {:dispatched? true :result (call-export instance export-name)}
       {:dispatched? false})))
@@ -1570,12 +1581,10 @@
           run-permits default-run-permits}
      :as opts}]
    (when-not (and (integer? deadline-ms) (pos? deadline-ms))
-     (throw (ex-info "kototama.tender: deadline-ms must be positive"
-                     {:kototama.tender/problem :invalid-deadline
-                      :kototama.tender/deadline-ms deadline-ms})))
+     (deny! :invalid-deadline deadline-ms
+            {:kototama.tender/deadline-ms deadline-ms}))
    (when-not (.tryAcquire ^Semaphore run-permits)
-     (throw (ex-info "kototama.tender: concurrent run limit reached"
-                     {:kototama.tender/problem :concurrency-exhausted})))
+     (deny! :concurrency-exhausted (.availablePermits ^Semaphore run-permits)))
    (let [executor (Executors/newSingleThreadExecutor)
          task (.submit executor
                        ^java.util.concurrent.Callable
@@ -1585,10 +1594,9 @@
        (.get task (long deadline-ms) TimeUnit/MILLISECONDS)
        (catch TimeoutException e
          (.cancel task true)
-         (throw (ex-info "kototama.tender: wall-clock deadline exceeded"
-                         {:kototama.tender/problem :deadline-exceeded
-                          :kototama.tender/deadline-ms deadline-ms}
-                         e)))
+         (deny! :deadline-exceeded deadline-ms
+                {:kototama.tender/deadline-ms deadline-ms}
+                e))
        (finally
          (.shutdownNow executor)
          (.release ^Semaphore run-permits))))))
@@ -1630,15 +1638,16 @@
      :as opts}]
    (cond
      (not (and (integer? deadline-ms) (pos? deadline-ms)))
-     {:ok? false
-      :error {:kototama.tender/problem :invalid-deadline
-              :kototama.tender/deadline-ms deadline-ms}
-      :message "kototama.tender: deadline-ms must be positive"}
+     (let [d (denial/denial :jvm :invalid-deadline deadline-ms
+                            {:kototama.tender/deadline-ms deadline-ms})]
+       {:ok? false :error d
+        :message (denial/message :jvm :invalid-deadline deadline-ms d)})
 
      (not (.tryAcquire ^Semaphore run-permits))
-     {:ok? false
-      :error {:kototama.tender/problem :concurrency-exhausted}
-      :message "kototama.tender: concurrent run limit reached"}
+     (let [d (denial/denial :jvm :concurrency-exhausted
+                            (.availablePermits ^Semaphore run-permits))]
+       {:ok? false :error d
+        :message (denial/message :jvm :concurrency-exhausted nil d)})
 
      :else
      (let [executor (Executors/newSingleThreadExecutor)
@@ -1651,10 +1660,10 @@
          (.get task (long deadline-ms) TimeUnit/MILLISECONDS)
          (catch TimeoutException _
            (.cancel task true)
-           {:ok? false
-            :error {:kototama.tender/problem :deadline-exceeded
-                    :kototama.tender/deadline-ms deadline-ms}
-            :message "kototama.tender: wall-clock deadline exceeded"})
+           (let [d (denial/denial :jvm :deadline-exceeded deadline-ms
+                                  {:kototama.tender/deadline-ms deadline-ms})]
+             {:ok? false :error d
+              :message (denial/message :jvm :deadline-exceeded deadline-ms d)}))
          (catch Exception e
            {:ok? false
             :error (or (some-> e .getCause ex-data)
