@@ -10,6 +10,7 @@
      help"
   (:require [clojure.java.io :as io]
             [clojure.pprint :as pp]
+            [clojure.string :as str]
             [kototama.browser :as browser]
             [kototama.contract :as contract]
             [kototama.guest :as guest]
@@ -31,17 +32,171 @@
         grants)
       :else (recur (rest xs) grants))))
 
+
+;; ── doctor / parity: gates that compute their verdict ───────────────────────
+;;
+;; Until 2026-09-07 both commands returned a literal {:ok? true} after
+;; pretty-printing a report, so `clojure -M:doctor` (the R1 gate named in
+;; docs/maturity.md) and `clojure -M:cli parity` (the R2 gate) had never
+;; produced a red. Every check below yields :pass, :fail or :unmeasured;
+;; :unmeasured ("could not run", e.g. a fixture file absent) is neither a
+;; pass nor a fail and maps to exit 2 in `exit-code`.
+
+(def maturity-doc-path "docs/maturity.md")
+(def fixtures-dir "test/kototama/fixtures")
+
+(defn parse-fixture-table
+  "Rows of docs/maturity.md's \"Checked-in emit fixtures\" table.
+
+   Only rows whose first cell is a backticked `*.wasm` name count, so the
+   header and separator rows never match. :host-free? is the literal
+   `none` in the Imports cell; :expected-main is the leading backticked
+   integer of the Expected cell, or nil when the row describes bytes/text."
+  [md]
+  (vec (keep (fn [line]
+               (when-let [[_ nm imports expected]
+                          (re-matches #"^\| `([^`]+\.wasm)` \| ([^|]*) \| (.*) \|\s*$" line)]
+                 (let [imports (str/trim imports)
+                       expected (str/trim expected)]
+                   {:name nm
+                    :imports imports
+                    :expected expected
+                    :host-free? (= "none" imports)
+                    :expected-main (when-let [[_ n] (re-find #"^`(-?\d+)`" expected)]
+                                     (Long/parseLong n))})))
+             (str/split-lines md))))
+
+(defn fixture-file
+  "Where a table row's fixture lives. A var so a test can point it at an
+   empty directory and prove that \"absent\" is reported as :unmeasured."
+  ^java.io.File [fixture-name]
+  (io/file fixtures-dir fixture-name))
+
+(defn check-fixture-row
+  "Parse one fixture; run it when the table says it is host-free and names
+   an integer `main`. Missing file -> :unmeasured, never :fail."
+  [{:keys [name host-free? expected-main]}]
+  (let [f (fixture-file name)
+        base {:check :fixture :name name}]
+    (if-not (.exists f)
+      (assoc base :outcome :unmeasured
+             :detail "fixture file absent -- cannot parse or run it")
+      (let [wasm (read-bytes f)
+            info (try (tender/inspect-module wasm)
+                      (catch Exception e {:error (.getMessage e)}))]
+        (cond
+          (:error info)
+          (assoc base :outcome :fail :detail (str "does not parse: " (:error info)))
+
+          (not (:magic-ok? info))
+          (assoc base :outcome :fail :detail "bad wasm magic")
+
+          (not (:has-main? info))
+          (assoc base :outcome :fail :detail "no `main` export")
+
+          (and host-free? expected-main)
+          (let [report (tender/run-report wasm [] (contract/host-caps {}))]
+            (cond
+              (not (:ok? report))
+              (assoc base :outcome :fail
+                     :detail (str "host-free run failed: " (pr-str (:error report))))
+
+              (not= expected-main (:result report))
+              (assoc base :outcome :fail
+                     :detail (str "main returned " (:result report)
+                                  ", docs/maturity.md says " expected-main))
+
+              :else (assoc base :outcome :pass :detail (str "main = " expected-main))))
+
+          :else
+          (assoc base :outcome :pass
+                 :detail (if host-free?
+                           "parses; table lists no integer main value to compare"
+                           "parses; host-import guests are exercised by tender-test, not doctor")))))))
+
+(defn check-r2-status-agreement
+  "The three places an R2 status can be read must agree with the one that
+   is computed (browser/r2-status of parity-score)."
+  []
+  (let [report (:status (browser/r2-report))
+        ladder (get-in guest/maturity-levels [:r2 :status])
+        derived (browser/r2-status (browser/parity-score))]
+    {:check :r2-status
+     :outcome (if (= report ladder derived) :pass :fail)
+     :detail {:r2-report report :maturity-levels ladder :derived-from-score derived}}))
+
+(defn check-parity-matrix
+  "The matrix covers the whole contract surface and every row declares an
+   explicit status for all three hosts (ADR-0009 Decision 1)."
+  []
+  (let [ids (set (map :import/id (:abi/imports contract/import-surface)))
+        rows (browser/parity-matrix)
+        mids (set (map :import rows))
+        implicit (vec (keep (fn [{:keys [import jvm browser node]}]
+                              (when-not (and jvm browser node) import))
+                            rows))]
+    [{:check :parity-covers-surface
+      :outcome (if (= ids mids) :pass :fail)
+      :detail {:missing (vec (remove mids ids)) :orphan (vec (remove ids mids))}}
+     {:check :parity-rows-explicit
+      :outcome (if (empty? implicit) :pass :fail)
+      :detail implicit}]))
+
+(defn doctor-checks
+  "Fixture-table checks (or one :unmeasured when the table cannot be read)
+   followed by the parity and R2-status checks."
+  []
+  (let [doc (io/file maturity-doc-path)
+        fixture-checks
+        (if-not (.exists doc)
+          [{:check :maturity-doc :outcome :unmeasured
+            :detail (str maturity-doc-path " absent -- fixture table cannot be read")}]
+          (let [rows (parse-fixture-table (slurp doc))]
+            (if (empty? rows)
+              [{:check :maturity-doc :outcome :unmeasured
+                :detail "no fixture rows parsed from the table"}]
+              (mapv check-fixture-row rows))))]
+    (-> fixture-checks
+        (into (check-parity-matrix))
+        (conj (check-r2-status-agreement)))))
+
+(defn summarize
+  "{:ok? bool :checks n :passed n :failures [...] :unmeasured [...]}.
+   :ok? requires zero failures AND zero unmeasured."
+  [checks]
+  (let [by (group-by :outcome checks)]
+    {:ok? (and (empty? (:fail by)) (empty? (:unmeasured by)))
+     :checks (count checks)
+     :passed (count (:pass by))
+     :failures (vec (:fail by))
+     :unmeasured (vec (:unmeasured by))}))
+
+(defn exit-code
+  "0 = every check passed; 2 = at least one check could not run (and none
+   failed outright is NOT required -- unmeasured wins so a partial run is
+   never read as a verdict); 1 = a check failed."
+  [result]
+  (cond
+    (:ok? result) 0
+    (seq (:unmeasured result)) 2
+    :else 1))
+
 (defn cmd-doctor []
-  (pp/pprint
-   (merge (guest/maturity-report)
-          {:r2 (browser/r2-report)
-           :placement {:owner "kotoba-lang/fleet"
-                       :gate "clojure -M:cli fleet-gate"}}))
-  {:ok? true})
+  (let [checks (doctor-checks)
+        summary (summarize checks)]
+    (pp/pprint
+     (merge (guest/maturity-report)
+            {:r2 (browser/r2-report)
+             :placement {:owner "kotoba-lang/fleet"
+                         :gate "clojure -M:cli fleet-gate"}
+             :doctor (assoc summary :results checks)}))
+    summary))
 
 (defn cmd-parity []
-  (pp/pprint (browser/r2-report))
-  {:ok? true})
+  (let [checks (conj (check-parity-matrix) (check-r2-status-agreement))
+        summary (summarize checks)]
+    (pp/pprint (assoc (browser/r2-report) :parity (assoc summary :results checks)))
+    summary))
 
 (defn cmd-lint [path]
   (let [src (slurp path)
@@ -124,4 +279,4 @@
             (println "  run <file.wasm> [--grant id …]   ← canonical execute")
             (println "  help")
             {:ok? true}))]
-    (System/exit (if (:ok? result) 0 1))))
+    (System/exit (exit-code result))))
