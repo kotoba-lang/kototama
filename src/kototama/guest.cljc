@@ -9,7 +9,7 @@
 
    Execution still goes through `kototama.tender` (JVM/Chicory). This ns does
    not parse Wasm itself (see tender/inspect-module for that)."
-  (:require [clojure.string :as str]
+  (:require [kotoba.lang.text :as str]
             [kototama.browser :as browser]
             [kototama.contract :as contract]
             [kototama.wasm-fields :as fields]))

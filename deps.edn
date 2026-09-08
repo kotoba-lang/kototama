@@ -5,7 +5,12 @@
  ;; exist, e.g. aiueos's own JVM-FFM ADR-0014 hvt-tender) is the only
  ;; namespace here needing real deps -- kototama.contract and lib/* stay
  ;; zero-dep/portable.
- :deps {com.dylibso.chicory/wasm     {:mvn/version "1.4.0"}  ; same pin as kotoba-lang/kotoba
+ :deps {
+        ;; kotoba.lang.text, not clojure.string. Pinned as an explicit floor:
+        ;; tools.deps takes the NEWEST sha it is shown, so without a floor here
+        ;; this repo silently rides whatever a sibling happens to name.
+        io.github.kotoba-lang/text {:git/sha "73bdb13ae7a3d004b44bca08be03a3191157a38f"}
+       com.dylibso.chicory/wasm     {:mvn/version "1.4.0"}  ; same pin as kotoba-lang/kotoba
         com.dylibso.chicory/runtime {:mvn/version "1.4.0"}
         ;; Bounded, hardened EDN reader replaces ad-hoc `clojure.edn`
         ;; (size/depth/node-count limits, dispatch forms forbidden) --

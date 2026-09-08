@@ -10,7 +10,7 @@
      help"
   (:require [clojure.java.io :as io]
             [clojure.pprint :as pp]
-            [clojure.string :as str]
+            [kotoba.lang.text :as str]
             [kototama.browser :as browser]
             [kototama.contract :as contract]
             [kototama.guest :as guest]

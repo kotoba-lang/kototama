@@ -1,7 +1,7 @@
 (ns kototama.test-atproto
   "Tests for the AT-Protocol surface + key-material identity (the pieces test_kototama.clj —
   gates/membrane/heartbeat/didkey — does not cover)."
-  (:require [clojure.string :as str]
+  (:require [kotoba.lang.text :as str]
             [clojure.test :refer [deftest is run-tests]]
             [kototama.atproto :as at]
             [kototama.identity :as id]))

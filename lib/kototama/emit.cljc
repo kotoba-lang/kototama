@@ -7,7 +7,7 @@
 
   Targets are surfaces like app-aozora (the yoro feed reader/poster) and
   com-etzhayyim (the etzhayyim PDS). Default status is :dry-run."
-  (:require [clojure.string :as str]
+  (:require [kotoba.lang.text :as str]
             [kototama.leash :as leash]
             [kototama.gates :as gates]))
 

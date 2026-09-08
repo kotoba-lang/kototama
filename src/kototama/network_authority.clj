@@ -1,6 +1,6 @@
 (ns kototama.network-authority
   "Fail-closed authority envelope for guest-triggered HTTP providers."
-  (:require [clojure.string :as str]
+  (:require [kotoba.lang.text :as str]
             ;; This namespace owns the policy-to-egress boundary.  Keep the
             ;; shared controls visible in its dependency graph so the
             ;; organization-level adoption gate can attest that ownership.
@@ -18,8 +18,8 @@
 (defn canonical-endpoint [value]
   (try
     (let [uri (URI/create value)
-          scheme (some-> (.getScheme uri) str/lower-case)
-          host (some-> (.getHost uri) str/lower-case)
+          scheme (some-> (.getScheme uri) str/lower)
+          host (some-> (.getHost uri) str/lower)
           port (.getPort uri)
           path (or (.getRawPath uri) "")
           query (.getRawQuery uri)]

@@ -4,7 +4,7 @@
   Socket objects never cross the Wasm boundary. Guests receive affine opaque
   i64 handles, and every endpoint, byte count, connection count, and connect
   timeout is checked against HostCaps before native I/O."
-  (:require [clojure.string :as str]
+  (:require [kotoba.lang.text :as str]
             [kotoba.security.abac :as abac]
             [kotoba.security.approval :as approval]
             [kotoba.security.crypto-policy :as crypto]
@@ -22,7 +22,7 @@
 (defn- tls-server-end-point-digest [^SSLSocket socket]
   (let [^X509Certificate certificate
         (first (.getPeerCertificates (.getSession socket)))
-        signature (str/upper-case (.getSigAlgName certificate))
+        signature (str/upper (.getSigAlgName certificate))
         algorithm (cond
                     (str/includes? signature "SHA512") "SHA-512"
                     (str/includes? signature "SHA384") "SHA-384"
@@ -59,12 +59,12 @@
                           (subs host 1 (dec (count host)))
                           host)]
         (if (ip-literal? unbracketed)
-          (str/lower-case (.getHostAddress (InetAddress/getByName unbracketed)))
+          (str/lower (.getHostAddress (InetAddress/getByName unbracketed)))
           (let [without-root-dot (if (str/ends-with? unbracketed ".")
                                    (subs unbracketed 0 (dec (count unbracketed)))
                                    unbracketed)
                 ascii (IDN/toASCII without-root-dot IDN/USE_STD3_ASCII_RULES)]
-            (when (seq ascii) (str/lower-case ascii))))))
+            (when (seq ascii) (str/lower ascii))))))
     (catch Exception _ nil)))
 
 (defn- exact-endpoint [host port]

@@ -13,7 +13,7 @@
   No code is a stub: even a code with no segment capability validates its own
   spec-fields and enforces its own risk-tag requirements — genuinely
   commodity-specific work."
-  (:require [clojure.string :as str]))
+  (:require [kotoba.lang.text :as str]))
 
 ;; ── helpers ────────────────────────────────────────────────────────────────
 

@@ -14,7 +14,7 @@
   (dag-cbor/sha2-256) — bridge via `kototama.kotoba/->bridge-edn` + the host's
   kotoba_bridge. The two agree on *structure*, not byte-for-byte CID; that is the
   documented seam."
-  (:require [clojure.string :as str]))
+  (:require [kotoba.lang.text :as str]))
 
 ;; ───────────────────────── content addressing ─────────────────────────
 

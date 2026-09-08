@@ -1,7 +1,7 @@
 (ns kototama.implementation-profile-test
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
-            [clojure.string :as str]
+            [kotoba.lang.text :as str]
             [clojure.test :refer [deftest is]]))
 
 ;; Validates every qualification/implementation-declaration-*.edn against the

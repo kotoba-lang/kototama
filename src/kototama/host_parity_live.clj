@@ -13,7 +13,7 @@
   (:require [json.data-json :as json]
             [clojure.java.io :as io]
             [clojure.java.shell :as shell]
-            [clojure.string :as str]
+            [kotoba.lang.text :as str]
             [kototama.contract :as contract]
             [kototama.tender :as tender]
             [kototama.postgresql-pool-provider :as pg-pool]

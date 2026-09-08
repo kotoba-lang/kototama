@@ -18,7 +18,7 @@
 
   种をまく doctrine (etzhayyim ADR-2606281500): autonomy is bounded by these rails,
   not by per-post operator prior restraint."
-  (:require [clojure.string :as str]))
+  (:require [kotoba.lang.text :as str]))
 
 ;; ───────────────────────── organism off-switch ─────────────────────────
 
@@ -46,7 +46,7 @@
   "Screen post text against the §2 catastrophe term. Returns {:ok? bool :flags [..]}.
   Empty/whitespace text is refused (an organism must have something to say)."
   [text]
-  (let [t (str/lower-case (str text))
+  (let [t (str/lower (str text))
         flags (filterv #(str/includes? t %) catastrophe-markers)]
     {:ok? (and (seq (str/trim (str text))) (empty? flags))
      :flags flags}))

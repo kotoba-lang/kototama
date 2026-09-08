@@ -3,7 +3,7 @@
   (:require [json.data-json :as json]
             [kotoba.lang.edn :as edn]
             [clojure.java.io :as io]
-            [clojure.string :as str]
+            [kotoba.lang.text :as str]
             [ed25519.core :as ed])
   (:import [java.io FileOutputStream]
            [java.security MessageDigest]

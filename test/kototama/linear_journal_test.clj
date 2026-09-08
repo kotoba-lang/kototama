@@ -1,5 +1,5 @@
 (ns kototama.linear-journal-test
-  (:require [clojure.string]
+  (:require [kotoba.lang.text]
             [clojure.test :refer [deftest is testing]]
             [kototama.linear-journal :as journal]
             [multiformats.core])
@@ -47,10 +47,10 @@
 ;; being invisible.
 
 (defn- read-lines [path]
-  (->> (clojure.string/split (slurp path) #"\n") (remove empty?) vec))
+  (->> (kotoba.lang.text/split (slurp path) #"\n") (remove empty?) vec))
 
 (defn- write-lines! [path lines]
-  (spit path (str (clojure.string/join "\n" lines) "\n")))
+  (spit path (str (kotoba.lang.text/join "\n" lines) "\n")))
 
 (deftest each-entry-names-the-one-before-it
   (let [path (temp-path "linear-chain-")
@@ -86,7 +86,7 @@
     (dotimes [_ 3] (journal/claim! j "lease-tamper" :refund/execute 3))
     (is (:ok? (journal/verify-chain j)))
     (let [lines (read-lines path)
-          forged (clojure.string/replace (nth lines 1) ":ordinal 2" ":ordinal 9")]
+          forged (kotoba.lang.text/replace (nth lines 1) ":ordinal 2" ":ordinal 9")]
       (is (not= forged (nth lines 1)) "the fixture really changed a line")
       (write-lines! path (assoc lines 1 forged)))
     (let [{:keys [ok? broken-at]} (journal/verify-chain j)]
@@ -124,7 +124,7 @@
           j (journal/open! path)]
       (dotimes [_ 3] (journal/claim! j "lease-strip" :refund/execute 3))
       (let [lines (read-lines path)
-            stripped (clojure.string/replace (nth lines 2) #", :prev \"[^\"]+\"" "")]
+            stripped (kotoba.lang.text/replace (nth lines 2) #", :prev \"[^\"]+\"" "")]
         (is (not= stripped (nth lines 2)) "the fixture really removed :prev")
         (write-lines! path (assoc lines 2 stripped)))
       (is (false? (:ok? (journal/verify-chain j))))

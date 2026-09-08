@@ -33,7 +33,7 @@
    Fail-closed on its own vocabulary: a reason that is not in `reasons`
    is a caller bug and `denial` throws on it instead of minting a
    denial nobody registered. `reasons` is the enumeration a test can walk."
-  (:require [clojure.string :as str]))
+  (:require [kotoba.lang.text :as str]))
 
 (def hosts
   "Host -> the message prefix that host's denials have always carried."

@@ -14,7 +14,7 @@
   Runtime contract preserved from the Python agents:
     invoke(input) -> {:result {:code :title :segment :did :ok ...} :log [..]}
     DID = did:web:etzhayyim.com:actor:c<code>"
-  (:require [clojure.string :as str]
+  (:require [kotoba.lang.text :as str]
             [langgraph.graph :as g]
             [langchain.model :as lcm]
             [langchain.message :as msg]

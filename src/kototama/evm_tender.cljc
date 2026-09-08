@@ -38,7 +38,7 @@
   (`:ethereum-general-state-tests`, `:differential-execution`), and the
   standing declaration in `qualification/` is what states the current status.
   See `qualification/implementation-declaration-kototama-evm-tender.edn`."
-  (:require [clojure.string :as str]
+  (:require [kotoba.lang.text :as str]
             [kototama.contract :as contract]
             [kototama.denial :as denial]
             [kotoba.vm.evm.core :as evm]

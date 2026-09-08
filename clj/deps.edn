@@ -8,7 +8,12 @@
  ;; the clj libs are siblings of kototama under orgs/kotoba-lang/ (../../<lib>).
  ;; The langchain :local/root overrides langgraph's transitive git dep so the
  ;; whole stack resolves offline against the local checkouts.
- :deps {io.github.kotoba-lang/langgraph {:local/root "../../langgraph"}
+ :deps {
+        ;; kotoba.lang.text, not clojure.string. Pinned as an explicit floor:
+        ;; tools.deps takes the NEWEST sha it is shown, so without a floor here
+        ;; this repo silently rides whatever a sibling happens to name.
+        io.github.kotoba-lang/text {:git/sha "73bdb13ae7a3d004b44bca08be03a3191157a38f"}
+       io.github.kotoba-lang/langgraph {:local/root "../../langgraph"}
         io.github.kotoba-lang/langchain {:local/root "../../langchain"}}
  :aliases
  {:test {:extra-paths ["test"]
