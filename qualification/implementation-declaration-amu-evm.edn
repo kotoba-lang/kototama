@@ -5,9 +5,9 @@
         :repository "https://github.com/kotoba-lang/kototama"}
  :implementation :amu-evm256-kotoba-v1
  :version "1.0.0"
- :as-of "2026-09-05"
+ :as-of "2026-09-09"
  :source-repo "kotoba-lang/amu"
- :source-sha "41a51d508f293ae601ac50e1b5144e09f23c727c"
+ :source-sha "26401d2fe14b62098abfb4f0cad01fe8005b5944"
  
  :profiles
  {:evm/v1
@@ -41,6 +41,6 @@
  
  :evidence
  {:kind :source-audit
-  :method "manual read of src/kotoba/compiler/backend/evm.cljc at :source-sha; emitted-bytecode-level only (creation-bytes/runtime-bytes/verify-artifact!); JVM-free compile path amu compile --target evm256-kotoba-v1 landed in amu PR #787 (main 34450a1dc6)"
+  :method "manual read of src/kotoba/compiler/backend/evm.cljc at :source-sha; emitted-bytecode-level only (creation-bytes/runtime-bytes/verify-artifact!); JVM-free compile path amu compile --target evm256-kotoba-v1 landed in amu PR #787 (main 34450a1dc6); re-issued 2026-09-09 at 26401d2fe14b62: evm.cljc + backend_evm_test.clj binary-identical since 41a51d508f (git diff empty, 0 commits) - values unchanged"
   :tests "amu test suite green at :source-sha; no EVM conformance suite exists yet"
   :limitation "This declaration asserts SHAPE conformity at the bytecode level only. Per spec :conformance, :evidence-required-for includes :partial - this file is that evidence, and it must be re-issued against a new :source-sha whenever the backend changes."}}
