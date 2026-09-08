@@ -1,5 +1,6 @@
 (ns kototama.component-provider-test
-  (:require [clojure.test :refer [deftest is]]
+  (:require #?(:clj  [clojure.test :refer [deftest is]]
+               :cljs [cljs.test :refer [deftest is] :include-macros true])
             [kototama.component-provider :as provider]))
 
 (deftest provider-contract-keeps-policy-identical-across-adapters
@@ -14,9 +15,9 @@
                               :max-bytes 1 :max-items 1 :deadline-ms 10
                               :audit-id "component-test"}}}}]
     (is (= request (provider/prepare! request)))
-    (is (thrown? clojure.lang.ExceptionInfo
+    (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs ExceptionInfo)
                  (provider/prepare! (assoc request :runtime :workerd-core))))
-    (is (thrown? clojure.lang.ExceptionInfo
+    (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs ExceptionInfo)
                  (provider/prepare! (assoc request :grants #{}))))))
 
 (deftest provider-invocation-keeps-the-ability-out-of-guest-control
@@ -40,5 +41,5 @@
                       :audit-id "component-test"}
             :payload {:value 42}}
            @seen))
-    (is (thrown? clojure.lang.ExceptionInfo
+    (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs ExceptionInfo)
                  (provider/invoke! prepared :aiueos.component/unknown {})))))

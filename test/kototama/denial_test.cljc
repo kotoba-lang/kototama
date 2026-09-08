@@ -2,7 +2,8 @@
   "The one denial shape (koto-h6) as a vocabulary: every registered reason
   has a message on every host, and an unregistered reason is refused rather
   than minted."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require #?(:clj  [clojure.test :refer [deftest is testing]]
+               :cljs [cljs.test :refer [deftest is testing] :include-macros true])
             [kototama.denial :as denial]))
 
 (deftest every-registered-reason-has-a-message-on-every-host
@@ -24,9 +25,9 @@
           "and says something after it"))))
 
 (deftest an-unregistered-reason-is-a-caller-bug-not-a-denial
-  (is (thrown-with-msg? clojure.lang.ExceptionInfo #"unregistered reason"
+  (is (thrown-with-msg? #?(:clj clojure.lang.ExceptionInfo :cljs ExceptionInfo) #"unregistered reason"
                         (denial/denial :jvm :made-up/reason 1)))
-  (is (thrown-with-msg? clojure.lang.ExceptionInfo #"unknown host"
+  (is (thrown-with-msg? #?(:clj clojure.lang.ExceptionInfo :cljs ExceptionInfo) #"unknown host"
                         (denial/denial :toaster :fuel-exhausted 1))))
 
 (deftest denial?-discriminates-the-shape
@@ -40,12 +41,18 @@
   (is (true? (denial/denial? (denial/denial :browser :host-surface-rejected [:x])))))
 
 (deftest deny!-throws-the-shape-with-the-message-and-cause
-  (let [cause (RuntimeException. "boom")
+  ;; A host exception object to hang off the cause chain. The JVM class and
+  ;; `js/Error` are the same role on their respective hosts; what is being
+  ;; tested is that `deny!` carries the cause through, not which class it is.
+  (let [cause #?(:clj (RuntimeException. "boom") :cljs (js/Error. "boom"))
         e (try (denial/deny! :jvm :deadline-exceeded 30 {:extra 1} cause)
                nil
-               (catch clojure.lang.ExceptionInfo e e))]
+               (catch #?(:clj clojure.lang.ExceptionInfo :cljs ExceptionInfo) e e))]
     (is (some? e))
-    (is (= "kototama.tender: wall-clock deadline exceeded" (.getMessage e)))
-    (is (identical? cause (.getCause e)))
+    ;; `ex-message`/`ex-cause` rather than `.getMessage`/`.getCause`: the
+    ;; interop spellings are JVM-only and were the last thing keeping this
+    ;; namespace on one host.
+    (is (= "kototama.tender: wall-clock deadline exceeded" (ex-message e)))
+    (is (identical? cause (ex-cause e)))
     (is (= 1 (:extra (ex-data e))))
     (is (denial/denial? (ex-data e)))))
