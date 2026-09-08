@@ -10,13 +10,17 @@
 ;; validated it against the spec schema. This closes that gap.
 ;;
 ;; FINDING (2026-09-08, this test's first run): the two declarations drifted in
-;; shape — amu-evm uses :profiles as a vector of {:profile k ...} maps and
-;; :spec as a keyword; kototama-evm-tender uses :profiles as a {profile->map}
-;; map and :spec as a spec-reference map. The spec schema does NOT pin
-;; :profiles/:spec shape, so both satisfy the letter of the schema while
-;; having incompatible shapes. We normalise both and validate schema
-;; semantics; the shape divergence is recorded as a finding for a spec
-;; tightening (do NOT claim consensus it doesn't have).
+;; shape — amu-evm used :profiles as a vector of {:profile k ...} maps and
+;; :spec as a keyword; kototama-evm-tender used :profiles as a {profile->map}
+;; map and :spec as a spec-reference map. The spec schema did not pin
+;; :profiles/:spec shape, so both satisfied the letter of the schema while
+;; having incompatible shapes.
+;;
+;; TIGHTENED (seq-9, same day): spec/kototama-vm-v1.edn :conformance
+;; :implementation-declaration now pins :profiles-shape :keyed-map and
+;; :spec-shape :reference-map. Both declarations were migrated to the keyed
+;; map + spec-reference-map shapes; bare-keyword :spec and vector :profiles
+;; are now non-conformant and this test enforces it.
 ;;
 ;; 8-question Q1: an empty declaration set must FAIL, not pass vacuously.
 (def spec
@@ -31,24 +35,30 @@
                    (and (str/includes? (.getName f) "implementation-declaration")
                         (str/ends-with? (.getName f) ".edn")))))))
 
-;; Normalise both observed :profiles shapes -> flat vector of {:profile k ...map}.
+;; Normalise :profiles -> flat vector of {:profile k ...map}. seq-9
+;; tightening: the spec now pins :profiles-shape :keyed-map (one key per
+;; profile, no duplicate entries). The old wild vector-of-{:profile k} shape
+;; is non-conformant; a non-map :profiles must FAIL, not pass vacuously.
 (defn- normalised-profiles [d]
   (let [p (:profiles d)]
-    (cond
-      (map? p)      (mapv (fn [[k v]] (assoc v :profile k)) p)
-      (vector? p)   (mapv (fn [pr] (if (map? pr) pr {:profile nil, :status nil, :omissions nil, :levels []})) p)
-      :else         [])))
+    (if (map? p)
+      (mapv (fn [[k v]] (assoc v :profile k)) p)
+      (do (assert false (str ":profiles must be a profile-keyed map, got: "
+                             (pr-str (type p))))
+          []))))
 
-;; Normalise both observed :spec shapes -> a keyword identifying the spec.
 (defn- read-declaration [f]
   (edn/read-string (slurp f)))
 
+;; seq-9 tightening: :spec MUST be a spec-reference map {:schema ...}. The old
+;; bare-keyword form is non-conformant.
 (defn- normalised-spec [d]
   (let [s (:spec d)]
-    (cond
-      (keyword? s) s
-      (map? s)     (:schema s)
-      :else        nil)))
+    (if (map? s)
+      (:schema s)
+      (do (assert false (str ":spec must be a spec-reference map, got: "
+                             (pr-str (type s))))
+          nil))))
 
 (deftest declarations-exist-vacuity-guard
   (is (pos? (count (glob-declaration-files)))
@@ -97,3 +107,24 @@
             (is (empty? (:levels p))
                 (str (.getName f) " profile " (:profile p) " :status " (:status p)
                      " requires empty :levels"))))))))
+
+(deftest declarations-satisfy-pinned-profiles-and-spec-shapes
+  ;; seq-9: specs pin :profiles as a profile-keyed map (no duplicate keys
+  ;; possible) and :spec as a spec-reference map. Enforce both directly so a
+  ;; future declaration cannot silently reintroduce the wild shapes.
+  (let [{:keys [profiles-shape spec-shape]} (:implementation-declaration conformance)]
+    (is (= :keyed-map profiles-shape) "spec :profiles-shape must be declared")
+    (is (= :reference-map spec-shape) "spec :spec-shape must be declared")
+    (doseq [f (glob-declaration-files)]
+      (let [d (read-declaration f)]
+        (is (map? (:profiles d))
+            (str (.getName f) " :profiles must be a profile-keyed map per "
+                 ":profiles-shape :keyed-map"))
+        (is (= (count (:profiles d))
+               (count (distinct (keys (:profiles d)))))
+            (str (.getName f) " :profiles keys must be distinct"))
+        (is (map? (:spec d))
+            (str (.getName f) " :spec must be a spec-reference map per "
+                 ":spec-shape :reference-map"))
+        (is (contains? (:spec d) :schema)
+            (str (.getName f) " :spec reference map must carry :schema"))))))
