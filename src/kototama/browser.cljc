@@ -71,8 +71,8 @@
    ;; llmInferUrl pointing at a developer-controlled proxy that holds any
    ;; real LLM provider credential server-side -- never a provider endpoint
    ;; called directly with a key embedded in browser-shipped JS/HTML.
-   :llm-infer       {:jvm :yes :browser :yes :node :inject
-                     :note "browser: Worker-hosted guest + SAME SAB+Atomics bridge as http-post, via a caller-supplied proxy URL (never a provider key embedded client-side); node: opts.llmInfer inject"}
+   :llm-infer       {:jvm :yes :browser :coop-or-inject :node :inject
+                     :note "browser: Worker-hosted guest + SAME SAB+Atomics bridge as http-post (requires COOP/COEP headers, not ambient), via a caller-supplied proxy URL (never a provider key embedded client-side); node: opts.llmInfer inject"}
    :http-fetch          {:jvm :yes :browser :yes :node :inject
                          :note "browser: shared Worker+SAB transport; node: opts.httpFetch inject; independent maxHttpFetches quota"}
    ;; Ported to wasm-webcomponent's actor-host.js as a byte-for-byte JS
