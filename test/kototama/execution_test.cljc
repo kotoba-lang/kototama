@@ -1,7 +1,8 @@
 (ns kototama.execution-test
   "The line this namespace exists to hold: an execution CID is an identity
   always and a cache key sometimes."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require #?(:clj  [clojure.test :refer [deftest is testing]]
+               :cljs [cljs.test :refer [deftest is testing] :include-macros true])
             [kototama.execution :as ex]))
 
 (def classify {:clock/now :source

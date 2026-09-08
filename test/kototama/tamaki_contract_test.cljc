@@ -1,5 +1,6 @@
 (ns kototama.tamaki-contract-test
-  (:require [clojure.test :refer [deftest is]]
+  (:require #?(:clj  [clojure.test :refer [deftest is]]
+               :cljs [cljs.test :refer [deftest is] :include-macros true])
             [kotoba.core.capability-repository :as repository]
             [kototama.tamaki-contract :as tamaki-contract]))
 
