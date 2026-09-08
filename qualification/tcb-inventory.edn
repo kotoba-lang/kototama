@@ -16,7 +16,7 @@
   {:path "src/kototama/component_authority_daemon.clj" :role :component-authority-daemon
    :sha256 "7c1b14b5fd6f90e2b8afaa5d92234e9f5156da22c16546ba4b70d5957e40e078"}
   {:path "src/kototama/browser.cljc" :role :host-support-admission
-   :sha256 "90cd2ddf8ef74d12a8ab48a1f2bdb9b451a4668bf714afddc7d7b8ba36b6c87f"}
+   :sha256 "0fc28483a0319bb7dabb8a7bed812ef23018e60e6d1ff5dff27ef287d12de8d2"}
   {:path "src/kototama/cli.clj" :role :operator-entrypoint
    :sha256 "1c7d8968625b6683f2280a90ddfca20e506f89a77848d86d729f1016cfe89dec"}
   {:path "src/kototama/compatibility.clj" :role :artifact-admission

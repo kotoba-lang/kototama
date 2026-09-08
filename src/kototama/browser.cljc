@@ -55,8 +55,8 @@
    ;; TextDecoder-on-SharedArrayBuffer rejection, and a Worker-startup race)
    ;; -- an earlier merge to that repo's main had wired this import but
    ;; never actually completed a request.
-   :http-post       {:jvm :yes :browser :yes :node :inject
-                     :note "browser: Worker-hosted guest + SAB+Atomics bridge, requires COOP/COEP; node: opts.httpPost inject"}
+   :http-post       {:jvm :yes :browser :coop-or-inject :node :inject
+                     :note "browser: Worker-hosted guest + SAB+Atomics bridge, requires COOP/COEP headers (not ambient); node: opts.httpPost inject"}
    :log-read        {:jvm :yes :browser :yes :node :yes}
    :log-write       {:jvm :yes :browser :yes :node :yes}
    :clock-monotonic {:jvm :yes :browser :yes :node :yes}
