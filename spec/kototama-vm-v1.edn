@@ -239,6 +239,13 @@
  {:implementation-declaration-schema :kototama.vm/implementation-profile-v1
   :implementation-declaration
   {:required [:spec :implementation :profiles :non-claims]
+   ;; shape pinned 2026-09-08 (seq-9 tightening): :profiles MUST be a
+   ;; profile-keyed map (one :evm/v1 :fevm/v1 etc. key, no duplicate
+   ;; entries possible), :spec MUST be a spec-reference map naming the
+   ;; schema + version + repository. Both wild vector/keyword shapes
+   ;; observed in the past are now non-conformant.
+   :profiles-shape :keyed-map
+   :spec-shape :reference-map
    :profile-required [:status :omissions]
    :evidence-required-for [:conformant :partial :shape-only]
    :statuses [:conformant :partial :shape-only :not-implemented]
