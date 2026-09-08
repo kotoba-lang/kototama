@@ -148,6 +148,7 @@
                "-n" "kototama.execution-test"
                "-n" "kototama.guest-test"
                "-n" "kototama.host-parity-live-test"
+               "-n" "kototama.implementation-profile-test"
                "-n" "kototama.linear-journal-test"
                "-n" "kototama.maturity-test"
                "-n" "kototama.network-authority-test"
