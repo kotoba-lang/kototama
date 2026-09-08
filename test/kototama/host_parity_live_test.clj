@@ -1,6 +1,6 @@
 (ns kototama.host-parity-live-test
   "T8.4 live host runner — JVM tender proofs for host-parity critical imports."
-  (:require [clojure.string]
+  (:require [kotoba.lang.text]
             [clojure.test :refer [deftest is testing]]
             [kototama.host-parity-live :as live]))
 
@@ -107,6 +107,6 @@
     (is (true? (:ok? r)) "the Node live corpus did not run")
     (doseq [import ["transport-connect" "tls-open" "pg-open"
                     "scram-sha256" "pg-pool-open"]]
-      (is (some #(clojure.string/starts-with? % (str import "-node")) ids)
+      (is (some #(kotoba.lang.text/starts-with? % (str import "-node")) ids)
           (str import " is claimed :node :inject but the Node live corpus"
                " proves no case for it")))))

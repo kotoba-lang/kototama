@@ -104,7 +104,7 @@
   (no nested-map support), enabling a byte-faithful CACAO wire token and
   a real `com.atproto.repo.createRecord` body from a `.kotoba` guest."
   (:require [json.data-json :as json]
-            [clojure.string :as str]
+            [kotoba.lang.text :as str]
             [kotoba.security.effect :as effect]
             [kototama.browser :as browser]
             [kototama.compatibility :as compatibility]

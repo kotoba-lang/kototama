@@ -2,7 +2,7 @@
   "Packaging gate for the component-authority receiver. Fleet daemon
    packaging moved to kotoba-lang/fleet under ADR-2607266000."
   (:require [clojure.java.shell :as shell]
-            [clojure.string :as str]
+            [kotoba.lang.text :as str]
             [clojure.test :refer [deftest is]]))
 
 (deftest packaging-validate-script-passes

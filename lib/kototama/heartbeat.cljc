@@ -7,7 +7,7 @@
 
   The actual storage (read last tx, append tx, hash) is the HOST's job — see
   kototama.host (the `actor:host` ABI). This namespace only decides + shapes the result."
-  (:require [clojure.string :as str]))
+  (:require [kotoba.lang.text :as str]))
 
 (defn changed?
   "True when this beat's datoms differ from the last committed datoms (idempotent-by-content)."

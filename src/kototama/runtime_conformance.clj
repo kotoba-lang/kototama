@@ -27,7 +27,7 @@
    root CLAUDE.md records for the :spki-pin-mismatch -> :peer-not-pinned
    rename)."
   (:require [clojure.java.shell :as shell]
-            [clojure.string :as str]
+            [kotoba.lang.text :as str]
             [kototama.contract :as contract]
             [kototama.tender :as tender]))
 

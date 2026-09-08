@@ -10,7 +10,7 @@
 
   The membrane rule: every machine-composed outward TEXT passes `gates/assert-no-advice`
   before it can become a post — observations only, never advice / valuation / forecast."
-  (:require [clojure.string :as str]
+  (:require [kotoba.lang.text :as str]
             [kototama.gates :as gates]))
 
 ;; ── content-addressed record key (FNV-1a → hex) ──────────────────────────────

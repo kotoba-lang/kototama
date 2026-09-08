@@ -8,7 +8,7 @@
 
   The leash is the off-switch of the 種をまく doctrine: stop re-issuing (or let
   it expire) and the organism self-disables, falling back to its local log."
-  (:require [clojure.string :as str]))
+  (:require [kotoba.lang.text :as str]))
 
 (defn leash
   "Construct the present-only leash view of a member-issued delegation bundle.

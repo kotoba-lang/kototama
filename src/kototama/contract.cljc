@@ -4,7 +4,7 @@
   This namespace defines data shapes and validation rules for actor host imports.
   Hosts may adapt these maps to Rust, JS, or JVM APIs, but the requested import
   surface is accepted only when the contract grants and runtime limits allow it."
-  (:require [clojure.string :as str]))
+  (:require [kotoba.lang.text :as str]))
 
 (def actor-host-namespace "actor:host")
 (def actor-host-version 0)

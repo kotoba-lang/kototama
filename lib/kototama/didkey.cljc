@@ -7,7 +7,7 @@
   did:key (Ed25519) = multicodec 0xed 0x01 ++ raw-pubkey, multibase base58btc ('z' prefix).
   base58btc is INLINED (no dependency) so this is portable to bb/JVM today and to the
   kototama wasm subset as the host gains byte-vector ops. Deterministic; pure."
-  (:require [clojure.string :as str]))
+  (:require [kotoba.lang.text :as str]))
 
 (def ^:private b58-alphabet "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz")
 

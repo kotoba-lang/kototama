@@ -5,7 +5,7 @@
             [kototama.membrane :as m]
             [kototama.heartbeat :as h]
             [kototama.didkey :as d]
-            [clojure.string :as str]
+            [kotoba.lang.text :as str]
             [clojure.test :refer [deftest is run-tests]]))
 
 (def ok-record {:status :dry-run :sources ["ADR-x" "did:web:y"] :cash 0 :server-held-key false :sim-only true})

@@ -1,7 +1,7 @@
 (ns kototama.maturity-test
   "R1 maturity gates: host-free pure guests, session report, inspect-module."
   (:require [clojure.java.io :as io]
-            [clojure.string :as str]
+            [kotoba.lang.text :as str]
             [clojure.test :refer [deftest is testing]]
             [kototama.browser :as browser]
             [kototama.contract :as contract]

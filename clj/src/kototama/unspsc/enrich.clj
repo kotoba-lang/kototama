@@ -15,7 +15,7 @@
   (:require [json.data-json :as json]
             [kotoba.lang.edn :as edn]
             [clojure.java.io :as io]
-            [clojure.string :as str])
+            [kotoba.lang.text :as str])
   (:gen-class))
 
 (def ^:private taxonomy-path "resources/unspsc-taxonomy.edn")

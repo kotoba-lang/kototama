@@ -12,7 +12,7 @@
   Run:  clojure -M:build-taxonomy [registry.json] [enrichment.jsonl] [out.edn]"
   (:require [json.data-json :as json]
             [clojure.java.io :as io]
-            [clojure.string :as str])
+            [kotoba.lang.text :as str])
   (:gen-class))
 
 (def ^:private root

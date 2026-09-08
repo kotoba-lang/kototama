@@ -2,7 +2,7 @@
   "Phase 1 pilot: prove the functional clj organism replaces the Python stubs.
   Key invariant under test: NO code is a hollow stub — every actor does
   commodity-specific, input-validating work; coverage = all 18,342 codes."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.lang.text] [clojure.test :refer [deftest is testing]]
             [langchain.db :as db]
             [langchain.model :as lcm]
             [langgraph.checkpoint :as cp]
@@ -85,8 +85,8 @@
         v (cap/run t {})]
     (testing "no model → deterministic, commodity-grounded template"
       (let [txt (org/reason-text nil t v)]
-        (is (not (clojure.string/blank? txt)))
-        (is (clojure.string/includes? txt "10101500"))))
+        (is (not (kotoba.lang.text/blank? txt)))
+        (is (kotoba.lang.text/includes? txt "10101500"))))
     (testing "model path → uses the model output"
       (let [model (lcm/mock-model [(langchain.message/ai "MURAKUMO-SAYS-OK")])
             txt (org/reason-text model t v)]
@@ -94,7 +94,7 @@
     (testing "model that throws → fails open to template"
       (let [boom (lcm/mock-model (fn [_ _] (throw (ex-info "down" {}))))
             txt (org/reason-text boom t v)]
-        (is (clojure.string/includes? txt "10101500"))))))
+        (is (kotoba.lang.text/includes? txt "10101500"))))))
 
 ;; ── kotoba-datomic-shaped persistence (organic as-of history) ───────────────
 
@@ -133,7 +133,7 @@
                    {:thread-id "shortcut-test"})]
         (is (true? (get-in state [:result :ok])))
         (is (true? (get-in state [:result :shortcut])))
-        (is (some #(clojure.string/includes? % ":validate:prior_shortcut")
+        (is (some #(kotoba.lang.text/includes? % ":validate:prior_shortcut")
                   (:log state)))
         (is (empty? (get-in state [:result :checks])))))
     (testing "no prior-consensus is byte-identical to today"

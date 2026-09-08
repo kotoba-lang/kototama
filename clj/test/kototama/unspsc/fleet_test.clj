@@ -2,7 +2,7 @@
   "Phase 3: the full 18,342-actor fleet instantiates + runs + shards, and actor
   state persists as-of on the kotoba-Datom log (verified at subset scale; the
   demo in-memory Datom store is O(n²) so the full run uses the O(1) mem store)."
-  (:require [clojure.string :as str]
+  (:require [kotoba.lang.text :as str]
             [clojure.test :refer [deftest is]]
             [kototama.unspsc.fleet :as fleet]))
 

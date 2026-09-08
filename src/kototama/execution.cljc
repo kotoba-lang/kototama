@@ -43,7 +43,7 @@
   `:receipt/value` for a source. `kototama.linear-journal` chains
   consumption entries; those are not yet these receipts, and this namespace
   does not pretend otherwise: it reads whatever receipts it is handed."
-  (:require [clojure.string :as str]
+  (:require [kotoba.lang.text :as str]
             [multiformats.core :as mf]))
 
 (def required-receipt-keys

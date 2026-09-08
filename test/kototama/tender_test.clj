@@ -7,7 +7,7 @@
   (:require [clojure.test :refer [deftest is testing]]
             [clojure.java.io :as io]
             [clojure.java.shell :as shell]
-            [clojure.string :as str]
+            [kotoba.lang.text :as str]
             [kototama.signer-lifecycle :as signer]
             [kototama.tender :as tender]
             [kototama.contract :as contract])
