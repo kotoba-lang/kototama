@@ -8,7 +8,7 @@
             [langchain.message :as msg]
             [langchain.db :as db]
             [langchain.kotoba-db :as kdb]
-            [clojure.string :as str]
+            [kotoba.lang.text :as str]
             [kototama.unspsc.taxonomy :as tax]
             [kototama.unspsc.capability :as cap]
             [kototama.unspsc.react :as react]))
@@ -78,7 +78,7 @@
   the browser. Same-origin (/xrpc/* → dev-proxy → live node)."
   [{:keys [url method headers body]}]
   (let [xhr (js/XMLHttpRequest.)]
-    (.open xhr (str/upper-case (name method)) url false)
+    (.open xhr (str/upper (name method)) url false)
     (doseq [[k v] headers] (.setRequestHeader xhr k v))
     (.send xhr (or body ""))
     {:status (.-status xhr) :body (.-responseText xhr)}))

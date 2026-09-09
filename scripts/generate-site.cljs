@@ -38,7 +38,7 @@
 ;;      where it was told to look
 (require '[jp-go-dds.core :as dds]
          '[jp-go-dds.page :as page]
-         '[clojure.string :as str]
+         '[kotoba.lang.text :as str]
          '["fs" :as fs])
 
 (def ^:private argv (vec *command-line-args*))
