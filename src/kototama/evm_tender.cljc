@@ -94,10 +94,35 @@
   [^String s]
   (str (mf/cidv1-raw (utf8-bytes s))))
 
+(defn- byte-hex
+  "Two lowercase hex digits for one program byte, on either host.
+
+  This was `(format \"%02x\" (int b))`, and `clojure.core/format` does not exist
+  on ClojureScript -- so `kototama.evm-tender` could not LOAD there at all
+  (`Unable to resolve symbol: format`, measured 2026-09-08 by requiring the
+  namespace under nbb). An EVM program's identity was therefore not computable
+  on the runtime this workspace is migrating to.
+
+  It refuses out of range rather than formatting anything. `%02x` of a NEGATIVE
+  int on the JVM produces EIGHT hex digits, not two, so a `code` carrying a
+  signed byte silently produced a different -- and much longer -- program
+  identity instead of an error. Nothing in this repository constructs `code`
+  that way (every caller builds a vector of 0-255 ints, and `evm-tender` has no
+  callers outside its own tests), so the refusal costs no existing program and
+  closes a shape that would otherwise be a silent identity change."
+  [b]
+  (let [n #?(:clj (long b) :cljs b)]
+    (when-not (and (integer? n) (<= 0 n) (<= n 255))
+      (throw (ex-info "evm-tender: program byte outside 0-255"
+                      {:kotoba.evm/byte b})))
+    (let [h #?(:clj (Integer/toHexString (int n))
+               :cljs (.toString n 16))]
+      (if (= 1 (count h)) (str "0" h) h))))
+
 (defn program-cid
   "Identity of the deployed bytecode."
   [code]
-  (cid-of (str/join "," (map #(format "%02x" (int %)) code))))
+  (cid-of (str/join "," (map byte-hex code))))
 
 (defn message-cid
   "Identity of the invocation: calldata, value, caller, budget.
