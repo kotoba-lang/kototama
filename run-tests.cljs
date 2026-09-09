@@ -42,6 +42,7 @@
 (ns run-tests
   (:require [cljs.test :as t]
             [kototama.component-provider-test]
+            [kototama.evm-program-cid-test]
             [kototama.denial-test]
             [kototama.execution-test]
             [kototama.tamaki-contract-test]))
@@ -52,4 +53,5 @@
   (when (pos? (+ (or (:fail m) 0) (or (:error m) 0)))
     (set! (.-exitCode js/process) 1)))
 
-(t/run-tests 'kototama.component-provider-test 'kototama.denial-test 'kototama.execution-test 'kototama.tamaki-contract-test)
+(t/run-tests 'kototama.evm-program-cid-test
+             'kototama.component-provider-test 'kototama.denial-test 'kototama.execution-test 'kototama.tamaki-contract-test)
