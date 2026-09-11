@@ -40,8 +40,8 @@
                  :fip-0054-exit-code-mapping
                  :contract-authority-vocabulary-reused-unforked
                  :unknown-grant-rejected-pre-flight]
-   :evidence ["test/kototama/evm_tender_test.clj"
-              "src/kototama/evm_tender.cljc"]
+   :evidence ["test/kototama/evm_tender_test.cljk"
+              "src/kototama/evm_tender.cljk"]
    :omissions [:ethereum-general-state-tests
                :differential-execution-suite
                :evm-message-level
@@ -59,7 +59,7 @@
   {:status :shape-only
    :levels []
    :implemented [:fip-0054-exit-code-mapping]
-   :evidence ["test/kototama/evm_tender_test.clj"]
+   :evidence ["test/kototama/evm_tender_test.cljk"]
    :omissions [:filecoin-network-version-pin
                :fevm-actor-version-pin
                :gas-mapping-to-filecoin-meter

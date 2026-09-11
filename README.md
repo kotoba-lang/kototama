@@ -218,7 +218,7 @@ binary and a Core module are the same artifact.
 
 ### Compat tender (Chicory) — still present, not primary
 
-`src/kototama/tender.clj` wires every `kototama.contract` `actor:host` import
+`src/kototama/tender.cljk` wires every `kototama.contract` `actor:host` import
 to a Chicory `HostFunction` with pre-flight + per-call grant checks,
 `RuntimeLimits`, memory limits, and fuel. Useful as a verification harness
 against real Wasm bytes — **not** what "use kototama" means for new work.
@@ -232,18 +232,18 @@ are not considered duplicated work to consolidate.
 
 ## Contract Surface
 
-- `src/kototama/contract.cljc` defines the `actor:host` import surface,
+- `src/kototama/contract.cljk` defines the `actor:host` import surface,
   `HostCaps`, `RuntimeLimits`, grant normalization, and import validation
   (pure data, zero-dep, no execution — see `kototama.tender` for that).
-- `src/kototama/tamaki_contract.cljc` independently admits Tamaki's versioned
+- `src/kototama/tamaki_contract.cljk` independently admits Tamaki's versioned
   capability envelope before `HostCaps` construction. Business capabilities
   are not authority: imports, grants, limits, effect policy, ABI version, and
   network allowlists are rechecked at this boundary.
-- `src/kototama/tender.clj` is the Chicory-based execution runtime (see
+- `src/kototama/tender.cljk` is the Chicory-based execution runtime (see
   above). `:clj`-only, matching `com.dylibso.chicory`'s own JVM-only
   nature; pulls in `com.dylibso.chicory/{wasm,runtime}` and
   `kotoba-lang/org-ietf-ed25519` (`kototama.contract` itself stays free of them).
-- `src/kototama/aiueos_adapter.clj` closes the "aiueos decides, kototama
+- `src/kototama/aiueos_adapter.cljk` closes the "aiueos decides, kototama
   enforces" loop for real: calls `aiueos.cli/command-result` (a real
   `io.github.kotoba-lang/aiueos` dependency, in-process — not the
   `bb decide` subprocess `aiueos.decide` also exposes for hosts that
@@ -288,7 +288,7 @@ Wasm interpreter". Hosting library:
 GitHub Pages serves this repository from the default branch root, so the demo
 and every document are already public. Both directory addresses used to 404 —
 there was no document at either, and no map of what was published.
-`scripts/generate-site.cljs` builds them from the repository tree: the lead
+`scripts/generate-site.cljk` builds them from the repository tree: the lead
 paragraph is read out of this README, each document title is that file's own
 `#` heading, each byte count is `stat` on the real file. It is built on
 [`jp-go-dds`](https://github.com/kotoba-lang/jp-go-digital-design-system), the
@@ -296,9 +296,9 @@ workspace's base design system.
 
 ```bash
 D=../jp-go-digital-design-system
-nbb --classpath "$D/src:../html/src:../css/src" scripts/generate-site.cljs \
+nbb --classpath "$D/src:../html/src:../css/src" scripts/generate-site.cljk \
   --dds-css "$D/resources/jp_go_dds/dds.css"            # regenerate
-nbb --classpath "$D/src:../html/src:../css/src" scripts/generate-site.cljs \
+nbb --classpath "$D/src:../html/src:../css/src" scripts/generate-site.cljk \
   --dds-css "$D/resources/jp_go_dds/dds.css" --check    # 1 if hand-edited
 ```
 
@@ -340,8 +340,8 @@ wasm-webcomponent / `web/`) and still verified on the demoted JVM tender
 
 ```bash
 clojure -M:test
-bb --classpath lib lib/kototama/test_actor.clj
-bb --classpath lib lib/kototama/test_atproto.cljc
+bb --classpath lib lib/kototama/test_actor.cljk
+bb --classpath lib lib/kototama/test_atproto.cljk
 ```
 
 `clojure -M:test` is the default repository gate (contract + tender + aiueos

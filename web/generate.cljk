@@ -126,7 +126,7 @@
     [:p "Hand-assembled module importing " [:code "clock_monotonic"] "/" [:code "log_write"] "/"
      [:code "sha256_hex"] " (module " [:code "\"kotoba\""] "), backed by "
      [:code "actor-host.js"] " — a browser-side port of "
-     [:a {:href "../src/kototama/contract.cljc"} [:code "kototama.contract"]]
+     [:a {:href "../src/kototama/contract.cljk"} [:code "kototama.contract"]]
      "'s " [:code "HostCaps"] "/" [:code "RuntimeLimits"] "/"
      [:code "validate-import-surface"] ", the same fail-closed pre-flight + per-call "
      "grant checks " [:code "kototama.tender"] " (the JVM/Chicory counterpart) enforces. "

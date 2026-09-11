@@ -1,5 +1,5 @@
 ;; kototama.wasm-fields -- contract import id naming, as a pure Kotoba guest
-;; (oracle: src/kototama/wasm_fields.cljc).
+;; (oracle: src/kototama/wasm_fields.cljk).
 ;;
 ;; The oracle's table is 58 entries (measured by counting the map): an
 ;; id string and its wasm field name under module "kotoba". :container-items

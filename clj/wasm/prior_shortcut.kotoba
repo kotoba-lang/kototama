@@ -1,7 +1,7 @@
 (ns kototama-unspsc-prior-shortcut)
 
 ;; Narrow-slice port of kototama's kototama.unspsc.life/prior-shortcut?
-;; (clj/src/kototama/unspsc/life.cljc) into `.kotoba`, per ADR-2607151500's
+;; (clj/src/kototama/unspsc/life.cljk) into `.kotoba`, per ADR-2607151500's
 ;; kotoba-lang-org-internal narrow-slice porting policy -- the first
 ;; candidate found (kototama.unspsc.capability's segment-capabilities table)
 ;; turned out to store closures as data (predicate fns keyed by segment),

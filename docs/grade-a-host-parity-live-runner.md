@@ -114,7 +114,7 @@ Emits `HOST_PARITY_LIVE_JSON:` for Clojure integration (`run-node-live`).
 
 ## Evidence
 
-- `test/kototama/host_parity_live_test.clj` (56 JVM live proofs)
+- `test/kototama/host_parity_live_test.cljk` (56 JVM live proofs)
 - `node web/verify-host-parity-live.mjs` (38 Node proofs)
 
 ## Related

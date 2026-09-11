@@ -3,23 +3,23 @@
             [kototama.tcb :as tcb]))
 
 (def required-boundaries
-  #{"src/kototama/contract.cljc"
-    "src/kototama/tender.clj"
-    "src/kototama/browser.cljc"
-    "src/kototama/component_platform.clj"
-    "src/kototama/component_provider.cljc"
-    "src/kototama/workerd_core.clj"
+  #{"src/kototama/contract.cljk"
+    "src/kototama/tender.cljk"
+    "src/kototama/browser.cljk"
+    "src/kototama/component_platform.cljk"
+    "src/kototama/component_provider.cljk"
+    "src/kototama/workerd_core.cljk"
     "workerd/kototama-core-host.mjs"
-    "src/kototama/compatibility.clj"
-    "src/kototama/aiueos_adapter.clj"
-    "src/kototama/linear_journal.clj"
-    "src/kototama/component_authority.clj"
-    "src/kototama/component_authority_http.clj"
-    "src/kototama/component_authority_daemon.clj"
-    "src/kototama/network_authority.clj"
-    "src/kototama/release_evidence.clj"
-    "src/kototama/signer_lifecycle.clj"
-    "src/kototama/tcb.clj"})
+    "src/kototama/compatibility.cljk"
+    "src/kototama/aiueos_adapter.cljk"
+    "src/kototama/linear_journal.cljk"
+    "src/kototama/component_authority.cljk"
+    "src/kototama/component_authority_http.cljk"
+    "src/kototama/component_authority_daemon.cljk"
+    "src/kototama/network_authority.cljk"
+    "src/kototama/release_evidence.cljk"
+    "src/kototama/signer_lifecycle.cljk"
+    "src/kototama/tcb.cljk"})
 
 (deftest checked-in-tcb-has-no-drift
   (is (= {:valid? true :files 24 :external 8 :errors []}
