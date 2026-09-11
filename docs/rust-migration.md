@@ -5,7 +5,7 @@ Status: Rust wrapper removed.
 `kototama` is now a CLJC-first contract and organism runtime repository. The
 authoritative behavior lives in:
 
-- `src/kototama/contract.cljc`
+- `src/kototama/contract.cljk`
 - `lib/kototama/*.cljc`
 - `lib/actor/publish.bb`
 

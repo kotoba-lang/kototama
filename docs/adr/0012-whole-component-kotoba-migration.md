@@ -9,8 +9,8 @@
 ## Context
 
 The proposed first step extracted only the expiry/scope/present-only decision
-from `lib/kototama/leash.cljc`, and only mood/cadence/prior-shortcut decisions
-from `clj/src/kototama/unspsc/life.cljc`. That would have proved that Amu can
+from `lib/kototama/leash.cljk`, and only mood/cadence/prior-shortcut decisions
+from `clj/src/kototama/unspsc/life.cljk`. That would have proved that Amu can
 compile a few pure functions, but it would not have migrated either component.
 The Clojure namespace would still own its API, data model, folds and calls, and
 the caller would have to project business inputs into a second implementation.

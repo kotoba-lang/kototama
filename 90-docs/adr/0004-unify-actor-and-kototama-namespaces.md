@@ -37,7 +37,7 @@ membrane, heartbeat, organism, core}` + `kototama.unspsc.*` (the fleet).
 
 ## Verification
 
-- bb: `lib/kototama/test_actor.clj` 6/31 · `test_atproto.cljc` 4/11 ·
+- bb: `lib/kototama/test_actor.cljk` 6/31 · `test_atproto.cljc` 4/11 ·
   `core_test.clj` 10/36.
 - fleet: `cd clj && clojure -M:test` 40/222.
 - Rust: `cargo test --target aarch64-apple-darwin` 4/0 (the prelude rename

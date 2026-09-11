@@ -67,8 +67,8 @@ test:http-post-browser`) -- a real HTTP round-trip through a
 cross-origin-isolated page.
 
 `http-post` is genuinely `8/9`-real now, corrected again in
-`docs/maturity.md`/`README.md`/`src/kototama/browser.cljc`/
-`src/kototama/guest.cljc`/`test/kototama/browser_test.cljc`. Item 3
+`docs/maturity.md`/`README.md`/`src/kototama/browser.cljk`/
+`src/kototama/guest.cljk`/`test/kototama/browser_test.cljk`. Item 3
 (JSPI) and `llm-infer`'s browser path remain not built. This is the third
 state this ADR has recorded for the same claim (landed → not built →
 actually landed) -- each correction was made against directly-verified

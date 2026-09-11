@@ -21,8 +21,8 @@
 ;; a static page with zero external requests.
 ;;
 ;; Run:
-;;   nbb --classpath "<dds>/src:<html>/src:<css>/src" scripts/generate-site.cljs
-;;   nbb --classpath "..." scripts/generate-site.cljs --check
+;;   nbb --classpath "<dds>/src:<html>/src:<css>/src" scripts/generate-site.cljk
+;;   nbb --classpath "..." scripts/generate-site.cljk --check
 ;;
 ;; where <dds>/<html>/<css> are the west checkouts of
 ;; kotoba-lang/jp-go-digital-design-system, kotoba-lang/html, kotoba-lang/css.
@@ -164,7 +164,7 @@
 (defn- footer [regenerate-from]
   [:footer
    (dds/divider)
-   [:p [:small "Generated from the repository tree by " [:code "scripts/generate-site.cljs"]
+   [:p [:small "Generated from the repository tree by " [:code "scripts/generate-site.cljk"]
         " — do not hand-edit. Regenerate from " [:code regenerate-from] " and verify with "
         [:code "--check"] "."]]])
 
