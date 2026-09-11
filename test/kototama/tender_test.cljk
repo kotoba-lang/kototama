@@ -1369,7 +1369,7 @@
 
 ;; cbor-encode/json-encode/json-extract-field, unlike http-fetch above,
 ;; ARE net-new to kotoba-core-contracts' capability_contract.edn (ids 245/
-;; 246) -- compiled with `clojure -M:dev` against a LOCAL sibling checkout
+;; 246) -- compiled with `kbb -M:dev` against a LOCAL sibling checkout
 ;; of the SAME edited kotoba-core-contracts this wave's own PR carries
 ;; (com-junkawasaki/root ADR-2607230943), proving the independent `kotoba`
 ;; compiler resolves these new host-import call targets and kototama.tender

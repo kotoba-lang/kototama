@@ -19,4 +19,4 @@ if [[ ! -r "$CONFIG" ]]; then
 fi
 
 cd "$HOME_DIR"
-exec clojure -M:authority-daemon "$CONFIG"
+exec kbb -M:authority-daemon "$CONFIG"

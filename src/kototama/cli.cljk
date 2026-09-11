@@ -36,8 +36,8 @@
 ;; ── doctor / parity: gates that compute their verdict ───────────────────────
 ;;
 ;; Until 2026-09-07 both commands returned a literal {:ok? true} after
-;; pretty-printing a report, so `clojure -M:doctor` (the R1 gate named in
-;; docs/maturity.md) and `clojure -M:cli parity` (the R2 gate) had never
+;; pretty-printing a report, so `kbb -M:doctor` (the R1 gate named in
+;; docs/maturity.md) and `kbb -M:cli parity` (the R2 gate) had never
 ;; produced a red. Every check below yields :pass, :fail or :unmeasured;
 ;; :unmeasured ("could not run", e.g. a fixture file absent) is neither a
 ;; pass nor a fail and maps to exit 2 in `exit-code`.
@@ -188,7 +188,7 @@
      (merge (guest/maturity-report)
             {:r2 (browser/r2-report)
              :placement {:owner "kotoba-lang/fleet"
-                         :gate "clojure -M:cli fleet-gate"}
+                         :gate "kbb -M:cli fleet-gate"}
              :doctor (assoc summary :results checks)}))
     summary))
 

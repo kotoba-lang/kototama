@@ -27,7 +27,7 @@ profile; they are not production fallbacks.
 Verification:
 
 ```sh
-clojure -M:test -n kototama.browser-test -n kototama.tender-test
+kbb -M:test -n kototama.browser-test -n kototama.tender-test
 ```
 
 The browser and Node execution implementation lives in

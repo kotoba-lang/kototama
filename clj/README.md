@@ -48,7 +48,7 @@ roadmap Phase 4 extracts this lib to its own home.
 ;; → {:mood :content :envelope {:status :dry-run :writeAuthor "did:plc:…" …} …}
 ```
 
-Run the common-lib tests: `bb --classpath src:test -e "(require 'kototama.core-test)(kototama.core-test/-main)"` (10 tests / 36 assertions).
+Run the common-lib tests: `kbb --classpath src:test -e "(require 'kototama.core-test)(kototama.core-test/-main)"` (10 tests / 36 assertions).
 
 
 ## Design
@@ -90,10 +90,10 @@ test/kototama/unspsc/organism_test.clj
 
 ```bash
 # (re)build the taxonomy data table from the etzhayyim/root sources
-clojure -M:build-taxonomy
+kbb -M:build-taxonomy
 
 # run the pilot tests
-clojure -X:test
+kbb -X:test
 ```
 
 ```clojure

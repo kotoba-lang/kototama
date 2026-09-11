@@ -1,7 +1,7 @@
-#!/usr/bin/env nbb
+#!/usr/bin/env kbb
 ;; nbb port of kototama/lib/actor/publish.bb (ADR-2607173000 Wave 1).
 ;;
-;;   nbb publish.cljs --actor <actor-dir> [--live]
+;;   kbb --backend sci publish.cljk --actor <actor-dir> [--live]
 ;;
 ;; Loads sibling kototama gates/atproto via relative paths from this file when
 ;; present under lib/actor/; wrappers in etzhayyim actors pass --actor.

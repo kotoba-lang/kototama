@@ -94,7 +94,7 @@
    :r2  browser-native host parity matrix + host-free web fixtures. The entry
         is `kototama.browser/r2-level`, derived from `browser/parity-score`
         -- status and note are computed, not written here, so this ladder,
-        `browser/r2-report` and `clojure -M:cli doctor` cannot disagree.
+        `browser/r2-report` and `kbb -M:cli doctor` cannot disagree.
    R3 (fleet multi-tenant tender) was retired from this ladder when the
    shared-store fleet moved to kotoba-lang/fleet; placement maturity is
    reported there (T6), which consumes this tender rather than being part
@@ -144,9 +144,9 @@
    :levels maturity-levels
    :import-surface (mapv :import/id (:abi/imports contract/import-surface))
    :wasm-fields wasm-field-by-import-id
-   :notes ["R1 gate: clojure -M:test (tender + contract + aiueos + guest + maturity)"
+   :notes ["R1 gate: kbb -M:test (tender + contract + aiueos + guest + maturity)"
            "R2 gate: node web/verify*.mjs (+ verify-host-free.mjs)"
-           "T6 placement gate: kotoba-lang/fleet `clojure -M:cli fleet-gate`"
+           "T6 placement gate: kotoba-lang/fleet `kbb -M:cli fleet-gate`"
            "Host-free pure guests: empty requested-imports + empty grants"
            "Emit path: kotoba-lang/kotoba `wasm emit` → .wasm → tender/run-report"
            "Lint .kotoba with kototama.guest/lint-kotoba-source before emit"]})

@@ -12,7 +12,7 @@
   langchain.kotoba-db to land on a live kotoba node. Physical rollout to the
   10-node Murakumo cluster (cell-runner) is operator-gated.
 
-  Run:  clojure -M:fleet [limit]"
+  Run:  kbb -M:fleet [limit]"
   (:require [langchain.db :as db]
             [langchain.kotoba-db :as kdb]
             [langgraph.checkpoint :as cp]

@@ -60,7 +60,7 @@
 ;; ── doctor / parity compute their verdict ───────────────────────────────────
 ;;
 ;; Both commands returned a literal {:ok? true} until 2026-09-07, so the R1
-;; gate `clojure -M:doctor` and the R2 gate `clojure -M:cli parity` had never
+;; gate `kbb -M:doctor` and the R2 gate `kbb -M:cli parity` had never
 ;; been red. These tests pin the three outcomes apart: pass, fail, and
 ;; "could not run" (:unmeasured, exit 2).
 

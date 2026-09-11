@@ -73,7 +73,7 @@ build gate.
 ### The migration gate is JVM-free
 
 The `kotoba` command is the verified native release executable. It is not a
-Java launcher, `clojure -M` wrapper or development classpath. Amu executes its
+Java launcher, `kbb -M` wrapper or development classpath. Amu executes its
 nbb/Node compiler entry with `--jvm-free`; dependency-lock failure,
 project-linker use or an unsupported target stops the migration instead of
 falling back to Clojure/JVM.

@@ -16,7 +16,7 @@ not enter an interruptible host operation.
 Verification:
 
 ```sh
-clojure -M:test -n kototama.tender-test
+kbb -M:test -n kototama.tender-test
 ```
 
 The production fleet entry point uses `run-report-bounded` with

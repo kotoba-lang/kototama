@@ -37,7 +37,7 @@ anymore (see "History" below).
   editing:
   ```bash
   cd web
-  nbb --classpath "../../html/src:../../css/src" generate.cljs
+  kbb --backend sci --classpath "../../html/src:../../css/src" generate.cljs
   ```
   (adjust the `--classpath` entries to wherever your west checkout has
   `kotoba-lang/html` and `kotoba-lang/css`). The output is still a plain
@@ -59,7 +59,7 @@ cd web && python3 -m http.server 8123
 ## Scope (honest R2 advanced-partial)
 
 Maturity ladder: top-level [`docs/maturity.md`](../docs/maturity.md).
-Parity matrix: `kototama.browser` / `clojure -M:cli parity`.
+Parity matrix: `kototama.browser` / `kbb -M:cli parity`.
 
 ### actor:host (wasm-webcomponent `actor-host.js`)
 

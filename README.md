@@ -246,7 +246,7 @@ are not considered duplicated work to consolidate.
 - `src/kototama/aiueos_adapter.cljk` closes the "aiueos decides, kototama
   enforces" loop for real: calls `aiueos.cli/command-result` (a real
   `io.github.kotoba-lang/aiueos` dependency, in-process — not the
-  `bb decide` subprocess `aiueos.decide` also exposes for hosts that
+  `kbb -M:decide` subprocess `aiueos.decide` also exposes for hosts that
   aren't already JVM/Clojure) and translates the actual grant/deny
   decision into a `kototama.contract/host-caps` value. `kototama.tender`
   never computes a grant itself either way (ADR-2607022700's rule); this
@@ -266,10 +266,10 @@ are not considered duplicated work to consolidate.
 # Guest must already be AOT-compiled by the language (kotoba):
 #   kotoba wasm emit cell.kotoba --package-lock L -o cell.wasm
 
-clojure -M:cli run path/to/guest.wasm --grant …     # execute (tender / CLI)
-clojure -M:cli lint path/to/guest.kotoba            # emit-pitfall lint only (no compile)
-clojure -M:cli inspect path/to/guest.wasm
-clojure -M:doctor
+kbb -M:cli run path/to/guest.wasm --grant …     # execute (tender / CLI)
+kbb -M:cli lint path/to/guest.kotoba            # emit-pitfall lint only (no compile)
+kbb -M:cli inspect path/to/guest.wasm
+kbb -M:doctor
 node web/verify-host-free.mjs                       # first path: native WebAssembly engine
 ```
 
@@ -296,9 +296,9 @@ workspace's base design system.
 
 ```bash
 D=../jp-go-digital-design-system
-nbb --classpath "$D/src:../html/src:../css/src" scripts/generate-site.cljk \
+kbb --backend sci --classpath "$D/src:../html/src:../css/src" scripts/generate-site.cljk \
   --dds-css "$D/resources/jp_go_dds/dds.css"            # regenerate
-nbb --classpath "$D/src:../html/src:../css/src" scripts/generate-site.cljk \
+kbb --backend sci --classpath "$D/src:../html/src:../css/src" scripts/generate-site.cljk \
   --dds-css "$D/resources/jp_go_dds/dds.css" --check    # 1 if hand-edited
 ```
 
@@ -324,11 +324,11 @@ Ladder and gates: [`docs/maturity.md`](docs/maturity.md).
 | T6 fleet placement | external — stable gate owned by `kotoba-lang/fleet` |
 
 ```bash
-clojure -M:doctor                                    # tender/browser snapshot
-clojure -M:cli parity                                # R2 import matrix
+kbb -M:doctor                                    # tender/browser snapshot
+kbb -M:cli parity                                # R2 import matrix
 bash deploy/validate-packaging.sh                    # authority receiver packaging
-clojure -M:cli lint  path/to/guest.kotoba            # lint only — compile with kotoba
-clojure -M:cli run     path/to/guest.wasm            # RUNTIME: run AOT guest
+kbb -M:cli lint  path/to/guest.kotoba            # lint only — compile with kotoba
+kbb -M:cli run     path/to/guest.wasm            # RUNTIME: run AOT guest
 node web/verify-host-free.mjs                        # R2 host-free under browser Wasm
 ```
 
@@ -339,12 +339,12 @@ wasm-webcomponent / `web/`) and still verified on the demoted JVM tender
 ## Test
 
 ```bash
-clojure -M:test
-bb --classpath lib lib/kototama/test_actor.cljk
-bb --classpath lib lib/kototama/test_atproto.cljk
+kbb -M:test
+kbb --classpath lib lib/kototama/test_actor.cljk
+kbb --classpath lib lib/kototama/test_atproto.cljk
 ```
 
-`clojure -M:test` is the default repository gate (contract + tender + aiueos
+`kbb -M:test` is the default repository gate (contract + tender + aiueos
 adapter + guest lint + maturity fixtures). `kototama.tender-test`
 shells out to the `wasm-tools` CLI (Bytecode Alliance) to assemble its WAT
 fixtures into real Wasm bytes at test time — install it (`cargo install

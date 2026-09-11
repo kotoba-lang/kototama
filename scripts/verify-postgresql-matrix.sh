@@ -14,7 +14,7 @@ for major in 14 15 17; do
     exit 3
   fi
   echo "matrix cell: JDK ${java_major}, $(${prefix}/postgres --version)"
-  PATH="${prefix}:${PATH}" clojure -M:postgresql-interop
+  PATH="${prefix}:${PATH}" kbb -M:postgresql-interop
 done
 
 echo "PostgreSQL local matrix: PASS"

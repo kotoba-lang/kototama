@@ -9,7 +9,7 @@
   Output: {\"10101500\" {:code :title :segment :family :class :commodity :did
                           :spec-fields [..] :risk-tags [..] :desc-en :desc-ja}, ...}
 
-  Run:  clojure -M:build-taxonomy [registry.json] [enrichment.jsonl] [out.edn]"
+  Run:  kbb -M:build-taxonomy [registry.json] [enrichment.jsonl] [out.edn]"
   (:require [json.data-json :as json]
             [clojure.java.io :as io]
             [kotoba.lang.text :as str])

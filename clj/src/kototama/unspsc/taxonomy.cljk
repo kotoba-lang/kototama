@@ -24,7 +24,7 @@
      (if-let [r (io/resource "unspsc-taxonomy.edn")]
        (with-open [rdr (io/reader r)]
          (set-table! (edn/read (java.io.PushbackReader. rdr))))
-       (throw (ex-info "taxonomy resource not found — run `clojure -M:build-taxonomy`"
+       (throw (ex-info "taxonomy resource not found — run `kbb -M:build-taxonomy`"
                        {:resource "unspsc-taxonomy.edn"})))))
 
 (defn ensure-loaded! []

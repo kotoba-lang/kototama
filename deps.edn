@@ -24,7 +24,7 @@
         ;; dedupes by the coordinate SYMBOL, so this file was putting ed25519
         ;; on the classpath TWICE: once here as `ed25519` at fdcefb9, and once
         ;; as `org-ietf-ed25519` at c1ba832, which kotoba-lang/security pulls
-        ;; in. Measured with `clojure -Stree`.
+        ;; in. Measured with `kbb -Stree`.
         ;;
         ;; The sha moves fdcefb9 -> c1ba832 rather than staying put, because
         ;; c1ba832 is what the canonical coordinate ALREADY resolved to here.

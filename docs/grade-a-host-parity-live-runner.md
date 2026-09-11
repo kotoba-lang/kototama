@@ -1,6 +1,6 @@
 # Grade A / T8.4 — live host runners (JVM + Node)
 
-- Status: partial (JVM 56 + Node 38 inject/live; **live SCRAM/PG success via** `clojure -M:postgresql-interop`; **scram-sha256 host crypto live-proven**)
+- Status: partial (JVM 56 + Node 38 inject/live; **live SCRAM/PG success via** `kbb -M:postgresql-interop`; **scram-sha256 host crypto live-proven**)
 - Date: 2026-07-31
 - WBS: T8.4
 
@@ -101,7 +101,7 @@ Emits `HOST_PARITY_LIVE_JSON:` for Clojure integration (`run-node-live`).
 ## Non-claims
 
 - Transport/TLS + full pg-pool/wire/scram/deeper-wire Node inject fail-closed proven (wasm-webcomponent#17–#19). Node inject surface complete for actor:host pg family
-- Live SCRAM-SHA-256-PLUS *session* success is proven by `clojure -M:postgresql-interop`
+- Live SCRAM-SHA-256-PLUS *session* success is proven by `kbb -M:postgresql-interop`
   (ephemeral PG + TLS + SCRAM guest providers); not embedded in the 56 JVM inject corpus
 - `:scram-sha256` **host crypto** is live-proven in the JVM corpus (credentials inject;
   no live PG required) — complementary to interop session proof

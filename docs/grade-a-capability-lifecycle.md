@@ -27,7 +27,7 @@ lease issued at the earlier epoch.
 Verification:
 
 ```sh
-clojure -M:test \
+kbb -M:test \
   -n kototama.tender-test \
   -n kototama.component-authority-test \
   -n kototama.component-provider-test
