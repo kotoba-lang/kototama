@@ -18,9 +18,9 @@ the seed is never written into the evidence:
 
 ```sh
 KOTOTAMA_RELEASE_SIGNING_SEED_HEX=<64-hex-chars> \
-  clojure -M:release-evidence dist/release-evidence
+  kbb -M:release-evidence dist/release-evidence
 
-clojure -M:test -n kototama.release-evidence-test
+kbb -M:test -n kototama.release-evidence-test
 ```
 
 T-08 remains `in-progress`: CI must publish this evidence for a tagged clean

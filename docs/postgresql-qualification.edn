@@ -36,4 +36,4 @@
                   :local-observed {:postgresql "17.9" :status :pass}}
  :commands
  {:local-matrix "bash scripts/verify-postgresql-matrix.sh"
-  :single-cell "clojure -M:postgresql-interop"}}
+  :single-cell "kbb -M:postgresql-interop"}}

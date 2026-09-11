@@ -19,7 +19,7 @@ guest memory or the checked-in policy.
 Verification:
 
 ```sh
-clojure -M:test -n kototama.browser-test \
+kbb -M:test -n kototama.browser-test \
   -n kototama.network-authority-test \
   -n kototama.tender-test
 ```

@@ -21,8 +21,8 @@
 ;; a static page with zero external requests.
 ;;
 ;; Run:
-;;   nbb --classpath "<dds>/src:<html>/src:<css>/src" scripts/generate-site.cljk
-;;   nbb --classpath "..." scripts/generate-site.cljk --check
+;;   kbb --backend sci --classpath "<dds>/src:<html>/src:<css>/src" scripts/generate-site.cljk
+;;   kbb --backend sci --classpath "..." scripts/generate-site.cljk --check
 ;;
 ;; where <dds>/<html>/<css> are the west checkouts of
 ;; kotoba-lang/jp-go-digital-design-system, kotoba-lang/html, kotoba-lang/css.

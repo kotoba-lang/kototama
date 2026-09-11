@@ -77,7 +77,7 @@ posting on by default per 種をまく; high-stakes actuation behind `may-actuat
 - One repo named kototama holds the runtime + the common lib + the fleet.
 - kyoninka's cross-repo dependency resolves to `kototama/clj` (deps local root).
 - Tests green from the new location: `clj` common-lib 10/36 (bb), UNSPSC fleet
-  50/258 (`clojure -M:test`).
+  50/258 (`kbb -M:test`).
 - The archived kototama-clj remains as a historical pointer; no new work lands
   there.
 

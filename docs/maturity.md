@@ -20,16 +20,16 @@ The R2 status and ratio above are not written by hand: `kototama.browser/r2-stat
 derives them from `parity-score` (`:qualified` only when every contract import
 is browser-linkable), `kototama.guest/maturity-levels` embeds
 `browser/r2-level`, and `kototama.maturity-test` fails when this row disagrees
-with the computed value. `clojure -M:doctor` exits 2 (not 0, not 1) when this
+with the computed value. `kbb -M:doctor` exits 2 (not 0, not 1) when this
 file is absent, because "could not compare" is not "compared and agreed".
 
 ## R1 acceptance gates
 
 ```bash
-clojure -M:test
-clojure -M:doctor
-clojure -M:cli run test/kototama/fixtures/kotoba-compiled-fact.wasm
-clojure -M:cli run test/kototama/fixtures/kotoba-compiled-peak-cells.wasm
+kbb -M:test
+kbb -M:doctor
+kbb -M:cli run test/kototama/fixtures/kotoba-compiled-fact.wasm
+kbb -M:cli run test/kototama/fixtures/kotoba-compiled-peak-cells.wasm
 ```
 
 ### Checked-in emit fixtures (`test/kototama/fixtures/`)
@@ -57,7 +57,7 @@ node web/verify.mjs
 node web/verify-kgraph.mjs
 node web/verify-actor-host.mjs
 node web/verify-host-free.mjs   # demo + fact + peak-cells under browser Wasm
-clojure -M:cli parity           # JVM vs browser import matrix
+kbb -M:cli parity           # JVM vs browser import matrix
 ```
 
 ### Browser import parity (actor:host)
@@ -72,7 +72,7 @@ clojure -M:cli parity           # JVM vs browser import matrix
 | http-fetch (ADR-2607230943) | yes | **yes** (shared SAB network bridge) | inject |
 | http-post-headers (com-junkawasaki/root, third wave) | yes | **yes** (shared SAB network bridge) | inject |
 
-Score today: **19/58** browser-linkable (`clojure -M:cli parity` prints the
+Score today: **19/58** browser-linkable (`kbb -M:cli parity` prints the
 matrix; the earlier "14/14" here counted only the first three waves of
 actor:host imports, before the transport/TLS, pg and scram families -- 39
 explicit browser `:no` -- joined the contract surface). The three pure-computation codec
@@ -226,8 +226,8 @@ one direction and calls `kototama.tender`; kototama does not depend on fleet.
 Run its acceptance gate from that repository:
 
 ```bash
-clojure -M:test
-clojure -M:cli fleet-gate
+kbb -M:test
+kbb -M:cli fleet-gate
 bash deploy/staging-smoke.sh
 ```
 

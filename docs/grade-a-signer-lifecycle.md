@@ -20,7 +20,7 @@ signing configuration is a denial, never a development fallback.
 Verification:
 
 ```sh
-clojure -M:test -n fleet.store-test \
+kbb -M:test -n fleet.store-test \
   -n kototama.signer-lifecycle-test \
   -n kototama.tender-test
 ```

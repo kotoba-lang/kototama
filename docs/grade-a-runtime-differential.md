@@ -16,7 +16,7 @@ The existing independent actor-host smoke test additionally exercises
 `wasm-webcomponent` JavaScript host rather than Chicory:
 
 ```sh
-clojure -M:test -n kototama.runtime-conformance-test
+kbb -M:test -n kototama.runtime-conformance-test
 node web/verify-actor-host.mjs
 ```
 

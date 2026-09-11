@@ -104,7 +104,7 @@
       ;; that has no `.md` (superproject scripts/fleet-ci/gates.edn,
       ;; `kototama-hermetic`). Nothing to compare against there; say so on
       ;; stderr rather than counting a silent pass. On a workstation, and via
-      ;; `clojure -M:doctor` (exit 2), the absence is reported as unmeasured.
+      ;; `kbb -M:doctor` (exit 2), the absence is reported as unmeasured.
       (binding [*out* *err*]
         (println "SKIPPED kototama.maturity-test/maturity-md-r2-row-quotes-the-derived-status-and-ratio:"
                  maturity-md "absent (filtered tree?) -- not measured"))

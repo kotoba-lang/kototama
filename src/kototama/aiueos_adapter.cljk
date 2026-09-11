@@ -6,7 +6,7 @@
 
   aiueos's own decision entry point is `aiueos.decide` (ADR-2607022700's
   decision-subprocess design): a process a native host adapter shells out
-  to via `bb decide`, reading/writing newline-delimited EDN. That subprocess
+  to via `kbb -M:decide`, reading/writing newline-delimited EDN. That subprocess
   wrapper exists for host adapters that can't or don't want a JVM/Clojure
   dependency on aiueos directly (a Rust or Node tender, say). `kototama`
   IS already JVM/Clojure, and `aiueos.decide/handle-request` is documented
@@ -15,7 +15,7 @@
   command-result` (what `handle-request` itself calls, one layer down,
   skipping the EDN-line marshaling a subprocess boundary needs but an
   in-process call doesn't) directly, as a real `io.github.kotoba-lang/
-  aiueos` dependency, rather than spawning `bb decide` per decision. This
+  aiueos` dependency, rather than spawning `kbb -M:decide` per decision. This
   is still `aiueos.decide!`'s and `aiueos.cli/command-result`'s decision --
   this adapter only translates the answer, exactly as the deferred
   follow-up specified -- not a second, kototama-owned decision algorithm,

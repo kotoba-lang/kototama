@@ -20,13 +20,13 @@ Declare **maturity R1** as the current stable level:
 
 - `tender/open-session` + `run-report` + `inspect-module`
 - `guest/lint-kotoba-source` + `guest/profile` + `guest/maturity-report`
-- CLI: `clojure -M:cli doctor|lint|inspect|run`
+- CLI: `kbb -M:cli doctor|lint|inspect|run`
 - Checked-in host-free fixtures: `fact` (120) and Williams peak-cells proxy (240)
 - Document ladder in `docs/maturity.md`
 
 ## Consequences
 
-- R1 CI gate remains `clojure -M:test` (now includes guest + maturity suites)
+- R1 CI gate remains `kbb -M:test` (now includes guest + maturity suites)
 - Browser parity stays R2 (partial); fleet durable loop stays R3 (planned)
 - Guest authors must pass lint before emit; docstring-on-defn is a hard fail
 

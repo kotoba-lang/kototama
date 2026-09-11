@@ -14,8 +14,8 @@ digest drift, absent external-boundary inventory, or an unversioned external
 dependency:
 
 ```sh
-clojure -M:tcb-check
-clojure -M:test -n kototama.tcb-test
+kbb -M:tcb-check
+kbb -M:test -n kototama.tcb-test
 ```
 
 Changing trusted source now requires an intentional inventory review and

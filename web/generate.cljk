@@ -8,7 +8,7 @@
 ;; "zero-build-step for consumers" stance.
 ;;
 ;; Run (regenerate index.html after editing this file):
-;;   nbb --classpath "../html/src:../css/src" generate.cljs
+;;   kbb --backend sci --classpath "../html/src:../css/src" generate.cljs
 ;;
 ;; The `<script type="module">` WebComponent-wiring block is genuine
 ;; executable JS, not representable as Hiccup markup itself -- it passes

@@ -1,4 +1,4 @@
-;; nbb --classpath "src:test:$(clojure -Spath -M:test)" run-tests.cljk
+;; kbb --backend sci --classpath "src:test:$(kbb -Spath -M:test)" run-tests.cljk
 ;;
 ;; The ClojureScript half of this repository's suite. It had none until
 ;; 2026-09-08, while shipping 10 `.cljc` sources -- so every one of those was a

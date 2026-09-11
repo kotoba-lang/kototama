@@ -1,5 +1,5 @@
-#!/usr/bin/env bb
-;; actor common-lib tests (portable, bb/JVM).  Run:  bb --classpath lib lib/actor/test_kototama.clj
+#!/usr/bin/env kbb
+;; actor common-lib tests (portable, bb/JVM).  Run:  kbb --classpath lib lib/actor/test_kototama.clj
 (ns kototama.test-actor
   (:require [kototama.gates :as g]
             [kototama.membrane :as m]

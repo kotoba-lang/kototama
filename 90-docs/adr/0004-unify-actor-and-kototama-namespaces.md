@@ -39,7 +39,7 @@ membrane, heartbeat, organism, core}` + `kototama.unspsc.*` (the fleet).
 
 - bb: `lib/kototama/test_actor.cljk` 6/31 · `test_atproto.cljc` 4/11 ·
   `core_test.clj` 10/36.
-- fleet: `cd clj && clojure -M:test` 40/222.
+- fleet: `cd clj && kbb -M:test` 40/222.
 - Rust: `cargo test --target aarch64-apple-darwin` 4/0 (the prelude rename
   compiles to wasm; `compiles_actor_logic_to_wasm` uses `kototama-may-draft?`).
 

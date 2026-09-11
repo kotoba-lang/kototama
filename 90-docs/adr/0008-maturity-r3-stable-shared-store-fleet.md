@@ -26,7 +26,7 @@ Explicitly **out of scope** for this stable label:
 
 ## Evidence
 
-- `clojure -M:cli fleet-gate` (11 acceptance checks)
+- `kbb -M:cli fleet-gate` (11 acceptance checks)
 - `bash deploy/staging-smoke.sh` (packaging + gate + daemon + status/audit)
 - CI: fleet-gate, daemon dry-run, packaging validate, staging-smoke
 - aiueos GRANT/DENY E2E through `fleet-exec` + tender

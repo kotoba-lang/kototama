@@ -44,7 +44,7 @@ records this honestly, but honesty in a doc is not enforcement.
 must either (a) land the `wasm-webcomponent` browser wiring in the same wave
 (cross-repo PR pair), or (b) carry an explicit waiver note in the PR body AND
 a same-PR `docs/maturity.md` parity-table update marking the gap. The parity
-score in `clojure -M:cli parity` is the machine check; CI should fail a
+score in `kbb -M:cli parity` is the machine check; CI should fail a
 contract change that does not update the parity matrix.
 
 The former 5-import backlog (`http-fetch`/`cbor-encode`/`json-encode`/
