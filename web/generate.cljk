@@ -8,7 +8,7 @@
 ;; "zero-build-step for consumers" stance.
 ;;
 ;; Run (regenerate index.html after editing this file):
-;;   kbb --backend sci --classpath "../html/src:../css/src" generate.cljs
+;;   kbb --backend sci --classpath "../html/src:../css/src" generate.cljk
 ;;
 ;; The `<script type="module">` WebComponent-wiring block is genuine
 ;; executable JS, not representable as Hiccup markup itself -- it passes
@@ -98,7 +98,7 @@
      " (" [:code "KotobaWasmElement"] " + " [:code "kgraph.js"] " + " [:code "actor-host.js"]
      ") — this page no longer carries its own copy of that hosting code, it only "
      "supplies the `.wasm` payloads and a few short " [:code "define()"] " calls. "
-     "This page itself is generated (see " [:code "generate.cljs"] ") via "
+     "This page itself is generated (see " [:code "generate.cljk"] ") via "
      [:a {:href "https://github.com/kotoba-lang/html"} [:code "kotoba-lang/html"]] "/"
      [:a {:href "https://github.com/kotoba-lang/css"} [:code "kotoba-lang/css"]]
      " (Hiccup-compatible EDN → HTML/CSS), run under nbb — the org's "
