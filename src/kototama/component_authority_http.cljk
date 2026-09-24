@@ -1,11 +1,10 @@
 (ns kototama.component-authority-http
   "Bounded HTTP receiver for signed Murakumo Component authority envelopes."
-  (:require [kotoba.lang.edn :as edn]
+  (:require [kotoba.bytes :as kbytes] [kotoba.lang.edn :as edn]
             [kototama.component-authority :as authority])
   (:import [com.sun.net.httpserver HttpExchange HttpHandler HttpServer
             HttpsConfigurator HttpsServer]
            [java.net InetSocketAddress]
-           [java.nio.charset StandardCharsets]
            [java.util.concurrent Executors]
            [javax.net.ssl SSLContext]))
 
@@ -13,7 +12,7 @@
 (def max-request-bytes (* 1024 1024))
 
 (defn- response! [^HttpExchange exchange status body]
-  (let [bytes (.getBytes (pr-str body) StandardCharsets/UTF_8)]
+  (let [bytes (kbytes/utf8-bytes (pr-str body))]
     (.set (.getResponseHeaders exchange) "content-type" "application/edn")
     (.sendResponseHeaders exchange status (alength bytes))
     (with-open [output (.getResponseBody exchange)]
@@ -58,8 +57,7 @@
 
             :else
             (let [envelope (edn/read-string
-                            (String. ^bytes (request-bytes! exchange)
-                                     StandardCharsets/UTF_8))
+                            (kbytes/utf8-string ^bytes (request-bytes! exchange)))
                   event (authority/apply-envelope! state envelope trust)]
               (response! exchange 202
                          {:ok? true

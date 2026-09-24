@@ -103,7 +103,7 @@
   interpretation of the SAME (ptr,len) input bytes grew) closes finding 4
   (no nested-map support), enabling a byte-faithful CACAO wire token and
   a real `com.atproto.repo.createRecord` body from a `.kotoba` guest."
-  (:require [json.data-json :as json]
+  (:require [kotoba.bytes :as kbytes] [json.data-json :as json]
             [kotoba.lang.text :as str]
             [kotoba.security.effect :as effect]
             [kototama.browser :as browser]
@@ -336,7 +336,7 @@
              (let [bs (read-bytes! instance (aget args 0) (aget args 1))
                    digest (.digest (MessageDigest/getInstance "SHA-256") bs)
                    hex (apply str (map #(format "%02x" (bit-and (int %) 0xff)) digest))]
-               (write-bytes! instance (aget args 2) (aget args 3) (.getBytes hex "UTF-8"))))))
+               (write-bytes! instance (aget args 2) (aget args 3) (kbytes/utf8-bytes hex))))))
 
 ;; ── outbound-HTTP hardening (guest-triggered network calls only) ──────────
 ;;
@@ -497,7 +497,7 @@
              (ensure-granted! caps :http-post)
              (if-not (within-count-limit? :http-posts :max-http-posts caps limits-state)
                -1
-               (let [url (String. ^bytes (read-bytes! instance (aget args 0) (aget args 1)) "UTF-8")]
+               (let [url (kbytes/utf8-string ^bytes (read-bytes! instance (aget args 0) (aget args 1)))]
                  (if (or (blocked-http-post-destination? url)
                          (not (contract/url-allowed? (:limits caps) url)))
                    -1
@@ -557,7 +557,7 @@
              (ensure-granted! caps :http-fetch)
              (if-not (within-count-limit? :http-fetches :max-http-fetches caps limits-state)
                -1
-               (let [url (String. ^bytes (read-bytes! instance (aget args 0) (aget args 1)) "UTF-8")]
+               (let [url (kbytes/utf8-string ^bytes (read-bytes! instance (aget args 0) (aget args 1)))]
                  (if (or (blocked-http-post-destination? url)
                          (not (contract/url-allowed? (:limits caps) url)))
                    -1
@@ -694,7 +694,7 @@
 
 (defn- cbor-val [^ByteArrayOutputStream o v]
   (cond
-    (string? v)     (let [b (.getBytes ^String v "UTF-8")] (cbor-head o 3 (alength b)) (.write o b 0 (alength b)))
+    (string? v)     (let [b (kbytes/utf8-bytes ^String v)] (cbor-head o 3 (alength b)) (.write o b 0 (alength b)))
     (map? v)        (do (cbor-head o 5 (count v)) (doseq [[k vv] v] (cbor-val o (name k)) (cbor-val o vv)))
     (sequential? v) (do (cbor-head o 4 (count v)) (doseq [x v] (cbor-val o x)))
     :else           (cbor-val o (str v))))
@@ -747,7 +747,7 @@
   (host-fn "cbor_encode" (mapv valtype [:i32 :i32 :i32 :i32]) ValType/I32
            (fn [instance args]
              (ensure-granted! caps :cbor-encode)
-             (let [pairs (parse-flat-pairs (String. ^bytes (read-bytes! instance (aget args 0) (aget args 1)) "UTF-8"))]
+             (let [pairs (parse-flat-pairs (kbytes/utf8-string ^bytes (read-bytes! instance (aget args 0) (aget args 1))))]
                (write-bytes! instance (aget args 2) (aget args 3) (cbor-pairs-bytes pairs))))))
 
 ;; ── minimal JSON object encode + bounded string-field scan. Neither is
@@ -804,7 +804,7 @@
   this function's pre-nesting-extension output for any PAIRS with no
   dotted keys (same reasoning as `cbor-pairs-bytes`'s docstring)."
   ^bytes [pairs]
-  (.getBytes (tree-node->json (build-nested-tree pairs) true) "UTF-8"))
+  (kbytes/utf8-bytes (tree-node->json (build-nested-tree pairs) true)))
 
 (defn- json-encode-host-fn
   "`(pairs-ptr pairs-len out-ptr out-cap) -> bytes-written|-1`. Same
@@ -815,7 +815,7 @@
   (host-fn "json_encode" (mapv valtype [:i32 :i32 :i32 :i32]) ValType/I32
            (fn [instance args]
              (ensure-granted! caps :json-encode)
-             (let [pairs (parse-flat-pairs (String. ^bytes (read-bytes! instance (aget args 0) (aget args 1)) "UTF-8"))]
+             (let [pairs (parse-flat-pairs (kbytes/utf8-string ^bytes (read-bytes! instance (aget args 0) (aget args 1))))]
                (write-bytes! instance (aget args 2) (aget args 3) (json-pairs-bytes pairs))))))
 
 (defn- json-string-field-value
@@ -864,12 +864,12 @@
   (host-fn "json_extract_field" (mapv valtype [:i32 :i32 :i32 :i32 :i32 :i32]) ValType/I32
            (fn [instance args]
              (ensure-granted! caps :json-extract-field)
-             (let [json-text (String. ^bytes (read-bytes! instance (aget args 0) (aget args 1)) "UTF-8")
-                   field (String. ^bytes (read-bytes! instance (aget args 2) (aget args 3)) "UTF-8")
+             (let [json-text (kbytes/utf8-string ^bytes (read-bytes! instance (aget args 0) (aget args 1)))
+                   field (kbytes/utf8-string ^bytes (read-bytes! instance (aget args 2) (aget args 3)))
                    value (json-string-field-value json-text field)]
                (if (nil? value)
                  -1
-                 (write-bytes! instance (aget args 4) (aget args 5) (.getBytes ^String value "UTF-8")))))))
+                 (write-bytes! instance (aget args 4) (aget args 5) (kbytes/utf8-bytes ^String value)))))))
 
 ;; ── http-post-headers (com-junkawasaki/root, third wave -- Phase A's
 ;; ADR-2607230943 flagged this as an explicit follow-up, closed here).
@@ -926,12 +926,12 @@
              (ensure-granted! caps :http-post-headers)
              (if-not (within-count-limit? :http-posts :max-http-posts caps limits-state)
                -1
-               (let [url (String. ^bytes (read-bytes! instance (aget args 0) (aget args 1)) "UTF-8")]
+               (let [url (kbytes/utf8-string ^bytes (read-bytes! instance (aget args 0) (aget args 1)))]
                  (if (or (blocked-http-post-destination? url)
                          (not (contract/url-allowed? (:limits caps) url)))
                    -1
                    (let [body (read-bytes! instance (aget args 2) (aget args 3))
-                         header-text (String. ^bytes (read-bytes! instance (aget args 4) (aget args 5)) "UTF-8")
+                         header-text (kbytes/utf8-string ^bytes (read-bytes! instance (aget args 4) (aget args 5)))
                          headers (parse-flat-pairs header-text)
                          req (post-request-with-headers url body headers (caps-timeout-ms caps :http-request-timeout-ms))
                          resp (.send (timed-http-client (caps-timeout-ms caps :http-connect-timeout-ms))
@@ -1026,12 +1026,12 @@
              (ensure-granted! caps :llm-infer)
              (if-not (within-count-limit? :llm-infers :max-llm-infers caps limits-state)
                -1
-               (let [prompt (String. ^bytes (read-bytes! instance (aget args 0) (aget args 1)) "UTF-8")
+               (let [prompt (kbytes/utf8-string ^bytes (read-bytes! instance (aget args 0) (aget args 1)))
                      text ((:infer-fn llm-client) prompt)]
                  (if (nil? text)
                    -1
                    (do (swap! limits-state update :llm-infers inc)
-                       (write-bytes! instance (aget args 2) (aget args 3) (.getBytes ^String text "UTF-8")))))))))
+                       (write-bytes! instance (aget args 2) (aget args 3) (kbytes/utf8-bytes ^String text)))))))))
 
 (defn- kagi-sign-host-fn
   "`(ref-ptr ref-len msg-ptr msg-len out-ptr out-cap) -> written|-1`.
@@ -1063,7 +1063,7 @@
                  -1
                  :else
                  (try
-                   (let [ref (String. ^bytes (read-bytes! instance (aget args 0) ref-len) "UTF-8")
+                   (let [ref (kbytes/utf8-string ^bytes (read-bytes! instance (aget args 0) ref-len))
                          msg (read-bytes! instance (aget args 2) msg-len)
                          sig (sign-fn kagi-decisions ref msg)]
                      (if (or (nil? sig) (not (bytes? sig)))
@@ -1149,7 +1149,7 @@
                        iterations (aget args 4)
                        auth-len (aget args 6)
                        ref (when (and (pos? ref-len) (<= ref-len 255))
-                             (String. ^bytes (read-bytes! instance (aget args 0) ref-len) "UTF-8"))
+                             (kbytes/utf8-string ^bytes (read-bytes! instance (aget args 0) ref-len)))
                        allowlist (get-in caps [:limits :scram-credential-allowlist])
                        credential-map (cond
                                         (fn? credentials) (credentials)
@@ -1173,7 +1173,7 @@
                          (let [salted (.getEncoded (.generateSecret
                                                    (SecretKeyFactory/getInstance "PBKDF2WithHmacSHA256")
                                                    spec))
-                               client-key (hmac-sha256 salted (.getBytes "Client Key" "UTF-8"))
+                               client-key (hmac-sha256 salted (kbytes/utf8-bytes "Client Key"))
                                stored-key (.digest (MessageDigest/getInstance "SHA-256") client-key)
                                client-signature (hmac-sha256 stored-key auth-message)
                                proof (byte-array 32)
@@ -1182,7 +1182,7 @@
                                               (unchecked-byte
                                                (bit-xor (bit-and 255 (aget client-key i))
                                                         (bit-and 255 (aget client-signature i))))))
-                               server-key (hmac-sha256 salted (.getBytes "Server Key" "UTF-8"))
+                               server-key (hmac-sha256 salted (kbytes/utf8-bytes "Server Key"))
                                server-signature (hmac-sha256 server-key auth-message)
                                result (byte-array (concat proof server-signature))]
                            (swap! limits-state update :scram-proofs inc)
@@ -1931,4 +1931,4 @@
   "Read a UTF-8 string of LEN bytes at PTR out of INSTANCE's memory -- for
   a caller inspecting a result `main` wrote into a buffer it provided."
   [instance ptr len]
-  (String. ^bytes (read-bytes! instance ptr len) "UTF-8"))
+  (kbytes/utf8-string ^bytes (read-bytes! instance ptr len)))

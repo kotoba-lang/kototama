@@ -12,13 +12,11 @@
   addressing is not idempotence; the CID does not stop a second execution* --
   and the three properties below are what the implementation actually
   provides. The third is a negative result and is the point of the file."
-  (:require [clojure.test :refer [deftest is testing]]
-            [kototama.linear-journal :as journal])
-  (:import [java.nio.file Files]))
+  (:require [kotoba.io :as kio] [clojure.test :refer [deftest is testing]]
+            [kototama.linear-journal :as journal]))
 
 (defn- temp-path [prefix]
-  (.toString (Files/createTempFile prefix ".edn"
-                                   (make-array java.nio.file.attribute.FileAttribute 0))))
+  (.toString (kio/temp-file prefix ".edn")))
 
 (defn- fresh [] (journal/open! (temp-path "delivery-")))
 

@@ -4,7 +4,7 @@
   This namespace verifies the shared signed wire ABI, trusted issuer key,
   audience, freshness, replay order, and monotonic epoch before updating the
   live source consulted at every provider call."
-  (:require [ed25519.core :as ed]
+  (:require [kotoba.bytes :as kbytes] [ed25519.core :as ed]
             [kotoba.abi.contract :as abi]))
 
 (defn initial-state []
@@ -76,9 +76,8 @@
                    (<= issued-at-ms (+ now max-future-skew-ms)))
       (reject :stale-envelope "Component authority envelope is outside its freshness window"
               {:issued-at-ms issued-at-ms :now-ms now}))
-    (let [payload (.getBytes
-                   ^String (abi/component-authority-signing-payload envelope)
-                   "UTF-8")]
+    (let [payload (kbytes/utf8-bytes
+                   ^String (abi/component-authority-signing-payload envelope))]
       (when-not (and signature-bytes
                      (try
                        (ed/verify public-key payload signature-bytes)

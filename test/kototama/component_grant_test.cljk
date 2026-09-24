@@ -1,5 +1,5 @@
 (ns kototama.component-grant-test
-  (:require [clojure.test :refer [deftest is]]
+  (:require [kotoba.bytes :as kbytes] [clojure.test :refer [deftest is]]
             [kototama.aiueos-adapter :as adapter]
             [multiformats.core :as mf]))
 
@@ -64,7 +64,7 @@
       (is (= #{:http-get-stream} (:grants host-caps))))))
 
 (deftest denied-or-unbound-component-never-reaches-linker
-  (let [bytes (.getBytes "component" "UTF-8")
+  (let [bytes (kbytes/utf8-bytes "component")
         artifact {:capabilities #{:aiueos.component/aiueos-clock-now}
                   :component-imports
                   {:aiueos.component/aiueos-clock-now
@@ -73,8 +73,8 @@
         world {:target :wasm-component-kotoba-v1 :wasi-version "0.3.0" :profile :sync
                :exports #{:app/run} :ambient-wasi false :budgets {:fuel 1 :memory-pages 1}
                :identity {:component-cid (mf/cidv1-raw bytes)
-                          :package-lock-cid (mf/cidv1-raw (.getBytes "lock" "UTF-8"))
-                          :definition-cids #{(mf/cidv1-raw (.getBytes "def" "UTF-8"))}}}
+                          :package-lock-cid (mf/cidv1-raw (kbytes/utf8-bytes "lock"))
+                          :definition-cids #{(mf/cidv1-raw (kbytes/utf8-bytes "def"))}}}
         linked (atom false)]
     (is (thrown? clojure.lang.ExceptionInfo
                  (adapter/admit-component-with-aiueos!
@@ -82,7 +82,7 @@
     (is (false? @linked))))
 
 (deftest component-adapter-must-be-explicitly-qualified-before-linking
-  (let [bytes (.getBytes "component" "UTF-8")
+  (let [bytes (kbytes/utf8-bytes "component")
         artifact {:capabilities #{:aiueos.component/aiueos-clock-now}
                   :component-imports
                   {:aiueos.component/aiueos-clock-now
@@ -91,8 +91,8 @@
         world {:target :wasm-component-kotoba-v1 :wasi-version "0.3.0" :profile :sync
                :exports #{:app/run} :ambient-wasi false :budgets {:fuel 1 :memory-pages 1}
                :identity {:component-cid (mf/cidv1-raw bytes)
-                          :package-lock-cid (mf/cidv1-raw (.getBytes "lock" "UTF-8"))
-                          :definition-cids #{(mf/cidv1-raw (.getBytes "def" "UTF-8"))}}
+                          :package-lock-cid (mf/cidv1-raw (kbytes/utf8-bytes "lock"))
+                          :definition-cids #{(mf/cidv1-raw (kbytes/utf8-bytes "def"))}}
                :abilities {}}
         providers {:aiueos.component/aiueos-clock-now :clock-provider}
         linked (atom false)]
@@ -102,7 +102,7 @@
     (is (false? @linked))))
 
 (deftest provider-authorization-observes-live-control-plane-epoch
-  (let [bytes (.getBytes "component" "UTF-8")
+  (let [bytes (kbytes/utf8-bytes "component")
         import :aiueos.component/aiueos-clock-now
         ability {:target "clock://monotonic" :operation :clock/now
                  :max-bytes 1 :max-items 1 :deadline-ms 10 :audit-id "epoch-test"}
@@ -113,8 +113,8 @@
                :exports #{:app/run} :ambient-wasi false
                :budgets {:fuel 1 :memory-pages 1}
                :identity {:component-cid (mf/cidv1-raw bytes)
-                          :package-lock-cid (mf/cidv1-raw (.getBytes "lock" "UTF-8"))
-                          :definition-cids #{(mf/cidv1-raw (.getBytes "def" "UTF-8"))}}}
+                          :package-lock-cid (mf/cidv1-raw (kbytes/utf8-bytes "lock"))
+                          :definition-cids #{(mf/cidv1-raw (kbytes/utf8-bytes "def"))}}}
         epoch (atom 7)
         admitted (atom nil)]
     (adapter/admit-component-with-aiueos!
@@ -130,7 +130,7 @@
     (is (false? ((:lease-authorize? @admitted) import ability)))))
 
 (deftest aiueos-policy-narrowing-reaches-the-provider-boundary
-  (let [bytes (.getBytes "component" "UTF-8")
+  (let [bytes (kbytes/utf8-bytes "component")
         import :aiueos.component/aiueos-clock-now
         requested {:target "clock://monotonic" :operation :clock/now
                    :max-bytes 64 :max-items 10 :deadline-ms 1000
@@ -148,8 +148,8 @@
                :profile :sync :exports #{:app/run} :ambient-wasi false
                :budgets {:fuel 1 :memory-pages 1}
                :identity {:component-cid (mf/cidv1-raw bytes)
-                          :package-lock-cid (mf/cidv1-raw (.getBytes "lock" "UTF-8"))
-                          :definition-cids #{(mf/cidv1-raw (.getBytes "def" "UTF-8"))}}}
+                          :package-lock-cid (mf/cidv1-raw (kbytes/utf8-bytes "lock"))
+                          :definition-cids #{(mf/cidv1-raw (kbytes/utf8-bytes "def"))}}}
         admitted (atom nil)
         audit-sink (fn [_] "persisted")
         outcome

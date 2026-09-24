@@ -4,7 +4,7 @@
    Kototama owns this contract and grant enforcement; Wasmtime, Chicory-core
    compatibility, and workerd are engines/adapters, not competing policy
    implementations."
-  (:require [clojure.set :as set]
+  (:require [kotoba.lang.coll :as set]
             [kotoba.abi.contract :as abi]))
 
 (def supported-runtimes

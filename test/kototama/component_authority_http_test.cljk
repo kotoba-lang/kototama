@@ -1,5 +1,5 @@
 (ns kototama.component-authority-http-test
-  (:require [kotoba.lang.edn :as edn]
+  (:require [kotoba.bytes :as kbytes] [kotoba.lang.edn :as edn]
             [clojure.test :refer [deftest is]]
             [ed25519.core :as ed]
             [kotoba.abi.contract :as abi]
@@ -82,9 +82,8 @@
                  :murakumo.component/node nil}}]
     (assoc unsigned :signature
            (hex (ed/sign seed
-                         (.getBytes
-                          (abi/component-authority-signing-payload unsigned)
-                          "UTF-8"))))))
+                         (kbytes/utf8-bytes
+                          (abi/component-authority-signing-payload unsigned)))))))
 
 (defn- post [port value]
   (let [request (-> (HttpRequest/newBuilder

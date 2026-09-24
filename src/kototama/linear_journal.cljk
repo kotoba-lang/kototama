@@ -32,10 +32,9 @@
   unchained prefix rather than as corruption: a journal that predates the
   chain is not a broken chain, and calling it one would make the check
   useless on every journal that already exists."
-  (:require [kotoba.lang.edn :as edn]
+  (:require [kotoba.bytes :as kbytes] [kotoba.lang.edn :as edn]
             [multiformats.core :as mf])
   (:import [java.io File RandomAccessFile]
-           [java.nio.charset StandardCharsets]
            [java.util.concurrent ConcurrentHashMap]
            [java.util.concurrent.locks ReentrantLock]
            [java.util.function Function]))
@@ -65,7 +64,7 @@
 (defn entry-cid
   "Raw CIDv1 of an entry's canonical bytes."
   [entry]
-  (mf/cidv1-raw (.getBytes ^String (canonical-line entry) StandardCharsets/UTF_8)))
+  (mf/cidv1-raw (kbytes/utf8-bytes ^String (canonical-line entry))))
 
 (defn entries [^Journal journal]
   (with-open [reader (java.io.BufferedReader. (java.io.FileReader. (:file journal)))]
@@ -89,7 +88,7 @@
         (let [bytes (byte-array (.length raf))
               _ (.seek raf 0)
               _ (.readFully raf bytes)
-              recovered (->> (.split (String. bytes StandardCharsets/UTF_8) "\n")
+              recovered (->> (.split (kbytes/utf8-string bytes) "\n")
                              (remove empty?)
                              (map edn/read-string))
               used (count (filter #(and (= :consume (:op %))
@@ -106,8 +105,7 @@
                                  :import import :ordinal (inc used)}
                           prev (assoc :prev prev))]
               (.seek raf (.length raf))
-              (.write raf (.getBytes (str (canonical-line entry) "\n")
-                                     StandardCharsets/UTF_8))
+              (.write raf (kbytes/utf8-bytes (str (canonical-line entry) "\n")))
               (.sync (.getFD raf))
               true))))
       (finally (.unlock lock)))))
@@ -176,15 +174,14 @@
         (let [bytes (byte-array (.length raf))
               _ (.seek raf 0)
               _ (.readFully raf bytes)
-              recovered (->> (.split (String. bytes StandardCharsets/UTF_8) "\n")
+              recovered (->> (.split (kbytes/utf8-string bytes) "\n")
                              (remove empty?)
                              (map edn/read-string))
               prev (some-> (last recovered) entry-cid)]
           (when-let [entry (entry-fn (vec recovered))]
             (let [entry (cond-> entry prev (assoc :prev prev))]
               (.seek raf (.length raf))
-              (.write raf (.getBytes (str (canonical-line entry) "\n")
-                                     StandardCharsets/UTF_8))
+              (.write raf (kbytes/utf8-bytes (str (canonical-line entry) "\n")))
               (.sync (.getFD raf))
               (entry-cid entry)))))
       (finally (.unlock lock)))))

@@ -4,7 +4,7 @@
   heartbeat cadence gates outward activity. Ported minimally from the Python
   unispsc_organism. Shared code, but each actor's trajectory individuates from
   its own history — so 18,342 actors are organically distinct, not clones."
-  (:require [clojure.set :as set]))
+  (:require [kotoba.lang.coll :as set]))
 
 (def base-joucho {:joy 50 :calm 50 :stress 40 :gratitude 50 :focus 50})
 

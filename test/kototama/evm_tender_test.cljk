@@ -7,7 +7,7 @@
   second contract with the same name."
   (:require [clojure.test :refer [deftest is testing]]
             [kotoba.lang.edn :as edn]
-            [clojure.java.io :as io]
+            [kotoba.io :as io]
             [kototama.evm-tender :as evm-tender]))
 
 (defn- hex [s]

@@ -10,9 +10,9 @@
   `web/verify-actor-host.mjs`.
 
   ADR: docs/grade-a-host-parity-live-runner.md"
-  (:require [json.data-json :as json]
+  (:require [kotoba.bytes :as kbytes] [json.data-json :as json]
             [clojure.java.io :as io]
-            [clojure.java.shell :as shell]
+            [kotoba.process :as shell]
             [kotoba.lang.text :as str]
             [kototama.contract :as contract]
             [kototama.tender :as tender]
@@ -348,7 +348,7 @@
                              (fn [ds ref msg]
                                (when (and (= ds decisions)
                                           (= ref "kagi://ops/key")
-                                          (= (String. ^bytes msg "UTF-8") "msg"))
+                                          (= (kbytes/utf8-string ^bytes msg) "msg"))
                                  sig))}})]
     {:ok? (= 64 n)
      :id :kagi-sign-jvm-available

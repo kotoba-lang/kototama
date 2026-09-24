@@ -1,7 +1,7 @@
 (ns kototama.postgresql-pool-provider
   "Opaque PostgreSQL lease table. Protocol/auth/reset stay in compiled Kotoba
   providers; this JVM boundary owns only bounded pool membership and freshness."
-  (:require [kototama.tender :as tender])
+  (:require [kotoba.bytes :as kbytes] [kototama.tender :as tender])
   (:import (com.dylibso.chicory.wasm.types ValType)
            (java.nio ByteBuffer ByteOrder)))
 
@@ -335,7 +335,7 @@
                   (locking (:execution-lock connection)
                     (let [query-instance (:query-instance connection)
                           query-base (:query-base connection)
-                          sql (.getBytes "select 1" "UTF-8")
+                          sql (kbytes/utf8-bytes "select 1")
                           _ (copy-bytes! sql query-instance query-base)
                           result (invoke query-instance "pg-query-state"
                                          [(:channel connection) query-base (alength sql)

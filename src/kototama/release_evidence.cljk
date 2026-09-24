@@ -1,6 +1,6 @@
 (ns kototama.release-evidence
   "Deterministic release artifact, SBOM, provenance, signing, and verification."
-  (:require [json.data-json :as json]
+  (:require [kotoba.bytes :as kbytes] [kotoba.io :as kio] [json.data-json :as json]
             [kotoba.lang.edn :as edn]
             [clojure.java.io :as io]
             [kotoba.lang.text :as str]
@@ -26,7 +26,7 @@
   (hex (.digest (MessageDigest/getInstance "SHA-256") ^bytes bytes)))
 
 (defn sha256-file [file]
-  (sha256-bytes (java.nio.file.Files/readAllBytes (.toPath (io/file file)))))
+  (sha256-bytes (kio/read-all-bytes (io/file file))))
 
 (defn release-files
   "Stable release input set. Build output, VCS metadata, tests, and mutable
@@ -51,7 +51,7 @@
 
 (defn source-root-digest [manifest]
   (sha256-bytes
-   (.getBytes (pr-str (sort-by :path manifest)) "UTF-8")))
+   (kbytes/utf8-bytes (pr-str (sort-by :path manifest)))))
 
 (defn write-deterministic-jar!
   [output files]
@@ -59,7 +59,7 @@
   (with-open [stream (JarOutputStream. (FileOutputStream. (io/file output)))]
     (doseq [path (sort files)]
       (let [entry (JarEntry. (str/replace path "\\" "/"))
-            bytes (java.nio.file.Files/readAllBytes (.toPath (io/file path)))]
+            bytes (kio/read-all-bytes (io/file path))]
         (.setTime entry fixed-entry-time-ms)
         (.putNextEntry stream entry)
         (.write stream bytes)
@@ -127,7 +127,7 @@
                       "metadata" {"invocationId" artifact-digest}}}}
         sbom-path (str output-dir "/kototama.cdx.json")
         provenance-path (str output-dir "/kototama.intoto.json")
-        signature (ed/sign seed (.getBytes artifact-digest "UTF-8"))
+        signature (ed/sign seed (kbytes/utf8-bytes artifact-digest))
         envelope {:signature/version 1 :algorithm :ed25519
                   :artifact "kototama.jar" :sha256 artifact-digest
                   :public-key (hex (ed/pubkey-from-seed seed))
@@ -153,7 +153,7 @@
           checks {:digest (= digest (:sha256 envelope))
                   :signature (and public-key signature-bytes
                                   (ed/verify public-key
-                                             (.getBytes digest "UTF-8")
+                                             (kbytes/utf8-bytes digest)
                                              signature-bytes))
                   :sbom (= digest
                            (get-in sbom-data

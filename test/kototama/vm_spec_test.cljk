@@ -1,6 +1,6 @@
 (ns kototama.vm-spec-test
   (:require [kotoba.lang.edn :as edn]
-            [clojure.java.io :as io]
+            [kotoba.io :as io]
             [clojure.test :refer [deftest is]]))
 
 (def spec

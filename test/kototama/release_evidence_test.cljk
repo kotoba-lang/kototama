@@ -1,12 +1,12 @@
 (ns kototama.release-evidence-test
-  (:require [clojure.java.io :as io]
+  (:require [kotoba.io :as io]
             [clojure.test :refer [deftest is testing]]
             [kototama.release-evidence :as release]))
 
 (defn delete-tree! [root]
-  (when (.exists (io/file root))
-    (doseq [file (reverse (file-seq (io/file root)))]
-      (.delete file))))
+  (when (io/exists? (io/file root))
+    (doseq [file (reverse (io/file-seq (io/file root)))]
+      (io/delete file))))
 
 (deftest release-is-reproducible-signed-and-self-verifying
   (let [root (str "tmp/release-evidence-" (System/currentTimeMillis))
