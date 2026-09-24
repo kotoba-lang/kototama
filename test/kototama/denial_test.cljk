@@ -28,12 +28,12 @@
   (is (thrown-with-msg? #?(:clj clojure.lang.ExceptionInfo :cljs ExceptionInfo) #"unregistered reason"
                         (denial/denial :jvm :made-up/reason 1)))
   (is (thrown-with-msg? #?(:clj clojure.lang.ExceptionInfo :cljs ExceptionInfo) #"unknown host"
-                        (denial/denial :toaster :fuel-exhausted 1))))
+                        (denial/denial :toaster :host-meter/instructions-exhausted 1))))
 
 (deftest denial?-discriminates-the-shape
-  (is (false? (denial/denial? {:kototama.tender/problem :fuel-exhausted}))
+  (is (false? (denial/denial? {:kototama.tender/problem :host-meter/instructions-exhausted}))
       "one of the four old shapes, alone, is not the shape")
-  (is (false? (denial/denial? {:kototama.tender/problem :fuel-exhausted
+  (is (false? (denial/denial? {:kototama.tender/problem :host-meter/instructions-exhausted
                                 :kototama.tender/reason :invalid-deadline
                                 :kototama.tender/value 1
                                 :kototama.tender/host :jvm}))

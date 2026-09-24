@@ -60,7 +60,10 @@
    :missing-execution-identity "capability leases require an exact execution identity"
    :invalid-capability-lease "invalid capability lease"
    ;; budget
-   :fuel-exhausted "wasm execution exceeded fuel limit"
+   ;; The Wasm host's INSTRUCTION meter (kototama.tender), renamed from
+   ;; :fuel-exhausted by P4 of adr-2609242100: the language's fuel counts
+   ;; function entries and is `:budget/fuel`; this is the host's meter.
+   :host-meter/instructions-exhausted "wasm execution exceeded its host instruction meter"
    :invalid-budget "budget must be a positive integer"
    :invalid-fuel-scope "fuel-scope must be :call or :instance"
    ;; admission
