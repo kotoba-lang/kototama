@@ -14,7 +14,7 @@
   - Kademlia paper (Maymounkov & Mazières)
   - IPFS DHT (kubo/go-ipfs implementation)
   - RFC 6962 (Certificate Transparency DHT analog)"
-  (:require [kotoba.bytes :as kbytes] [clojure.math :as math]))
+  (:require [kotoba.bytes :as kbytes]))
 
 (def ^:const DEFAULT-K 20)  ;; peers per bucket (standard Kademlia)
 (def ^:const ID-BITS 256)   ;; CID as 256-bit integer (for distance)
