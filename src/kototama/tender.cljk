@@ -1268,8 +1268,17 @@
          listener (reify ExecutionListener
                     (onExecution [_ _instruction _stack]
                       (when (> (swap! n inc) limit)
-                        (deny! :fuel-exhausted @n
-                               (cond-> {:kototama.tender/fuel-limit limit
+                        ;; P4 of adr-2609242100: this counter is the Wasm
+                        ;; HOST's instruction meter, not the language's fuel
+                        ;; (fuel counts function entries on every Kotoba
+                        ;; target), so its exhaustion has its own name. The
+                        ;; `fuel-*` detail keys stay beside the new ones for
+                        ;; readers written before the rename.
+                        (deny! :host-meter/instructions-exhausted @n
+                               (cond-> {:kototama.tender/host-meter-limit limit
+                                        :kototama.tender/host-meter-used @n
+                                        :kototama.tender/host-meter-scope scope
+                                        :kototama.tender/fuel-limit limit
                                         :kototama.tender/fuel-used @n
                                         :kototama.tender/fuel-scope scope}
                                  calls (assoc :kototama.tender/calls @calls))))))]
@@ -1301,12 +1310,47 @@
   [limit]
   (first (fuel-listener* limit)))
 
-(def default-fuel-limit
-  "Default max Wasm-instruction budget per `instantiate`d guest, absent an
-  explicit `:fuel` in `opts`. Same order of magnitude reasoning as
-  `kotoba.wasm-exec/default-fuel-limit`: generous for legitimate small
-  guests, still trips a genuinely unbounded loop in a fraction of a second."
+(def default-instruction-meter-limit
+  "Default Wasm-INSTRUCTION meter per call (per `instantiate`d guest), absent
+  an explicit `:host-meter/instructions` (legacy spelling `:fuel`) in `opts`.
+  Generous for legitimate small guests, still trips a genuinely unbounded
+  loop in a fraction of a second.
+
+  A HOST meter of this Wasm host, not the language's fuel (P4 of superproject
+  adr-2609242100): Kotoba's fuel counts function entries on every target and
+  is the profile budget `:budget/fuel`; this counts Chicory instructions and
+  its exhaustion is `:host-meter/instructions-exhausted`. kotoba-lang
+  lang/limits.edn :profile/wasm :host-meter names this var."
   5000000)
+
+(def ^{:deprecated "adr-2609242100 P4: use default-instruction-meter-limit"}
+  default-fuel-limit
+  "Deprecated name of `default-instruction-meter-limit` (it was never fuel)."
+  default-instruction-meter-limit)
+
+(def host-meter-scopes
+  "`fuel-scopes` under the host meter's own name (P4 of adr-2609242100)."
+  fuel-scopes)
+
+(defn- host-meter-options
+  "OPTS with the host meter's canonical keys -- `:host-meter/instructions`
+  and `:host-meter/scope` -- folded onto the legacy `:fuel` / `:fuel-scope`
+  every existing caller passes, which remain accepted. Naming the same budget
+  twice with two values is refused, not resolved silently."
+  [opts]
+  (doseq [[canonical legacy] [[:host-meter/instructions :fuel]
+                              [:host-meter/scope :fuel-scope]]]
+    (when (and (contains? opts canonical) (contains? opts legacy)
+               (not= (get opts canonical) (get opts legacy)))
+      (deny! :invalid-budget (get opts canonical)
+             {:kototama.tender/host-meter canonical
+              :kototama.tender/legacy legacy
+              :kototama.tender/legacy-value (get opts legacy)})))
+  (cond-> opts
+    (contains? opts :host-meter/instructions)
+    (assoc :fuel (:host-meter/instructions opts))
+    (contains? opts :host-meter/scope)
+    (assoc :fuel-scope (:host-meter/scope opts))))
 
 (defn artifact-sha256 [^bytes wasm-bytes]
   (apply str
@@ -1356,7 +1400,18 @@
       (let [own-limits (.limits (.getMemory (.get section) 0))]
         (MemoryLimits. (.initialPages own-limits) (min caps-limit (.maximumPages own-limits)))))))
 
+(declare open-session*)
+
 (defn open-session
+  "`open-session*` with the host meter's canonical option keys
+  (`:host-meter/instructions`, `:host-meter/scope`) accepted beside the
+  legacy `:fuel` / `:fuel-scope` (P4 of adr-2609242100). See `open-session*`."
+  ([wasm-bytes requested-imports host-caps]
+   (open-session* wasm-bytes requested-imports host-caps {}))
+  ([wasm-bytes requested-imports host-caps opts]
+   (open-session* wasm-bytes requested-imports host-caps (host-meter-options opts))))
+
+(defn- open-session*
   "Parse WASM-BYTES and build a Chicory session (Instance + observability).
 
    Returns:
@@ -1386,7 +1441,7 @@
    `:kagi-client` is `{:authorized-sign-fn (fn [decisions ref msg] bytes|nil)}`;
    without it (and non-empty `:kagi-decisions`) kagi-sign returns -1."
   ([wasm-bytes requested-imports host-caps]
-   (open-session wasm-bytes requested-imports host-caps {}))
+   (open-session* wasm-bytes requested-imports host-caps {}))
   ([wasm-bytes requested-imports host-caps
     {:keys [store llm-client kagi-client kagi-decisions fuel fuel-scope
             require-kotoba-compatibility? profile capability-leases
@@ -1395,7 +1450,7 @@
             provider-host-functions scram-credentials]
      :as opts
      :or {store (in-memory-store) llm-client (default-llm-client)
-          kagi-client {} kagi-decisions [] fuel default-fuel-limit
+          kagi-client {} kagi-decisions [] fuel default-instruction-meter-limit
           fuel-scope default-fuel-scope}}]
    (validate-fuel! fuel fuel-scope)
    (let [configured (cond-> #{}
@@ -1491,6 +1546,11 @@
            instance (.build (if mem-limits (.withMemoryLimits builder mem-limits) builder))]
        {:instance instance
         :limits-state limits-state
+        ;; The host meter under its own name (P4); the `fuel-*` keys below
+        ;; are the same atoms/values, kept for readers written before it.
+        :host-meter/instructions-used fuel-used
+        :host-meter/instructions-limit fuel
+        :host-meter/scope fuel-scope
         :fuel-used fuel-used
         :fuel-limit fuel
         :fuel-scope fuel-scope
@@ -1563,7 +1623,8 @@
   ([wasm-bytes requested-imports host-caps]
    (instantiate wasm-bytes requested-imports host-caps {}))
   ([wasm-bytes requested-imports host-caps opts]
-   (let [scope (get opts :fuel-scope :instance)]
+   (let [opts (host-meter-options opts)
+         scope (get opts :fuel-scope :instance)]
      (when-not (= :instance scope)
        (deny! :invalid-fuel-scope scope
               {:kototama.tender/fuel-scope scope
@@ -1752,6 +1813,9 @@
            result (session-call-main session)]
        {:ok? true
         :result result
+        :host-meter/instructions-used @(:fuel-used session)
+        :host-meter/instructions-limit (:fuel-limit session)
+        :host-meter/scope (:fuel-scope session)
         :fuel-used @(:fuel-used session)
         :fuel-limit (:fuel-limit session)
         :fuel-scope (:fuel-scope session)

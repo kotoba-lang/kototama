@@ -1107,7 +1107,7 @@
 (deftest fuel-limit-traps-an-infinite-loop
   (let [wasm (wat->wasm infinite-loop-wat)
         caps (contract/host-caps {})]
-    (is (thrown-with-msg? clojure.lang.ExceptionInfo #"fuel limit"
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo #"host instruction meter"
                           (tender/run-main wasm [] caps {:fuel 10000})))))
 
 (deftest bounded-run-enforces-deadline-and-concurrency-admission
@@ -1508,7 +1508,7 @@
         multi (tender/instantiate (wat->wasm multi-export-wat) [] caps)
         clock-now (read-fixture "amu-compiled-clock-now.wasm")
         paths
-        {:fuel-exhausted
+        {:host-meter/instructions-exhausted
          #(tender/run-main loop-wasm [] caps {:fuel 100})
          :invalid-deadline
          #(tender/run-main-bounded (byte-array 0) [] caps {:deadline-ms 0})
@@ -1589,7 +1589,7 @@
       (let [s (tender/open-session fact [] caps {:fuel cap :fuel-scope :instance})
             _ (is (= 120 (tender/session-call-main s)))
             d (ex-data-of #(tender/session-call-main s))]
-        (is (= :fuel-exhausted (:kototama.tender/reason d) (:kototama.tender/problem d)))
+        (is (= :host-meter/instructions-exhausted (:kototama.tender/reason d) (:kototama.tender/problem d)))
         (is (= :jvm (:kototama.tender/host d)))
         (is (= :instance (:kototama.tender/fuel-scope d)))
         (is (= 2 (:kototama.tender/calls d)) "died at call 2 of the lifetime cap")
@@ -1599,7 +1599,7 @@
       (let [inst (tender/instantiate fact [] caps {:fuel cap})
             _ (is (= 120 (tender/call-main inst)))
             d (ex-data-of #(tender/call-main inst))]
-        (is (= :fuel-exhausted (:kototama.tender/reason d)))
+        (is (= :host-meter/instructions-exhausted (:kototama.tender/reason d)))
         (is (= :instance (:kototama.tender/fuel-scope d)))
         (is (not (contains? d :kototama.tender/calls))
             "no session counts the calls on a bare Instance, so none is claimed")))
