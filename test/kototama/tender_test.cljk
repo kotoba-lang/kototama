@@ -4,9 +4,9 @@
   compiled to real Wasm bytes at test time via the `wasm-tools` CLI
   (Bytecode Alliance, ~/.cargo/bin/wasm-tools), so these tests exercise
   the actual Chicory Parser/Instance/HostFunction linkage, not a mock."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.bytes :as kbytes] [clojure.test :refer [deftest is testing]]
             [clojure.java.io :as io]
-            [clojure.java.shell :as shell]
+            [kotoba.process :as shell]
             [kotoba.lang.text :as str]
             [kototama.signer-lifecycle :as signer]
             [kototama.tender :as tender]
@@ -536,7 +536,7 @@
   (let [server (doto (HttpServer/create (InetSocketAddress. "127.0.0.1" 0) 0)
                  (.createContext "/" (reify HttpHandler
                                        (handle [_ exchange]
-                                         (let [resp (.getBytes "pong" "UTF-8")]
+                                         (let [resp (kbytes/utf8-bytes "pong")]
                                            (.sendResponseHeaders ^HttpExchange exchange 200 (count resp))
                                            (with-open [os (.getResponseBody ^HttpExchange exchange)]
                                              (.write os resp))))))
@@ -682,14 +682,14 @@
                                          (reset! received
                                                  {:authorization (.getFirst (.getRequestHeaders ^HttpExchange exchange) "Authorization")
                                                   :content-type (.getFirst (.getRequestHeaders ^HttpExchange exchange) "Content-Type")
-                                                  :body (String. (.readAllBytes (.getRequestBody ^HttpExchange exchange)) "UTF-8")})
+                                                  :body (kbytes/utf8-string (.readAllBytes (.getRequestBody ^HttpExchange exchange)))})
                                          (.sendResponseHeaders ^HttpExchange exchange 200 -1))))
                  (.start))]
     (try
       (let [port (.getPort (.getAddress server))
             url (str "http://127.0.0.1:" port "/xrpc/com.atproto.repo.createRecord")
             headers (#'tender/parse-flat-pairs "Content-Type\tapplication/json\nAuthorization\tBearer fixed-jwt-token-value")
-            req (#'tender/post-request-with-headers url (.getBytes "{\"hello\":\"world\"}" "UTF-8") headers)
+            req (#'tender/post-request-with-headers url (kbytes/utf8-bytes "{\"hello\":\"world\"}") headers)
             resp (.send (#'tender/timed-http-client) req (HttpResponse$BodyHandlers/ofString))]
         (is (= 200 (.statusCode resp)))
         (is (= "Bearer fixed-jwt-token-value" (:authorization @received))
@@ -915,12 +915,12 @@
                                "record.createdAt\t2026-07-23T03:10:24.706886Z"
                                "record.actor\tdid:key:zTestDid123"])
           pairs (#'tender/parse-flat-pairs raw-pairs)
-          json-str (String. ^bytes (#'tender/json-pairs-bytes pairs) "UTF-8")
+          json-str (kbytes/utf8-string ^bytes (#'tender/json-pairs-bytes pairs))
           expected (str "{\"repo\":\"did:key:zTestDid123\",\"collection\":\"net.itonami.media.digest\","
                         "\"rkey\":\"digest.fixed123\",\"record\":{\"analysis\":\"This is a test digest analysis.\","
                         "\"cites\":[{\"url\":\"https://example.com/a\"},{\"url\":\"https://example.com/b\"}],"
                         "\"createdAt\":\"2026-07-23T03:10:24.706886Z\",\"actor\":\"did:key:zTestDid123\"}}")]
-      (is (= 297 (count (.getBytes json-str "UTF-8"))))
+      (is (= 297 (count (kbytes/utf8-bytes json-str))))
       (is (= expected json-str)
           "byte-exact against cloud_itonami.media.aozora/create-record!'s real cheshire-generated JSON body for this fixed record"))))
 

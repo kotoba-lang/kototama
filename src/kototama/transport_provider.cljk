@@ -4,7 +4,7 @@
   Socket objects never cross the Wasm boundary. Guests receive affine opaque
   i64 handles, and every endpoint, byte count, connection count, and connect
   timeout is checked against HostCaps before native I/O."
-  (:require [kotoba.lang.text :as str]
+  (:require [kotoba.bytes :as kbytes] [kotoba.lang.text :as str]
             [kotoba.security.abac :as abac]
             [kotoba.security.approval :as approval]
             [kotoba.security.crypto-policy :as crypto]
@@ -34,7 +34,7 @@
   (.readBytes (.memory instance) (int ptr) (int len)))
 
 (defn- read-utf8 [instance ptr len]
-  (String. ^bytes (read-bytes instance ptr len) "UTF-8"))
+  (kbytes/utf8-string ^bytes (read-bytes instance ptr len)))
 
 (defn- write-bytes [instance ptr cap bs]
   (let [n (count bs)]

@@ -1,5 +1,5 @@
 (ns kototama.compatibility-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.bytes :as kbytes] [clojure.test :refer [deftest is testing]]
             [kototama.compatibility :as compatibility]))
 
 (defn- uleb [value]
@@ -7,7 +7,7 @@
     (let [part (bit-and value 0x7f) next (unsigned-bit-shift-right value 7)]
       (if (zero? next) (conj out part) (recur next (conj out (bit-or part 0x80)))))))
 (defn- text [value]
-  (let [bytes (mapv #(bit-and 0xff %) (.getBytes ^String value "UTF-8"))]
+  (let [bytes (mapv #(bit-and 0xff %) (kbytes/utf8-bytes ^String value))]
     (into (uleb (count bytes)) bytes)))
 (defn- module [overrides]
   (let [d (merge compatibility/supported

@@ -26,7 +26,7 @@
    turns this red, and that red is the assertion working (the same shape
    root CLAUDE.md records for the :spki-pin-mismatch -> :peer-not-pinned
    rename)."
-  (:require [clojure.java.shell :as shell]
+  (:require [kotoba.io :as kio] [clojure.java.shell :as shell]
             [kotoba.lang.text :as str]
             [kototama.contract :as contract]
             [kototama.tender :as tender]))
@@ -182,8 +182,8 @@
   "Run one host-free module in all three engines and compare success/result or
    common trap behavior. See `compare-results` for the verdict shape."
   [path]
-  (let [bytes (java.nio.file.Files/readAllBytes
-               (.toPath (java.io.File. (str path))))]
+  (let [bytes (kio/read-all-bytes
+               (java.io.File. (str path)))]
     (compare-results {:chicory (chicory-main bytes)
                       :wasmtime (wasmtime-main path)
                       :node (node-main path)})))

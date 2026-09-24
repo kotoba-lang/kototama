@@ -1,6 +1,6 @@
 (ns kototama.component-platform
   "Fail-closed admission for compiler-produced WIT/Component Model worlds."
-  (:require [kotoba.abi.contract :as abi]
+  (:require [kotoba.bytes :as kbytes] [kotoba.abi.contract :as abi]
             [multiformats.core :as mf]))
 
 (defn- reject [code message]
@@ -57,11 +57,10 @@
       (reject :unknown-wit-import
               "execution identity can only bind closed ABI WIT imports"))
     (mf/cidv1-raw
-     (.getBytes ^String
+     (kbytes/utf8-bytes ^String
                 (case (:target world)
                   :wasm-component-kotoba-v1 (abi/world-wit ids)
-                  :wasm-component-kotoba-v2 (abi/world-wit-v2 ids))
-                "UTF-8"))))
+                  :wasm-component-kotoba-v2 (abi/world-wit-v2 ids))))))
 
 (defn validate-execution-identity!
   "Validate the portable execution receipt at the host boundary. The ABI

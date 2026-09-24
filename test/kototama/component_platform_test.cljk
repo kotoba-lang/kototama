@@ -1,5 +1,5 @@
 (ns kototama.component-platform-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.bytes :as kbytes] [clojure.test :refer [deftest is testing]]
             [kotoba.abi.contract :as abi]
             [kototama.component-platform :as platform]
             [multiformats.core :as mf]))
@@ -48,7 +48,7 @@
 
 
 (defn cid [value]
-  (mf/cidv1-raw (.getBytes ^String value "UTF-8")))
+  (mf/cidv1-raw (kbytes/utf8-bytes ^String value)))
 
 (defn execution-identity [component-cid]
   {:format :kotoba.execution-identity/v1
@@ -64,11 +64,10 @@
 (defn wit-world-cid [target imports]
   (let [name->id (into {} (map (fn [[id name]] [name id]) abi/capability-import-names))
         ids (mapv #(get name->id (name %)) imports)]
-    (mf/cidv1-raw (.getBytes ^String
+    (mf/cidv1-raw (kbytes/utf8-bytes ^String
                               (case target
                                 :wasm-component-kotoba-v1 (abi/world-wit ids)
-                                :wasm-component-kotoba-v2 (abi/world-wit-v2 ids))
-                              "UTF-8"))))
+                                :wasm-component-kotoba-v2 (abi/world-wit-v2 ids))))))
 
 (def valid
   {:target :wasm-component-kotoba-v1 :wasi-version "0.3.0" :profile :sync
@@ -132,7 +131,7 @@
     (is (= pure (platform/validate-world! pure)))))
 
 (deftest component-bytes-are-verified-before-the-linker-receives-them
-  (let [bytes (.getBytes "component" "UTF-8")
+  (let [bytes (kbytes/utf8-bytes "component")
         world (assoc-in valid [:identity :component-cid] (mf/cidv1-raw bytes))
         linked (atom nil)]
     (is (= :linked
@@ -148,7 +147,7 @@
                   (:kototama.component/code (ex-data e))))))))
 
 (deftest execution-identity-is-verified-before-component-linking
-  (let [bytes (.getBytes "component" "UTF-8")
+  (let [bytes (kbytes/utf8-bytes "component")
         component-cid (mf/cidv1-raw bytes)
         world (assoc-in valid [:identity :component-cid] component-cid)
         identity (assoc (execution-identity component-cid)

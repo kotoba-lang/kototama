@@ -14,7 +14,7 @@
   - Kademlia paper (Maymounkov & Mazières)
   - IPFS DHT (kubo/go-ipfs implementation)
   - RFC 6962 (Certificate Transparency DHT analog)"
-  (:require [clojure.math :as math]))
+  (:require [kotoba.bytes :as kbytes] [clojure.math :as math]))
 
 (def ^:const DEFAULT-K 20)  ;; peers per bucket (standard Kademlia)
 (def ^:const ID-BITS 256)   ;; CID as 256-bit integer (for distance)
@@ -51,7 +51,7 @@
   [cid-string]
   {:pre [(string? cid-string)]}
   (let [digest (java.security.MessageDigest/getInstance "SHA-256")
-        hash-bytes (.digest digest (.getBytes cid-string "UTF-8"))
+        hash-bytes (.digest digest (kbytes/utf8-bytes cid-string))
         ;; Interpret 32 bytes as big-endian integer
         big-int (BigInteger. 1 hash-bytes)]
     big-int))

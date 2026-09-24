@@ -6,7 +6,7 @@
   kototama.tender -- proving the ADR-2607062330 follow-up end to end, not
   just that the adapter's translation logic is internally consistent."
   (:require [clojure.java.io :as io]
-            [clojure.java.shell :as shell]
+            [kotoba.process :as shell]
             [clojure.test :refer [deftest is testing]]
             [kototama.aiueos-adapter :as adapter]
             [kototama.tender :as tender]))

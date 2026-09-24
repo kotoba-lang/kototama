@@ -1,13 +1,11 @@
 (ns kototama.linear-journal-test
-  (:require [kotoba.lang.text]
+  (:require [kotoba.bytes :as kbytes] [kotoba.io :as kio] [kotoba.lang.text]
             [clojure.test :refer [deftest is testing]]
             [kototama.linear-journal :as journal]
-            [multiformats.core])
-  (:import [java.nio.file Files Path]))
+            [multiformats.core]))
 
 (defn- temp-path [prefix]
-  (.toString (Files/createTempFile prefix ".edn"
-                                   (make-array java.nio.file.attribute.FileAttribute 0))))
+  (.toString (kio/temp-file prefix ".edn")))
 
 (deftest concurrent-claims-are-linear
   (let [path (temp-path "linear-authority-")
@@ -18,7 +16,7 @@
                                                  "lease-1" :clock/now 3)))))]
     (is (= 3 (count (filter true? claims))))
     (is (= 3 (journal/consumed (journal/open! path) "lease-1" :clock/now)))
-    (Files/deleteIfExists (Path/of path (make-array String 0)))))
+    (kio/delete-if-exists path)))
 
 (deftest recovered-journal-never-reissues-consumed-authority
   (let [path (temp-path "linear-recovery-")
@@ -27,7 +25,7 @@
     (let [after (journal/open! path)]
       (is (false? (journal/claim! after "lease-crash" :refund/execute 1)))
       (is (= 1 (journal/consumed after "lease-crash" :refund/execute))))
-    (Files/deleteIfExists (Path/of path (make-array String 0)))))
+    (kio/delete-if-exists path)))
 
 (deftest multiple-capabilities-have-independent-linear-budgets
   (let [path (temp-path "linear-multi-cap-")
@@ -38,7 +36,7 @@
     (is (false? (journal/claim! journal "lease-multi" :refund/execute 1)))
     (is (= 1 (journal/consumed journal "lease-multi" :customer/read)))
     (is (= 1 (journal/consumed journal "lease-multi" :refund/execute)))
-    (Files/deleteIfExists (Path/of path (make-array String 0)))))
+    (kio/delete-if-exists path)))
 
 ;; ── the entries are values, and they are linked ─────────────────────────────
 ;; Root ADR-2608160200. What a chain buys over an append log is not
@@ -64,7 +62,7 @@
       (is (apply distinct? (map journal/entry-cid es))
           "three consumptions are three different facts")
       (is (:ok? (journal/verify-chain j))))
-    (Files/deleteIfExists (Path/of path (make-array String 0)))))
+    (kio/delete-if-exists path)))
 
 (deftest a-cid-is-over-the-bytes-that-are-on-disk
   (let [path (temp-path "linear-bytes-")
@@ -76,9 +74,9 @@
           "the addressed form and the stored form are the same string")
       (is (= (journal/entry-cid entry)
              (multiformats.core/cidv1-raw
-              (.getBytes ^String line java.nio.charset.StandardCharsets/UTF_8)))
+              (kbytes/utf8-bytes ^String line)))
           "so anyone can recompute it from the file alone"))
-    (Files/deleteIfExists (Path/of path (make-array String 0)))))
+    (kio/delete-if-exists path)))
 
 (deftest an-edited-middle-entry-is-found
   (let [path (temp-path "linear-tamper-")
@@ -93,7 +91,7 @@
       (is (false? ok?) "an append log cannot see this; the chain can")
       (is (= 2 broken-at)
           "the break shows at the entry whose :prev no longer matches"))
-    (Files/deleteIfExists (Path/of path (make-array String 0)))))
+    (kio/delete-if-exists path)))
 
 (deftest a-removed-entry-is-found
   (let [path (temp-path "linear-truncate-")
@@ -102,7 +100,7 @@
     (let [lines (read-lines path)]
       (write-lines! path [(nth lines 0) (nth lines 2)]))
     (is (false? (:ok? (journal/verify-chain j))))
-    (Files/deleteIfExists (Path/of path (make-array String 0)))))
+    (kio/delete-if-exists path)))
 
 (deftest a-journal-written-before-the-chain-is-not-corruption
   (let [path (temp-path "linear-legacy-")]
@@ -116,7 +114,7 @@
         (is (true? ok?) "a journal that predates the chain is not a broken chain")
         (is (= 2 unchained) "and says how much of it is unlinked")
         (is (= 3 count))))
-    (Files/deleteIfExists (Path/of path (make-array String 0)))))
+    (kio/delete-if-exists path)))
 
 (deftest dropping-prev-from-a-chained-entry-is-not-accepted-as-legacy
   (testing "otherwise the escape hatch for old journals would be the forgery route"
@@ -128,7 +126,7 @@
         (is (not= stripped (nth lines 2)) "the fixture really removed :prev")
         (write-lines! path (assoc lines 2 stripped)))
       (is (false? (:ok? (journal/verify-chain j))))
-      (Files/deleteIfExists (Path/of path (make-array String 0))))))
+      (kio/delete-if-exists path))))
 
 ;; ── outcomes ────────────────────────────────────────────────────────────────
 ;; capability-semantics.edn requires four fields and declares
@@ -150,7 +148,7 @@
       (is (= 1 (count (journal/receipts j "lease-r" :refund/execute))))
       (is (empty? (journal/unreceipted j)))
       (is (:ok? (journal/verify-chain j)) "and it extends the same chain"))
-    (Files/deleteIfExists (Path/of path (make-array String 0)))))
+    (kio/delete-if-exists path)))
 
 (deftest a-receipt-does-not-consume-budget
   (testing "the at-most-once count must be unaffected by outcome records --
@@ -164,7 +162,7 @@
           "two receipts, still one consumption")
       (is (journal/claim! j "lease-b" :clock/now 2) "the second claim is still available")
       (is (false? (journal/claim! j "lease-b" :clock/now 2)) "and the third is not")
-      (Files/deleteIfExists (Path/of path (make-array String 0))))))
+      (kio/delete-if-exists path))))
 
 (deftest a-consumption-with-no-outcome-is-reported
   (testing "a crash between the claim and the provider returning: the
@@ -177,7 +175,7 @@
       (let [open (journal/unreceipted j)]
         (is (= 1 (count open)))
         (is (= 2 (:ordinal (first open))) "the second attempt is the one with no outcome"))
-      (Files/deleteIfExists (Path/of path (make-array String 0))))))
+      (kio/delete-if-exists path))))
 
 (deftest an-incomplete-receipt-is-refused
   (let [path (temp-path "linear-receipt-partial-")
@@ -189,7 +187,7 @@
                                      (dissoc (ok-receipt :clock/now) k)))
           (str "missing " k " is not a receipt")))
     (is (= 1 (count (journal/unreceipted j))) "and nothing was written")
-    (Files/deleteIfExists (Path/of path (make-array String 0)))))
+    (kio/delete-if-exists path)))
 
 (deftest a-receipt-for-a-consumption-that-never-happened-is-refused
   (testing "it would be a record of authority nobody spent"
@@ -200,7 +198,7 @@
           "ordinal 7 was never claimed")
       (is (nil? (journal/receipt! j "other-lease" :clock/now 1 (ok-receipt :clock/now))))
       (is (empty? (journal/receipts j "lease-x" :clock/now)))
-      (Files/deleteIfExists (Path/of path (make-array String 0))))))
+      (kio/delete-if-exists path))))
 
 (deftest a-source-outcome-can-carry-its-value
   (testing "kototama.execution refuses to memoise a source whose value was
@@ -213,4 +211,4 @@
                                :receipt/value "2026-08-16T00:00:00Z"))
       (is (= "2026-08-16T00:00:00Z"
              (:receipt/value (first (journal/receipts j "lease-v" :clock/now)))))
-      (Files/deleteIfExists (Path/of path (make-array String 0))))))
+      (kio/delete-if-exists path))))
