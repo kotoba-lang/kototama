@@ -1,5 +1,5 @@
 (ns kototama.transport-provider-test
-  (:require [clojure.test :refer [deftest is]]
+  (:require [kotoba.lang.error :as kerror] [clojure.test :refer [deftest is]]
             [kototama.transport-provider :as transport]))
 
 (deftest transport-admission-uses-shared-four-axis-abac
@@ -63,7 +63,7 @@
                  (assoc evidence :provider-origin-verified? false)
                  (assoc evidence :unavailable-failed-closed? false)]]
       (is (thrown-with-msg?
-           clojure.lang.ExceptionInfo #"hardware signing policy denies"
+           kerror/ExceptionInfo #"hardware signing policy denies"
            (transport/enforce-hardware-signing! true bad))))
     (is (false? (:hardware-signing/qualified?
                  (transport/enforce-hardware-signing!
@@ -102,10 +102,10 @@
                  [(first approvals) (assoc (second approvals)
                                            :approval/signature [:forged])]]]
       (is (thrown-with-msg?
-           clojure.lang.ExceptionInfo #"approval quorum denies transport"
+           kerror/ExceptionInfo #"approval quorum denies transport"
            (transport/enforce-approval! true bad approval-context
                                         "db.internal:5432" digest-fn))))
     (is (thrown-with-msg?
-         clojure.lang.ExceptionInfo #"approval quorum denies transport"
+         kerror/ExceptionInfo #"approval quorum denies transport"
          (transport/enforce-approval! true approvals approval-context
                                       "other.internal:5432" digest-fn)))))

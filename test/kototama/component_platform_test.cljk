@@ -1,5 +1,5 @@
 (ns kototama.component-platform-test
-  (:require [kotoba.bytes :as kbytes] [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.lang.error :as kerror] [kotoba.bytes :as kbytes] [clojure.test :refer [deftest is testing]]
             [kotoba.abi.contract :as abi]
             [kototama.component-platform :as platform]
             [multiformats.core :as mf]))
@@ -85,7 +85,7 @@
 
 (defn code [value]
   (try (platform/validate-world! value) nil
-       (catch clojure.lang.ExceptionInfo e (:kototama.component/code (ex-data e)))))
+       (catch kerror/ExceptionInfo e (:kototama.component/code (ex-data e)))))
 
 (deftest component-world-admission-is-closed
   (is (= valid (platform/validate-world! valid)))
@@ -143,7 +143,7 @@
            (try (platform/admit-and-link!
                  (assoc-in world [:identity :component-cid] (cid "other")) bytes identity)
                 nil
-                (catch clojure.lang.ExceptionInfo e
+                (catch kerror/ExceptionInfo e
                   (:kototama.component/code (ex-data e))))))))
 
 (deftest execution-identity-is-verified-before-component-linking
@@ -159,16 +159,16 @@
            (try (platform/admit-and-link! world (assoc identity :component-cid (cid "other"))
                                          bytes (fn [_] :linked))
                 nil
-                (catch clojure.lang.ExceptionInfo e
+                (catch kerror/ExceptionInfo e
                   (:kototama.component/code (ex-data e))))))
     (is (= :execution-wit-world-mismatch
            (try (platform/admit-and-link!
                  world (assoc identity :wit-world-cid (cid "other-wit"))
                  bytes (fn [_] :linked))
                 nil
-                (catch clojure.lang.ExceptionInfo e
+                (catch kerror/ExceptionInfo e
                   (:kototama.component/code (ex-data e))))))
     (is (= :invalid-execution-identity
            (try (platform/validate-execution-identity! (assoc identity :extra true)) nil
-                (catch clojure.lang.ExceptionInfo e
+                (catch kerror/ExceptionInfo e
                   (:kototama.component/code (ex-data e))))))))

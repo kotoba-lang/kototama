@@ -1,5 +1,5 @@
 (ns kototama.compatibility-test
-  (:require [kotoba.bytes :as kbytes] [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.lang.error :as kerror] [kotoba.bytes :as kbytes] [clojure.test :refer [deftest is testing]]
             [kototama.compatibility :as compatibility]))
 
 (defn- uleb [value]
@@ -20,7 +20,7 @@
     (byte-array (map unchecked-byte
                      (concat [0 97 115 109 1 0 0 0 0] (uleb (count payload)) payload)))))
 (defn- code [f]
-  (try (f) nil (catch clojure.lang.ExceptionInfo e (:kototama.compatibility/code (ex-data e)))))
+  (try (f) nil (catch kerror/ExceptionInfo e (:kototama.compatibility/code (ex-data e)))))
 
 (deftest compatibility-admission-is-fail-closed
   (is (= "kotoba-compiler/1" (:compiler (compatibility/validate! (module {}) true))))

@@ -2,7 +2,7 @@
   "The one denial shape (koto-h6) as a vocabulary: every registered reason
   has a message on every host, and an unregistered reason is refused rather
   than minted."
-  (:require #?(:clj  [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.lang.error :as kerror] #?(:clj  [clojure.test :refer [deftest is testing]]
                :cljs [cljs.test :refer [deftest is testing] :include-macros true])
             [kototama.denial :as denial]))
 
@@ -25,9 +25,9 @@
           "and says something after it"))))
 
 (deftest an-unregistered-reason-is-a-caller-bug-not-a-denial
-  (is (thrown-with-msg? #?(:clj clojure.lang.ExceptionInfo :cljs ExceptionInfo) #"unregistered reason"
+  (is (thrown-with-msg? kerror/ExceptionInfo #"unregistered reason"
                         (denial/denial :jvm :made-up/reason 1)))
-  (is (thrown-with-msg? #?(:clj clojure.lang.ExceptionInfo :cljs ExceptionInfo) #"unknown host"
+  (is (thrown-with-msg? kerror/ExceptionInfo #"unknown host"
                         (denial/denial :toaster :host-meter/instructions-exhausted 1))))
 
 (deftest denial?-discriminates-the-shape
@@ -47,7 +47,7 @@
   (let [cause #?(:clj (RuntimeException. "boom") :cljs (js/Error. "boom"))
         e (try (denial/deny! :jvm :deadline-exceeded 30 {:extra 1} cause)
                nil
-               (catch #?(:clj clojure.lang.ExceptionInfo :cljs ExceptionInfo) e e))]
+               (catch kerror/ExceptionInfo e e))]
     (is (some? e))
     ;; `ex-message`/`ex-cause` rather than `.getMessage`/`.getCause`: the
     ;; interop spellings are JVM-only and were the last thing keeping this

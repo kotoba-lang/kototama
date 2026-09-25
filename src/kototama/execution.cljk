@@ -43,7 +43,7 @@
   `:receipt/value` for a source. `kototama.linear-journal` chains
   consumption entries; those are not yet these receipts, and this namespace
   does not pretend otherwise: it reads whatever receipts it is handed."
-  (:require [kotoba.lang.text :as str]
+  (:require [kotoba.bytes :as kbytes] [kotoba.lang.text :as str]
             [multiformats.core :as mf]))
 
 (def required-receipt-keys
@@ -78,7 +78,7 @@
   Always available. This is the identity a receipt or a transaction cites,
   whether or not the execution may be memoised."
   [execution]
-  (mf/cidv1-raw #?(:clj (.getBytes ^String (canonical-string execution) "UTF-8")
+  (mf/cidv1-raw #?(:clj (kbytes/utf8-bytes ^String (canonical-string execution))
                    :cljs (.encode (js/TextEncoder.) (canonical-string execution)))))
 
 ;; ── replayability ───────────────────────────────────────────────────────────

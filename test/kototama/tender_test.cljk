@@ -4,8 +4,8 @@
   compiled to real Wasm bytes at test time via the `wasm-tools` CLI
   (Bytecode Alliance, ~/.cargo/bin/wasm-tools), so these tests exercise
   the actual Chicory Parser/Instance/HostFunction linkage, not a mock."
-  (:require [kotoba.bytes :as kbytes] [clojure.test :refer [deftest is testing]]
-            [clojure.java.io :as io]
+  (:require [kotoba.lang.error :as kerror] [kotoba.bytes :as kbytes] [clojure.test :refer [deftest is testing]]
+            [kotoba.io :as io]
             [kotoba.process :as shell]
             [kotoba.lang.text :as str]
             [kototama.signer-lifecycle :as signer]
@@ -331,13 +331,13 @@
       (is (= {:dispatched? false} (tender/dispatch-trigger instance :tick)))
       (is (= {:dispatched? false} (tender/dispatch-trigger instance :kse))))
     (testing "unknown trigger kind is a caller bug -- throws"
-      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"unknown trigger kind"
+      (is (thrown-with-msg? kerror/ExceptionInfo #"unknown trigger kind"
                             (tender/dispatch-trigger instance :bogus))))))
 
 (deftest ungranted-import-is-rejected-pre-flight-before-any-wasm-runs
   (testing "validate-import-surface's own :grants/missing error, no Instance ever built"
     (let [caps (contract/host-caps {:grants []})]
-      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"rejected by contract"
+      (is (thrown-with-msg? kerror/ExceptionInfo #"rejected by contract"
                             (tender/instantiate (byte-array 0) [:http-post] caps))))))
 
 (deftest a-defense-in-depth-grant-check-also-guards-each-call
@@ -348,7 +348,7 @@
     ;; this just re-confirms the pre-flight path is what actually fires.
     (let [wasm (wat->wasm sha256-hex-wat)
           caps (contract/host-caps {:grants [:clock-monotonic]})]
-      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"rejected by contract"
+      (is (thrown-with-msg? kerror/ExceptionInfo #"rejected by contract"
                             (tender/instantiate wasm [:sha256-hex] caps))))))
 
 ;; ── http-post: connect/request timeouts + SSRF-adjacent destination
@@ -605,7 +605,7 @@
 (deftest http-fetch-denied-pre-flight-when-max-http-fetches-is-zero-by-default
   (testing "granted but :max-http-fetches stays at its default-runtime-limits 0 -- rejected before any Instance is built (validate-import-surface counts REQUESTED import declarations against this same limit, same as :max-http-posts already does for http-post -- no test in this file ever requests a given import type more than once, so the separate RUNTIME per-call counter this limit ALSO gates via within-count-limit? is only exercised by imports a guest calls multiple times per `main`, e.g. log-write-thrice-wat/llm-infer-twice-wat below, not http-post/http-fetch)"
     (let [caps (contract/host-caps {:grants [:http-fetch]})]
-      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"rejected by contract"
+      (is (thrown-with-msg? kerror/ExceptionInfo #"rejected by contract"
                             (tender/instantiate (byte-array 0) [:http-fetch] caps))))))
 
 ;; ── http-post-headers (com-junkawasaki/root, third wave): a SEPARATE
@@ -666,7 +666,7 @@
 (deftest http-post-headers-denied-pre-flight-when-max-http-posts-is-zero-by-default
   (testing ":max-http-posts stays at its default-runtime-limits 0 for http-post-headers too -- rejected before any Instance is built"
     (let [caps (contract/host-caps {:grants [:http-post-headers]})]
-      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"rejected by contract"
+      (is (thrown-with-msg? kerror/ExceptionInfo #"rejected by contract"
                             (tender/instantiate (byte-array 0) [:http-post-headers] caps))))))
 
 (deftest post-request-with-headers-sends-real-headers-to-a-local-server
@@ -961,7 +961,7 @@
 (deftest llm-infer-denied-without-explicit-grant-and-limit
   (testing "default caps: no :llm-infer grant AND max-llm-infers 0 -- pre-flight rejects before any Instance is built"
     (let [caps (contract/host-caps {})]
-      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"rejected by contract"
+      (is (thrown-with-msg? kerror/ExceptionInfo #"rejected by contract"
                             (tender/instantiate (byte-array 0) [:llm-infer] caps))))))
 
 (deftest production-host-support-is-checked-before-wasm-parsing
@@ -975,7 +975,7 @@
           (tender/instantiate (byte-array 0) [import] caps
                               {:profile :production})
           (is false (str import " should be denied"))
-          (catch clojure.lang.ExceptionInfo e
+          (catch kerror/ExceptionInfo e
             (is (= :host-surface-rejected
                    (:kototama.host/code (ex-data e)))))))))
   (testing "explicit providers pass host admission and reach artifact parsing"
@@ -1000,14 +1000,14 @@
         (tender/open-session (byte-array 0) [:http-post] caps
                              {:profile :production})
         (is false "unconfigured production HTTP should fail")
-        (catch clojure.lang.ExceptionInfo e
+        (catch kerror/ExceptionInfo e
           (is (= :host-surface-rejected
                  (:kototama.host/code (ex-data e)))))))
     (testing "present but incomplete policy is rejected before signed artifact parsing"
       (try
         (tender/open-session (byte-array 0) [:http-post] caps configured)
         (is false "incomplete production network policy should fail")
-        (catch clojure.lang.ExceptionInfo e
+        (catch kerror/ExceptionInfo e
           (is (= :incomplete-policy
                  (:kototama.network/code (ex-data e)))))))))
 
@@ -1043,7 +1043,7 @@
       (try
         (tender/open-session wasm [] caps {:profile :production})
         (is false "unsigned artifact should be denied")
-        (catch clojure.lang.ExceptionInfo e
+        (catch kerror/ExceptionInfo e
           (is (= :signed-manifest-required
                  (:kototama.tender/problem (ex-data e)))))))
     (testing "authorized manifest is bound to the exact Wasm digest"
@@ -1052,7 +1052,7 @@
         (is (= 7 (tender/session-call-main session)))
         (is (true? (get-in session [:artifact-admission :authorized?]))))
       (is (thrown-with-msg?
-           clojure.lang.ExceptionInfo #"digest mismatch"
+           kerror/ExceptionInfo #"digest mismatch"
            (tender/open-session
             (byte-array (concat wasm [0]))
             [] caps (assoc signing :profile :production)))))
@@ -1065,7 +1065,7 @@
        (fn [_ body signature]
          (= signature [:root (:epoch (read-string body))])))
       (is (thrown-with-msg?
-           clojure.lang.ExceptionInfo #"manifest signer denied"
+           kerror/ExceptionInfo #"manifest signer denied"
            (tender/open-session
             wasm [] caps (assoc signing :profile :production)))))))
 
@@ -1107,7 +1107,7 @@
 (deftest fuel-limit-traps-an-infinite-loop
   (let [wasm (wat->wasm infinite-loop-wat)
         caps (contract/host-caps {})]
-    (is (thrown-with-msg? clojure.lang.ExceptionInfo #"host instruction meter"
+    (is (thrown-with-msg? kerror/ExceptionInfo #"host instruction meter"
                           (tender/run-main wasm [] caps {:fuel 10000})))))
 
 (deftest bounded-run-enforces-deadline-and-concurrency-admission
@@ -1118,7 +1118,7 @@
           started (promise)
           interrupted (promise)]
       (is (thrown-with-msg?
-           clojure.lang.ExceptionInfo #"deadline exceeded"
+           kerror/ExceptionInfo #"deadline exceeded"
            (tender/run-main-bounded
             wasm [:llm-infer] caps
             {:deadline-ms 50
@@ -1136,7 +1136,7 @@
       (.acquire permits)
       (try
         (is (thrown-with-msg?
-             clojure.lang.ExceptionInfo #"concurrent run limit"
+             kerror/ExceptionInfo #"concurrent run limit"
              (tender/run-main-bounded
               (byte-array 0) [] (contract/host-caps {})
               {:run-permits permits :deadline-ms 100})))
@@ -1144,7 +1144,7 @@
 
 (deftest bounded-run-rejects-invalid-deadline-before-execution
   (is (thrown-with-msg?
-       clojure.lang.ExceptionInfo #"deadline-ms must be positive"
+       kerror/ExceptionInfo #"deadline-ms must be positive"
        (tender/run-main-bounded
         (byte-array 0) [] (contract/host-caps {}) {:deadline-ms 0}))))
 
@@ -1176,7 +1176,7 @@
                        [:uses :clock-monotonic])))
       (tender/revoke-import! session :clock-monotonic :incident-response)
       (is (thrown-with-msg?
-           clojure.lang.ExceptionInfo #"host import denied"
+           kerror/ExceptionInfo #"host import denied"
            (tender/session-call-main session)))
       (is (= :incident-response
              (get-in (tender/authority-snapshot session)
@@ -1188,7 +1188,7 @@
       (tender/drop-import! session :clock-monotonic)
       (is (contains? (:dropped (tender/authority-snapshot session))
                      :clock-monotonic))
-      (is (thrown? clojure.lang.ExceptionInfo
+      (is (thrown? kerror/ExceptionInfo
                    (tender/session-call-main session))))))
 
 (deftest every-actor-host-import-obeys-the-session-authority-chokepoint
@@ -1211,7 +1211,7 @@
             (str import-id " accounts its call atomically"))
         (tender/revoke-import! session import-id :qualification-revocation)
         (is (thrown-with-msg?
-             clojure.lang.ExceptionInfo #"host import denied"
+             kerror/ExceptionInfo #"host import denied"
              (#'tender/ensure-granted! caps import-id))
             (str import-id " cannot retain linked authority after revocation"))))))
 
@@ -1240,7 +1240,7 @@
     (is (pos? (tender/session-call-main session)))
     (is (zero? (get-in (tender/authority-snapshot session) [:remaining :clock-monotonic])))
     (is (contains? (:consumed (tender/authority-snapshot session)) :clock-monotonic))
-    (is (thrown? clojure.lang.ExceptionInfo (tender/session-call-main session)))))
+    (is (thrown? kerror/ExceptionInfo (tender/session-call-main session)))))
 
 (deftest capability-leases-bind-the-session-to-identity-component-and-expiry
   (let [wasm (wat->wasm clock-monotonic-wat)
@@ -1259,13 +1259,13 @@
                :component-cid (cid-of "component") :resource-cid (cid-of "clock")
                :purpose :clock/monotonic :expires-at "2099-07-25T00:01:00Z"
                :uses 1 :transfer :non-transferable :delegation-depth 0}]
-    (is (thrown? clojure.lang.ExceptionInfo
+    (is (thrown? kerror/ExceptionInfo
                  (tender/open-session wasm [:clock-monotonic] caps
                                       {:capability-leases {:clock-monotonic lease}
                                        :execution-identity identity
                                        :execution-identity-cid (cid-of "other")
                                        :lease-now-ms 0})))
-    (is (thrown? clojure.lang.ExceptionInfo
+    (is (thrown? kerror/ExceptionInfo
                  (tender/open-session wasm [:clock-monotonic] caps
                                       {:capability-leases {:clock-monotonic
                                                            (assoc lease :expires-at "2020-01-01T00:00:00Z")}
@@ -1280,7 +1280,7 @@
                                         :lease-now-ms #(deref clock)})]
       (is (pos? (tender/session-call-main session)))
       (reset! clock 5000000000000)
-      (is (thrown? clojure.lang.ExceptionInfo (tender/session-call-main session)))
+      (is (thrown? kerror/ExceptionInfo (tender/session-call-main session)))
       (is (contains? (:expired (tender/authority-snapshot session)) :clock-monotonic)))))
 
 (deftest log-write-byte-limit-denies-once-exceeded
@@ -1477,7 +1477,7 @@
       (is (<= before n after)
           "host returns wall millis from the same clock_monotonic grant")
       (is (thrown-with-msg?
-           clojure.lang.ExceptionInfo #"host import denied"
+           kerror/ExceptionInfo #"host import denied"
            (tender/run-main wasm [] {}))
           "missing :clock-monotonic grant is fail-closed at the call"))))
 
@@ -1500,7 +1500,7 @@
   "The ex-data THUNK throws, or ::no-throw."
   [thunk]
   (try (thunk) ::no-throw
-       (catch clojure.lang.ExceptionInfo e (ex-data e))))
+       (catch kerror/ExceptionInfo e (ex-data e))))
 
 (deftest every-denial-path-returns-the-one-denial-shape
   (let [caps (contract/host-caps {})

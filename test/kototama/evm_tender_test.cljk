@@ -5,7 +5,7 @@
   pre-flight denial, budget as a value, overlay discipline, receipted
   attempts -- so that 'peer execution plane' means the same contract, not a
   second contract with the same name."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.lang.error :as kerror] [clojure.test :refer [deftest is testing]]
             [kotoba.lang.edn :as edn]
             [kotoba.io :as io]
             [kototama.evm-tender :as evm-tender]))
@@ -68,13 +68,13 @@
 
 (deftest an-ungranted-request-is-rejected-before-any-bytecode-runs
   (is (thrown-with-msg?
-       clojure.lang.ExceptionInfo #"rejected by contract"
+       kerror/ExceptionInfo #"rejected by contract"
        (evm-tender/open-session mul-return {:grants #{:no-such-capability}}))))
 
 (deftest an-invalid-budget-is-refused-before-any-bytecode-runs
   (doseq [bad [0 -1 nil "30000000"]]
     (is (thrown-with-msg?
-         clojure.lang.ExceptionInfo #"budget must be a positive integer"
+         kerror/ExceptionInfo #"budget must be a positive integer"
          (evm-tender/open-session mul-return {:gas bad}))
         (str "budget " (pr-str bad) " must be refused"))))
 

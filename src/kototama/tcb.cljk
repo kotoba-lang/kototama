@@ -1,7 +1,7 @@
 (ns kototama.tcb
   "Machine-verifiable trusted-computing-base inventory for the tender."
   (:require [kotoba.lang.edn :as edn]
-            [clojure.java.io :as io])
+            [kotoba.io :as io])
   (:import [java.security MessageDigest]))
 
 (def inventory-path "qualification/tcb-inventory.edn")
@@ -86,7 +86,7 @@
                  (fn [{:keys [path role sha256]}]
                    (let [file (io/file path)]
                      (cond
-                       (not (.exists file))
+                       (not (io/exists? file))
                        [{:kind :missing-file :path path}]
                        (not (keyword? role))
                        [{:kind :missing-role :path path}]

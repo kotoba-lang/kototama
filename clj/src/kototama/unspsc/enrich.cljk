@@ -14,7 +14,7 @@
                   taxonomy EDN and rewrite resources/unspsc-taxonomy.edn"
   (:require [json.data-json :as json]
             [kotoba.lang.edn :as edn]
-            [clojure.java.io :as io]
+            [kotoba.io :as io]
             [kotoba.lang.text :as str])
   (:gen-class))
 
@@ -78,9 +78,9 @@
   Only fills codes that currently lack spec-fields (idempotent; never clobbers
   the curated jsonl enrichment). Returns [merged-tax applied-count]."
   [tax dir]
-  (let [files (->> (file-seq (io/file dir))
-                   (filter #(.isFile %))
-                   (filter #(re-find #"\.(json|jsonl)$" (.getName %))))
+  (let [files (->> (io/file-seq (io/file dir))
+                   (filter #(io/file? %))
+                   (filter #(re-find #"\.(json|jsonl)$" (io/file-name %))))
         entries (mapcat read-overlay-file files)
         applied (atom 0)
         merged (reduce

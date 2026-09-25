@@ -1,5 +1,5 @@
 (ns kototama.component-authority-test
-  (:require [kotoba.bytes :as kbytes] [clojure.test :refer [deftest is]]
+  (:require [kotoba.lang.error :as kerror] [kotoba.bytes :as kbytes] [clojure.test :refer [deftest is]]
             [ed25519.core :as ed]
             [kotoba.abi.contract :as abi]
             [kototama.component-authority :as authority]))
@@ -95,19 +95,19 @@
 (deftest signature-replay-stale-epoch-and-untrusted-audience-fail-closed
   (let [state (atom (authority/initial-state))]
     (authority/apply-envelope! state (envelope (event :placed 2 5 "edge-a")) trust)
-    (is (thrown? clojure.lang.ExceptionInfo
+    (is (thrown? kerror/ExceptionInfo
                  (authority/apply-envelope!
                   state (envelope (event :placed 2 5 "edge-a")) trust)))
-    (is (thrown? clojure.lang.ExceptionInfo
+    (is (thrown? kerror/ExceptionInfo
                  (authority/apply-envelope!
                   state (envelope (event :placed 1 6 "edge-a")) trust)))
-    (is (thrown? clojure.lang.ExceptionInfo
+    (is (thrown? kerror/ExceptionInfo
                  (authority/apply-envelope!
                   state
                   (assoc (envelope (event :revoked 3 7 nil))
                          :audience "did:key:attacker")
                   trust)))
-    (is (thrown? clojure.lang.ExceptionInfo
+    (is (thrown? kerror/ExceptionInfo
                  (authority/apply-envelope!
                   state
                   (update (envelope (event :revoked 3 7 nil))
@@ -115,6 +115,6 @@
                   trust)))))
 
 (deftest missing-authority-never-defaults-to-epoch-one
-  (is (thrown? clojure.lang.ExceptionInfo
+  (is (thrown? kerror/ExceptionInfo
                ((authority/epoch-source
                  (atom (authority/initial-state)) (cid-of "missing"))))))

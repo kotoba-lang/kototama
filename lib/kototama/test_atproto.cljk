@@ -1,7 +1,7 @@
 (ns kototama.test-atproto
   "Tests for the AT-Protocol surface + key-material identity (the pieces test_kototama.clj —
   gates/membrane/heartbeat/didkey — does not cover)."
-  (:require [kotoba.lang.text :as str]
+  (:require [kotoba.lang.error :as kerror] [kotoba.lang.text :as str]
             [clojure.test :refer [deftest is run-tests]]
             [kototama.atproto :as at]
             [kototama.identity :as id]))
@@ -18,7 +18,7 @@
 (deftest feed-post-guards-text
   (is (= "app.bsky.feed.post" (get (at/feed-post {:text "disclosed FY2024 revenue ¥1tn"
                                                   :created-at "2026-01-01T00:00:00Z"}) "$type")))
-  (is (thrown? clojure.lang.ExceptionInfo
+  (is (thrown? kerror/ExceptionInfo
                (at/feed-post {:text "buy now" :created-at "2026-01-01T00:00:00Z"})))
   (let [p (at/feed-post {:text "disclosed revenue ¥1tn" :created-at "t"
                          :embed-uri (at/at-uri "did:x" "com.y.z" "k1")})]

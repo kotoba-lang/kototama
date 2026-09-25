@@ -1,7 +1,7 @@
 #!/usr/bin/env kbb
 ;; actor common-lib tests (portable, bb/JVM).  Run:  kbb --classpath lib lib/actor/test_kototama.clj
 (ns kototama.test-actor
-  (:require [kototama.gates :as g]
+  (:require [kotoba.lang.error :as kerror] [kototama.gates :as g]
             [kototama.membrane :as m]
             [kototama.heartbeat :as h]
             [kototama.didkey :as d]
@@ -32,7 +32,7 @@
     (is (= [:G-sources] (:refusal refused)))))
 
 (deftest build-live-refuses
-  (is (thrown? clojure.lang.ExceptionInfo (m/build-live {:any 1}))))
+  (is (thrown? kerror/ExceptionInfo (m/build-live {:any 1}))))
 
 (deftest heartbeat-idempotent
   (is (:append? (h/decide [[:db/add "e" ":a" 1]] [[:db/add "e" ":a" 0]])))
@@ -48,7 +48,7 @@
   (is (not (g/no-advice? "we recommend buy")))
   (is (= "recommend" (g/advice-hit "we recommend buy, target price up")))
   (is (not (g/no-advice? "目標株価を引き上げ")))                          ; JA substring
-  (is (thrown? clojure.lang.ExceptionInfo (g/assert-no-advice "strong buy rating")))
+  (is (thrown? kerror/ExceptionInfo (g/assert-no-advice "strong buy rating")))
   (is (= "clean text" (g/assert-no-advice "clean text"))))
 
 (deftest didkey-encoding

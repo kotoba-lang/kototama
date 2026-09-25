@@ -1,6 +1,6 @@
 (ns kototama.core-test
   "Contract tests for the kototama common organism/cell library."
-  (:require [clojure.test :refer [deftest is testing run-tests]]
+  (:require [kotoba.lang.error :as kerror] [clojure.test :refer [deftest is testing run-tests]]
             [kototama.kotoba :as kt]
             [kototama.cell :as cell]
             [kototama.life :as life]
@@ -42,7 +42,7 @@
   (let [c (cell/register! (cell/cell :inc (fn [s] (update s :n inc))))]
     (is (= {:n 1} (cell/run :inc {:n 0})))
     (is (= {:n 6} (cell/run c {:n 5})))
-    (is (thrown? clojure.lang.ExceptionInfo (cell/run :nope {})))))
+    (is (thrown? kerror/ExceptionInfo (cell/run :nope {})))))
 
 ;; ───────────────────────── life ─────────────────────────
 
@@ -85,12 +85,12 @@
     (is (= "did:plc:bob" (:writeAuthor env)) "attributed to consenting member")
     (is (= "https://bsky.social" (:pds env)) "app-aozora target"))
   (testing "content safety preserved under autonomy"
-    (is (thrown? clojure.lang.ExceptionInfo
+    (is (thrown? kerror/ExceptionInfo
                  (emit/post-record {:text "how to manipulate a child" :created-at "t"})))
-    (is (thrown? clojure.lang.ExceptionInfo
+    (is (thrown? kerror/ExceptionInfo
                  (emit/post-record {:text (apply str (repeat 301 "x")) :created-at "t"}))))
   (testing "no valid leash → cannot publish autonomously"
-    (is (thrown? clojure.lang.ExceptionInfo
+    (is (thrown? kerror/ExceptionInfo
                  (emit/envelope {:$type "app.bsky.feed.post" :text "hi"} nil {:now 0})))))
 
 ;; ───────────────────────── organism heartbeat ─────────────────────────

@@ -1,5 +1,5 @@
 (ns kototama.network-authority-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.lang.error :as kerror] [clojure.test :refer [deftest is testing]]
             [kototama.network-authority :as network]))
 
 (def policy
@@ -16,12 +16,12 @@
   (is (= :incomplete-policy
          (try (network/validate-policy! (dissoc policy :network-policy/purpose))
               nil
-              (catch clojure.lang.ExceptionInfo e
+              (catch kerror/ExceptionInfo e
                 (:kototama.network/code (ex-data e))))))
   (is (= :purpose-mismatch
          (try (network/make-context policy :billing (constantly {}))
               nil
-              (catch clojure.lang.ExceptionInfo e
+              (catch kerror/ExceptionInfo e
                 (:kototama.network/code (ex-data e)))))))
 
 (deftest endpoint-method-purpose-credential-and-quotas-are-bound
@@ -46,7 +46,7 @@
       (let [actual
             (try (network/authorize-request! context url method bytes call)
                  nil
-                 (catch clojure.lang.ExceptionInfo e
+                 (catch kerror/ExceptionInfo e
                    (:kototama.network/control (ex-data e))))]
         (is (= control actual))))))
 
@@ -54,12 +54,12 @@
   (doseq [endpoint ["http://api.example.test/v1"
                     "https://user@api.example.test/v1"
                     "https://api.example.test"]]
-    (is (thrown? clojure.lang.ExceptionInfo
+    (is (thrown? kerror/ExceptionInfo
                  (network/validate-policy!
                   (assoc policy :network-policy/endpoints #{endpoint})))))
   (let [context (network/make-context policy :model-inference
                                       (constantly nil))]
     (is (thrown-with-msg?
-         clojure.lang.ExceptionInfo #"credential resolution denied"
+         kerror/ExceptionInfo #"credential resolution denied"
          (network/authorize-request!
           context "https://api.example.test/v1/infer" :post 1 1)))))
