@@ -1,6 +1,6 @@
 (ns kototama.runtime-conformance-test
   (:require [kotoba.process :as shell]
-            [clojure.test :refer [deftest is testing]]
+            [kotoba.test :refer [deftest is testing]]
             [kototama.runtime-conformance :as conformance]))
 
 (def host-free-corpus

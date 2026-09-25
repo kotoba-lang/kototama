@@ -1,5 +1,5 @@
 (ns kototama.component-authority-test
-  (:require [kotoba.lang.error :as kerror] [kotoba.bytes :as kbytes] [clojure.test :refer [deftest is]]
+  (:require [kotoba.lang.error :as kerror] [kotoba.bytes :as kbytes] [kotoba.test :refer [deftest is]]
             [ed25519.core :as ed]
             [kotoba.abi.contract :as abi]
             [kototama.component-authority :as authority]))

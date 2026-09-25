@@ -1,6 +1,6 @@
 (ns kototama.release-evidence-test
   (:require [kotoba.io :as io]
-            [clojure.test :refer [deftest is testing]]
+            [kotoba.test :refer [deftest is testing]]
             [kototama.release-evidence :as release]))
 
 (defn delete-tree! [root]

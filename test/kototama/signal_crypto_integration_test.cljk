@@ -4,7 +4,7 @@
   round-trips, fails closed on a wrong key, and derives deterministic,
   per-message-distinct keys. Locks that the primitives are not just present
   but semantically wired correctly, not merely compile-green."
-  (:require [clojure.test :refer [deftest is]]
+  (:require [kotoba.test :refer [deftest is]]
             [kototama.signal-crypto :as sc]))
 
 (deftest derive-encrypt-decrypt-round-trip

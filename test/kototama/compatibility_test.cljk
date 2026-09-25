@@ -1,5 +1,5 @@
 (ns kototama.compatibility-test
-  (:require [kotoba.lang.error :as kerror] [kotoba.bytes :as kbytes] [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.lang.error :as kerror] [kotoba.bytes :as kbytes] [kotoba.test :refer [deftest is testing]]
             [kototama.compatibility :as compatibility]))
 
 (defn- uleb [value]

@@ -1,5 +1,5 @@
 (ns kototama.tcb-test
-  (:require [clojure.test :refer [deftest is]]
+  (:require [kotoba.test :refer [deftest is]]
             [kototama.tcb :as tcb]))
 
 (def required-boundaries

@@ -3,7 +3,7 @@
    packaging moved to kotoba-lang/fleet under ADR-2607266000."
   (:require [kotoba.process :as shell]
             [kotoba.lang.text :as str]
-            [clojure.test :refer [deftest is]]))
+            [kotoba.test :refer [deftest is]]))
 
 (deftest packaging-validate-script-passes
   (let [{:keys [exit out err]} (shell/sh "bash" "deploy/validate-packaging.sh")]

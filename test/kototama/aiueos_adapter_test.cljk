@@ -7,7 +7,7 @@
   just that the adapter's translation logic is internally consistent."
   (:require [kotoba.lang.error :as kerror] [kotoba.io :as io]
             [kotoba.process :as shell]
-            [clojure.test :refer [deftest is testing]]
+            [kotoba.test :refer [deftest is testing]]
             [kototama.aiueos-adapter :as adapter]
             [kototama.tender :as tender]))
 

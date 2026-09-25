@@ -5,7 +5,7 @@
   pre-flight denial, budget as a value, overlay discipline, receipted
   attempts -- so that 'peer execution plane' means the same contract, not a
   second contract with the same name."
-  (:require [kotoba.lang.error :as kerror] [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.lang.error :as kerror] [kotoba.test :refer [deftest is testing]]
             [kotoba.lang.edn :as edn]
             [kotoba.io :as io]
             [kototama.evm-tender :as evm-tender]))

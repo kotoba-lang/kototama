@@ -1,6 +1,6 @@
 (ns kototama.unspsc.life-test
   "Phase 2a: prior consensus / Stage-D learning signal parity."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.test :refer [deftest is testing]]
             [kototama.unspsc.life :as life]))
 
 (deftest prior-consensus-parity

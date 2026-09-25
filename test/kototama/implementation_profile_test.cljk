@@ -2,7 +2,7 @@
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
             [kotoba.lang.text :as str]
-            [clojure.test :refer [deftest is]]))
+            [kotoba.test :refer [deftest is]]))
 
 ;; Validates every qualification/implementation-declaration-*.edn against the
 ;; :conformance :implementation-declaration schema in spec/kototama-vm-v1.edn.
