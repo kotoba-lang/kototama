@@ -1,5 +1,5 @@
 (ns kototama.signer-lifecycle-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.lang.error :as kerror] [clojure.test :refer [deftest is testing]]
             [kototama.signer-lifecycle :as lifecycle]))
 
 (defn signed-update [epoch additions revokes emergency]
@@ -58,18 +58,18 @@
 (deftest trust-updates-reject-forgery-downgrade-and-invalid-records
   (let [registry (lifecycle/new-registry :offline/root)]
     (is (thrown-with-msg?
-         clojure.lang.ExceptionInfo #"invalid root signature"
+         kerror/ExceptionInfo #"invalid root signature"
          (lifecycle/apply-trust-update!
           registry (assoc (signed-update 1 {} #{} #{}) :signature :forged)
           root-verifier)))
     (lifecycle/apply-trust-update!
      registry (signed-update 2 {:key/a signer-a} #{} #{}) root-verifier)
     (is (thrown-with-msg?
-         clojure.lang.ExceptionInfo #"stale trust epoch"
+         kerror/ExceptionInfo #"stale trust epoch"
          (lifecycle/apply-trust-update!
           registry (signed-update 1 {} #{} #{}) root-verifier)))
     (is (thrown-with-msg?
-         clojure.lang.ExceptionInfo #"invalid signer record"
+         kerror/ExceptionInfo #"invalid signer record"
          (lifecycle/apply-trust-update!
           registry
           (signed-update 3 {:key/b {:key-id :key/b

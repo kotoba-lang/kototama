@@ -8,7 +8,7 @@
      inspect <file.wasm> — structural Wasm surface (no run)
      run <file.wasm> [--grant id …]  — run-report via tender
      help"
-  (:require [clojure.java.io :as io]
+  (:require [kotoba.io :as io]
             [kotoba.pprint :as pp]
             [kotoba.lang.text :as str]
             [kototama.browser :as browser]
@@ -69,7 +69,7 @@
 (defn fixture-file
   "Where a table row's fixture lives. A var so a test can point it at an
    empty directory and prove that \"absent\" is reported as :unmeasured."
-  ^java.io.File [fixture-name]
+  [fixture-name]
   (io/file fixtures-dir fixture-name))
 
 (defn check-fixture-row
@@ -78,7 +78,7 @@
   [{:keys [name host-free? expected-main]}]
   (let [f (fixture-file name)
         base {:check :fixture :name name}]
-    (if-not (.exists f)
+    (if-not (io/exists? f)
       (assoc base :outcome :unmeasured
              :detail "fixture file absent -- cannot parse or run it")
       (let [wasm (read-bytes f)
@@ -148,7 +148,7 @@
   []
   (let [doc (io/file maturity-doc-path)
         fixture-checks
-        (if-not (.exists doc)
+        (if-not (io/exists? doc)
           [{:check :maturity-doc :outcome :unmeasured
             :detail (str maturity-doc-path " absent -- fixture table cannot be read")}]
           (let [rows (parse-fixture-table (slurp doc))]

@@ -1,5 +1,5 @@
 (ns kototama.component-authority-daemon-test
-  (:require [clojure.test :refer [deftest is]]
+  (:require [kotoba.lang.error :as kerror] [clojure.test :refer [deftest is]]
             [kototama.component-authority-daemon :as daemon])
   (:import [java.nio.file Files]))
 
@@ -37,6 +37,6 @@
                             "self-asserted")]]
     (let [path (config-file config)]
       (try
-        (is (thrown? clojure.lang.ExceptionInfo
+        (is (thrown? kerror/ExceptionInfo
                      (daemon/load-config (.toString path))))
         (finally (Files/deleteIfExists path))))))

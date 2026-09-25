@@ -5,7 +5,7 @@
   actually gates a real Chicory-hosted WASM guest through
   kototama.tender -- proving the ADR-2607062330 follow-up end to end, not
   just that the adapter's translation logic is internally consistent."
-  (:require [clojure.java.io :as io]
+  (:require [kotoba.lang.error :as kerror] [kotoba.io :as io]
             [kotoba.process :as shell]
             [clojure.test :refer [deftest is testing]]
             [kototama.aiueos-adapter :as adapter]
@@ -70,6 +70,6 @@
           wasm (wat->wasm clock-monotonic-wat)]
       (is (= :deny (:aiueos/decision decision)))
       (is (= #{} (:grants host-caps)))
-      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"rejected by contract"
+      (is (thrown-with-msg? kerror/ExceptionInfo #"rejected by contract"
                             (tender/instantiate wasm [:clock-monotonic] host-caps))
           "no test-hardcoded HostCaps here -- aiueos's real denial is what kototama.tender's pre-flight actually rejects"))))

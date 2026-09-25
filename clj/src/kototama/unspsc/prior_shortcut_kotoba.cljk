@@ -16,7 +16,7 @@
   so requiring `kototama.unspsc.life` or `.organism` never forces it on a
   consumer who doesn't want the WASM-backed variant. Add Chicory to your
   own project's deps to use this namespace."
-  (:require [clojure.java.io :as io])
+  (:require [kotoba.io :as io])
   (:import (com.dylibso.chicory.runtime Instance)
            (com.dylibso.chicory.wasm Parser WasmModule)))
 

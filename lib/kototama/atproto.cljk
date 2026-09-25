@@ -10,13 +10,13 @@
 
   The membrane rule: every machine-composed outward TEXT passes `gates/assert-no-advice`
   before it can become a post — observations only, never advice / valuation / forecast."
-  (:require [kotoba.lang.text :as str]
+  (:require [kotoba.bytes :as kbytes] [kotoba.lang.text :as str]
             [kototama.gates :as gates]))
 
 ;; ── content-addressed record key (FNV-1a → hex) ──────────────────────────────
 
 (defn fnv1a [^String s]
-  #?(:clj (let [bs (.getBytes s "UTF-8")]
+  #?(:clj (let [bs (kbytes/utf8-bytes s)]
             (loop [h (unchecked-long 0xcbf29ce484222325) i 0]
               (if (< i (alength bs))
                 (recur (unchecked-multiply (bit-xor h (bit-and (aget bs i) 0xff))

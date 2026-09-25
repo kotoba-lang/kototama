@@ -6,7 +6,7 @@
     - Browser/cljs : the host fetches the EDN and injects it via `set-table!`
                      (clojure.core/format and java.io are avoided here)."
   #?(:clj (:require [kotoba.lang.edn :as edn]
-                    [clojure.java.io :as io])))
+                    [kotoba.io :as io])))
 
 (defonce ^:private table* (atom nil))
 

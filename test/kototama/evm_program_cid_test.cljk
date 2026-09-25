@@ -14,7 +14,7 @@
   reproduce the same string. They were captured from the JVM BEFORE the change
   and are unchanged by it — this makes program identity portable, it does not
   redefine it."
-  (:require #?(:clj  [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.lang.error :as kerror] #?(:clj  [clojure.test :refer [deftest is testing]]
                :cljs [cljs.test :refer [deftest is testing] :include-macros true])
             [kototama.evm-tender :as evm]))
 
@@ -51,7 +51,7 @@
   ;; refusal is the only answer that cannot be mistaken for an identity.
   (doseq [bad [256 -1 1000]]
     (testing (str bad)
-      (is (thrown? #?(:clj clojure.lang.ExceptionInfo :cljs ExceptionInfo)
+      (is (thrown? kerror/ExceptionInfo
                    (#'evm/program-cid [bad]))))))
 
 (deftest scanned-counts-are-nonzero

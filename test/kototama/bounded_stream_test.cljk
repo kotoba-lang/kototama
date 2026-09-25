@@ -1,5 +1,5 @@
 (ns kototama.bounded-stream-test
-  (:require [clojure.test :refer [deftest is]]
+  (:require [kotoba.lang.error :as kerror] [clojure.test :refer [deftest is]]
             [kototama.bounded-stream :as stream])
   (:import [java.io ByteArrayInputStream]))
 
@@ -14,7 +14,7 @@
     (is (true? (:done (stream/read-bytes! resource 4))))
     (is (try (stream/read-bytes! resource 1)
              false
-             (catch clojure.lang.ExceptionInfo error
+             (catch kerror/ExceptionInfo error
                (boolean (re-find #"cancelled" (.getMessage error))))))))
 
 (deftest rejects-an-oversized-pull
@@ -22,5 +22,5 @@
                   (ByteArrayInputStream. (byte-array 1)) 1)]
     (is (try (stream/read-bytes! resource 65537)
              false
-             (catch clojure.lang.ExceptionInfo error
+             (catch kerror/ExceptionInfo error
                (boolean (re-find #"outside" (.getMessage error))))))))
