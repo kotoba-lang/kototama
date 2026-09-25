@@ -1,7 +1,7 @@
 (ns kototama.host-parity-live-test
   "T8.4 live host runner — JVM tender proofs for host-parity critical imports."
   (:require [kotoba.lang.text]
-            [clojure.test :refer [deftest is testing]]
+            [kotoba.test :refer [deftest is testing]]
             [kototama.host-parity-live :as live]))
 
 (deftest jvm-live-corpus-covers-critical-ids

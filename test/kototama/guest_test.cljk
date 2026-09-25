@@ -1,5 +1,5 @@
 (ns kototama.guest-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.test :refer [deftest is testing]]
             [kototama.guest :as guest]
             [kototama.contract :as contract]))
 

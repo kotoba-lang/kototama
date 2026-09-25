@@ -1,6 +1,6 @@
 (ns kototama.core-test
   "Contract tests for the kototama common organism/cell library."
-  (:require [kotoba.lang.error :as kerror] [clojure.test :refer [deftest is testing run-tests]]
+  (:require [kotoba.lang.error :as kerror] [kotoba.test :refer [deftest is testing run-tests]]
             [kototama.kotoba :as kt]
             [kototama.cell :as cell]
             [kototama.life :as life]

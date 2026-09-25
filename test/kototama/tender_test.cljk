@@ -4,7 +4,7 @@
   compiled to real Wasm bytes at test time via the `wasm-tools` CLI
   (Bytecode Alliance, ~/.cargo/bin/wasm-tools), so these tests exercise
   the actual Chicory Parser/Instance/HostFunction linkage, not a mock."
-  (:require [kotoba.lang.error :as kerror] [kotoba.bytes :as kbytes] [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.lang.error :as kerror] [kotoba.bytes :as kbytes] [kotoba.test :refer [deftest is testing]]
             [kotoba.io :as io]
             [kotoba.process :as shell]
             [kotoba.lang.text :as str]

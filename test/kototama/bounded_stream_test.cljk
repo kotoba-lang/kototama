@@ -1,5 +1,5 @@
 (ns kototama.bounded-stream-test
-  (:require [kotoba.lang.error :as kerror] [clojure.test :refer [deftest is]]
+  (:require [kotoba.lang.error :as kerror] [kotoba.test :refer [deftest is]]
             [kototama.bounded-stream :as stream])
   (:import [java.io ByteArrayInputStream]))
 

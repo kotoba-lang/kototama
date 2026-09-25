@@ -1,6 +1,6 @@
 (ns kototama.linear-journal-test
   (:require [kotoba.bytes :as kbytes] [kotoba.io :as kio] [kotoba.lang.text]
-            [clojure.test :refer [deftest is testing]]
+            [kotoba.test :refer [deftest is testing]]
             [kototama.linear-journal :as journal]
             [multiformats.core]))
 

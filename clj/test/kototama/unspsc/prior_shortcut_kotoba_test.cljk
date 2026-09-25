@@ -8,7 +8,7 @@
   (not the flattened scalar ABI wasm/prior_shortcut.kotoba's `main`
   actually takes -- that translation is prior-shortcut-kotoba.clj's own
   job, and this test exercises it end-to-end, not around it)."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.test :refer [deftest is testing]]
             [kototama.unspsc.life :as life]
             [kototama.unspsc.prior-shortcut-kotoba :as wasm-life]))
 

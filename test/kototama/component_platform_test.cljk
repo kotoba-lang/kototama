@@ -1,5 +1,5 @@
 (ns kototama.component-platform-test
-  (:require [kotoba.lang.error :as kerror] [kotoba.bytes :as kbytes] [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.lang.error :as kerror] [kotoba.bytes :as kbytes] [kotoba.test :refer [deftest is testing]]
             [kotoba.abi.contract :as abi]
             [kototama.component-platform :as platform]
             [multiformats.core :as mf]))

@@ -1,7 +1,7 @@
 (ns kototama.unspsc.react-test
   "Proves each actor runs a genuine ReAct tool-calling loop
   (:agent → tools → :agent → … → END), driven by a deterministic mock model."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.test :refer [deftest is testing]]
             [langgraph.graph :as g]
             [langchain.model :as lcm]
             [langchain.message :as msg]

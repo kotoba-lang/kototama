@@ -3,7 +3,7 @@
   state persists as-of on the kotoba-Datom log (verified at subset scale; the
   demo in-memory Datom store is O(n²) so the full run uses the O(1) mem store)."
   (:require [kotoba.lang.text :as str]
-            [clojure.test :refer [deftest is]]
+            [kotoba.test :refer [deftest is]]
             [kototama.unspsc.fleet :as fleet]))
 
 (deftest full-fleet-sweep

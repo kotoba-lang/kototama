@@ -1,5 +1,5 @@
 (ns kototama.network-authority-test
-  (:require [kotoba.lang.error :as kerror] [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.lang.error :as kerror] [kotoba.test :refer [deftest is testing]]
             [kototama.network-authority :as network]))
 
 (def policy

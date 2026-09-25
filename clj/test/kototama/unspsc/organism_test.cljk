@@ -2,7 +2,7 @@
   "Phase 1 pilot: prove the functional clj organism replaces the Python stubs.
   Key invariant under test: NO code is a hollow stub — every actor does
   commodity-specific, input-validating work; coverage = all 18,342 codes."
-  (:require [kotoba.lang.text] [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.lang.text] [kotoba.test :refer [deftest is testing]]
             [langchain.db :as db]
             [langchain.model :as lcm]
             [langgraph.checkpoint :as cp]

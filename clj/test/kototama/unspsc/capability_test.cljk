@@ -1,6 +1,6 @@
 (ns kototama.unspsc.capability-test
   "Tests for UNSPSC segment capability verdicts."
-  (:require [clojure.test :refer [deftest is]]
+  (:require [kotoba.test :refer [deftest is]]
             [kototama.unspsc.capability :as cap]
             [kototama.unspsc.taxonomy :as tax]))
 

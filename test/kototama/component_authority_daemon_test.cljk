@@ -1,5 +1,5 @@
 (ns kototama.component-authority-daemon-test
-  (:require [kotoba.lang.error :as kerror] [clojure.test :refer [deftest is]]
+  (:require [kotoba.lang.error :as kerror] [kotoba.test :refer [deftest is]]
             [kototama.component-authority-daemon :as daemon])
   (:import [java.nio.file Files]))
 

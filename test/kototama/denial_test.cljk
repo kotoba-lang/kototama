@@ -2,7 +2,7 @@
   "The one denial shape (koto-h6) as a vocabulary: every registered reason
   has a message on every host, and an unregistered reason is refused rather
   than minted."
-  (:require [kotoba.lang.error :as kerror] #?(:clj  [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.lang.error :as kerror] #?(:clj  [kotoba.test :refer [deftest is testing]]
                :cljs [cljs.test :refer [deftest is testing] :include-macros true])
             [kototama.denial :as denial]))
 
