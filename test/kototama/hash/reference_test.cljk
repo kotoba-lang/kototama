@@ -1,0 +1,61 @@
+(ns kototama.hash.reference-test
+  "`kototama.hash.reference` agrees with `@noble/hashes` sha2/hmac (same
+  import shape as `kagi.digest.reference-test`), plus a NIST/RFC vector each
+  so a match against `@noble/hashes` and a match against the published
+  answer cannot both be coincidentally wrong.
+
+  Run from a west checkout (sibling `org-nist-sha2`):
+    npm run test:reference-hashes"
+  (:require [kotoba.test :refer [deftest is testing run-tests]]
+            [kototama.hash.reference :as reference]
+            ["@noble/hashes/sha2.js" :refer [sha256 sha512]]
+            ["@noble/hashes/hmac.js" :refer [hmac]]))
+
+(defn- bytes= [a b]
+  (and (= (.-length a) (.-length b))
+       (every? #(= (aget a %) (aget b %)) (range (.-length a)))))
+
+(defn- hex->bytes [hex]
+  (js/Uint8Array.from
+   (clj->js (mapv #(js/parseInt (subs hex (* 2 %) (+ 2 (* 2 %))) 16)
+                   (range (/ (count hex) 2))))))
+
+(deftest reference-sha256-matches-noble
+  (testing "empty input"
+    (let [empty (js/Uint8Array. 0)]
+      (is (bytes= (sha256 empty) (reference/sha256-bytes empty)))))
+  (testing "utf8 string"
+    (is (bytes= (sha256 (.encode (js/TextEncoder.) "vault ledger anchor"))
+                (reference/sha256-utf8 "vault ledger anchor"))))
+  (testing "random 128-byte block"
+    (let [bs (js/crypto.getRandomValues (js/Uint8Array. 128))]
+      (is (bytes= (sha256 bs) (reference/sha256-bytes bs)))))
+  (testing "NIST FIPS 180-4 \"abc\" vector"
+    (let [expected (hex->bytes
+                    "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
+          input (.encode (js/TextEncoder.) "abc")]
+      (is (bytes= expected (sha256 input)) "noble itself matches the published vector")
+      (is (bytes= expected (reference/sha256-bytes input))
+          "org-nist-sha2 matches the published vector"))))
+
+(deftest reference-sha512-matches-noble
+  (testing "random 128-byte block"
+    (let [bs (js/crypto.getRandomValues (js/Uint8Array. 128))]
+      (is (bytes= (sha512 bs) (reference/sha512-bytes bs))))))
+
+(deftest reference-hmac-sha256-matches-noble
+  (testing "random key/message"
+    (let [key (js/crypto.getRandomValues (js/Uint8Array. 20))
+          msg (js/crypto.getRandomValues (js/Uint8Array. 50))]
+      (is (bytes= (hmac sha256 key msg) (reference/hmac-sha256-bytes key msg)))))
+  (testing "RFC 4231 test case 1 (key = 0x0b*20, data = \"Hi There\")"
+    (let [key (js/Uint8Array.from (clj->js (vec (repeat 20 0x0b))))
+          msg (.encode (js/TextEncoder.) "Hi There")
+          expected (hex->bytes
+                    "b0344c61d8db38535ca8afceaf0bf12b881dc200c9833da726e9376c2e32cff7")]
+      (is (bytes= expected (hmac sha256 key msg)) "noble itself matches RFC 4231 #1")
+      (is (bytes= expected (reference/hmac-sha256-bytes key msg))
+          "org-nist-sha2 matches RFC 4231 #1"))))
+
+(defn -main [& _]
+  (run-tests 'kototama.hash.reference-test))

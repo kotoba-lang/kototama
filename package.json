@@ -5,7 +5,8 @@
   "scripts": {
     "check:q9-migration": "kbb --backend sci scripts/check-q9-migration-policy.cljk",
     "test:workerd": "bash workerd/verify-e2e.sh",
-    "test:nbb": "kbb --backend sci --classpath \"src:test:$(kbb -Spath -M:test)\" run-tests.cljk"
+    "test:nbb": "kbb --backend sci --classpath \"src:test:$(kbb -Spath -M:test)\" run-tests.cljk",
+    "test:reference-hashes": "kbb --backend sci --classpath \"src:test:../org-nist-sha2/src\" -m kototama.hash.reference-test"
   },
   "devDependencies": {
     "nbb": "1.5.211",
