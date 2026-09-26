@@ -1,0 +1,96 @@
+(ns kototama.hash.reference
+  "First-party equivalents of `@noble/hashes` sha2/hmac subpaths, routed
+  through `sha2.core` / `sha2.sha512` (`kotoba-lang/org-nist-sha2`), for
+  `@noble/hashes` host substitution (ADR-2608260200 / ADR-2608301100,
+  host-provider ladder step 3).
+
+  ## This repo does not currently CALL `@noble/hashes` anywhere
+
+  Unlike `kotoba-lang/kagi` (`kagi.digest`'s `:cljs` branch is a real,
+  loaded-in-production `@noble/hashes/sha2.js` import), a repo-wide grep of
+  every `.cljk` / `.cljc` / `.mjs` / `.js` under version control here turns
+  up zero `require`/import of `@noble/hashes` or any of its subpaths. The
+  `sha256-hex` `actor:host` capability this repo actually ships is:
+
+    - JVM tender (`kototama.tender`, production): `java.security.MessageDigest`.
+    - Browser parity check (`web/verify-actor-host.mjs`): `actor-host.js` and
+      its own vendored `@noble/curves` + `@noble/hashes` copy, fetched at
+      TEST TIME from a pinned commit of `kotoba-lang/wasm-webcomponent` over
+      HTTPS into a tmpdir — never from this repo's own `node_modules`.
+
+  `package.json`'s `\"@noble/hashes\": \"^2.4.0\"` dependency is real (added
+  2026-09-11, commit f8f0fb4, \"declared, not borrowed\" — a prior run had
+  been silently resolving it from an ancestor `node_modules` instead), but
+  nothing in this repo's own source has ever imported it since. This
+  namespace is the first such import: it exists purely as the correctness /
+  CI seam the ladder calls for, so that IF a future browser/Node call site
+  starts consuming `@noble/hashes` directly (instead of JVM
+  `MessageDigest` or the externally-vendored `wasm-webcomponent` copy),
+  first-party parity against `org-nist-sha2` is already proven rather than
+  assumed. It does not change `kototama.tender` or `web/verify-actor-host.mjs`.
+
+  ## Subpaths covered (first-party target exists: `sha2.core` / `sha2.sha512`)
+
+    `@noble/hashes/sha2.js`  sha256, sha224, sha512, sha384
+    `@noble/hashes/hmac.js`  hmac(sha256, ...), hmac(sha512, ...)
+
+  ## Subpaths skipped (no first-party target in THIS wave)
+
+    sha3 / keccak (`@noble/hashes/sha3.js`)   — no `org-nist-sha2` equivalent.
+    ripemd160 (`@noble/hashes/legacy.js`)      — no first-party target at all.
+    blake2b / blake2s                          — target is
+                                                  `kotoba-lang/org-ietf-blake2`,
+                                                  a separate substitution wave
+                                                  (ledger note).
+    sha1                                       — target is `kotoba-lang/hash`,
+                                                  a separate wave.
+    hkdf (`@noble/hashes/hkdf.js`)             — target is
+                                                  `kotoba-lang/crypto`, a
+                                                  separate wave.
+    scrypt / pbkdf2 / argon2                   — argon2 explicitly out of
+                                                  scope per the ledger note;
+                                                  scrypt/pbkdf2 have no
+                                                  assigned target either.
+
+  `u8-vec`/`vec-u8` convert `Uint8Array` (`@noble/hashes`' shape) to/from the
+  plain vector of unsigned ints `sha2.core`/`sha2.sha512` take and return."
+  (:require [sha2.core :as sha2]
+            [sha2.sha512 :as sha512]))
+
+(defn- u8-vec [^js u8] (vec (js/Array.from u8)))
+
+(defn- vec-u8 [v] (js/Uint8Array.from (clj->js v)))
+
+(defn sha256-bytes
+  "bytes (Uint8Array) → 32-byte digest (Uint8Array), via `org-nist-sha2`."
+  [bs]
+  (vec-u8 (sha2/sha256 (u8-vec bs))))
+
+(defn sha256-utf8
+  [s]
+  (sha256-bytes (.encode (js/TextEncoder.) s)))
+
+(defn sha224-bytes
+  "bytes → 28-byte digest, via `org-nist-sha2`."
+  [bs]
+  (vec-u8 (sha2/sha224 (u8-vec bs))))
+
+(defn sha512-bytes
+  "bytes → 64-byte digest, via `org-nist-sha2`'s `sha2.sha512`."
+  [bs]
+  (vec-u8 (sha512/sha512 (u8-vec bs))))
+
+(defn sha384-bytes
+  "bytes → 48-byte digest, via `org-nist-sha2`'s `sha2.sha512`."
+  [bs]
+  (vec-u8 (sha512/sha384 (u8-vec bs))))
+
+(defn hmac-sha256-bytes
+  "HMAC-SHA-256(key, message) → 32 bytes, via `org-nist-sha2`."
+  [key message]
+  (vec-u8 (sha2/hmac-sha256 (u8-vec key) (u8-vec message))))
+
+(defn hmac-sha512-bytes
+  "HMAC-SHA-512(key, message) → 64 bytes, via `org-nist-sha2`'s `sha2.sha512`."
+  [key message]
+  (vec-u8 (sha512/hmac-sha512 (u8-vec key) (u8-vec message))))
