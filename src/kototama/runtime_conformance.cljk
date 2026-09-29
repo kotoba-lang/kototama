@@ -24,7 +24,7 @@
 
    The literals are pinned on purpose: an engine renaming its trap message
    turns this red, and that red is the assertion working (the same shape
-   root CLAUDE.md records for the :spki-pin-mismatch -> :peer-not-pinned
+   root AGENTS.md records for the :spki-pin-mismatch -> :peer-not-pinned
    rename)."
   (:require [kotoba.io :as kio] [clojure.java.shell :as shell]
             [kotoba.lang.text :as str]
