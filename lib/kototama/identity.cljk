@@ -1,7 +1,7 @@
 (ns kototama.identity
   "kototama.identity — self-issued identity for atproto actors + artificial organisms.
 
-  The workspace model (root CLAUDE.md): an actor holds its OWN Ed25519 key → its
+  The workspace model (root AGENTS.md): an actor holds its OWN Ed25519 key → its
   key-derived name IS its graph → it is structurally authorized to self-mint/publish
   (no operator, no token, no owner hand-off). This ns is the KEY-MATERIAL half of that
   model — Ed25519 keygen (JVM/bb; java.security, verified to run under babashka) and the

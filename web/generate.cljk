@@ -1,7 +1,7 @@
 ;; Generates index.html from EDN/Hiccup via kotoba-lang/html + kotoba-lang/css
 ;; (this page's markup/styling as data, not hand-quoted HTML strings) --
 ;; matching the org's `.cljc` runtime priority (kototama > cljs > nbb > jvm,
-;; CLAUDE.md 2026-07-06): this is an nbb (ClojureScript-on-Node) script, not
+;; AGENTS.md 2026-07-06): this is an nbb (ClojureScript-on-Node) script, not
 ;; a JVM one. The output (`index.html`) is still a plain static file with no
 ;; runtime build step for a browser visiting the page -- only *authoring*
 ;; the page goes through cljs now, matching wasm-webcomponent's own

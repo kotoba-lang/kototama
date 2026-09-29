@@ -18,3 +18,11 @@ the accepted decision is `docs/adr/0012-whole-component-kotoba-migration.md`.
   vectors. They must not require `java`, `javac`, `clojure` or `clj`.
 - The JVM/Chicory tender remains an explicit compatibility/diagnostic surface
   only. It cannot authorize cutover, source deletion, soak or deployment.
+
+
+## Claude 向け追記（旧 CLAUDE.md より統合）
+
+Kototama Q9 work moves complete components and must build
+without a JVM through native `kotoba` and Amu `--jvm-free`. Decision-only
+`.cljk` files and JVM-backed acceptance are forbidden; block on missing
+tooling instead of falling back.
