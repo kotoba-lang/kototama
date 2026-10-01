@@ -37,7 +37,7 @@
 (require '] '[kotoba.lang.text :as str])
 
 (def here (__path.dirname *file*))
-(def runtime (str (str here) "/publish.cljs"))
+(def runtime (str (str here) "/publish.cljk"))
 (defn arg [flag] (let [a (vec *command-line-args*) i (.indexOf a flag)] (when (>= i 0) (get a (inc i)))))
 (def live? (some #{"--live"} *command-line-args*))
 (def interval (some-> (arg "--interval") parse-long))
