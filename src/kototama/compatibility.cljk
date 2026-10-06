@@ -5,7 +5,7 @@
 (def section-name "kotoba.compatibility")
 (def supported {:version 1 :compiler "kotoba-compiler/1"
                 :language "kotoba.language/safe-v1"
-                :runtime "kotoba-capability-host-v1"
+                :runtime "kototama-capability-host-v1"
                 :tender-role "kototama/component-tender-v1"
                 :tender-contract "kotoba.capability-host/v1"})
 
@@ -64,7 +64,12 @@
    (let [descriptor (when (or required? (header? bytes)) (inspect bytes))]
      (when (and required? (nil? descriptor)) (reject :missing "Kotoba compatibility metadata is required"))
      (when descriptor
-       (doseq [[field expected] supported]
+       ;; KIR renamed the capability-host identity in #81. Both v1 names
+       ;; describe this same host; browser/WASI identities remain refused.
+       (when-not (#{"kototama-capability-host-v1" "kotoba-capability-host-v1"}
+                  (:runtime descriptor))
+         (reject :mismatch "unsupported Kotoba compatibility runtime"))
+       (doseq [[field expected] (dissoc supported :runtime)]
          (when-not (= expected (get descriptor field))
            (reject :mismatch (str "unsupported Kotoba compatibility " (name field)))))
        (when-not (#{"kotoba.kir/v3" "kotoba.kir/v4"} (:kir descriptor))
