@@ -2,7 +2,7 @@
 
 `kototama` is the Kotoba **virtual-machine contract** — 言霊, the spirit of
 the word when it acts. It defines the deterministic transition from closed
-Lisp data, an IPLD world, bounded Datalog authority and a message to a new
+Lisp data, an IPLD world, a closed admission predicate and a message to a new
 world and receipt. Runtime engines validate, budget, **runtime-link**, and run
 artifacts that [`amu`](https://github.com/kotoba-lang/amu) wove. Kototama does
 **not** own the language, compiler, grant policy, consensus or fleet placement.
@@ -27,8 +27,11 @@ sahai      差配      T6 placement loop (leases/checkpoints/fencing)
 Kototama occupies the architectural role that EVM and FVM occupy in their
 ecosystems, without making one concrete engine or opcode encoding normative.
 Its native instruction form is a closed S-expression; its state is IPLD; its
-authorization plane is bounded Datalog with Biscuit delegation; its outputs
-are content-addressed receipts.
+admission core is a closed predicate written in Kotoba and compiled by amu
+([`src/kototama/admission.kotoba`](src/kototama/admission.kotoba)), over a
+capability-chain grant; Datalog and Biscuit sit outside that core as a query
+library and a boundary adapter (root ADR-2610082200); its outputs are
+content-addressed receipts.
 
 The normative specification is
 [`docs/kototama-virtual-machine.md`](docs/kototama-virtual-machine.md), with a

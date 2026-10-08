@@ -1,0 +1,111 @@
+;; kototama.admission -- the invocation admission core, as pure Kotoba (src/kototama/admission.kotoba).
+;;
+;; root ADR-2610082200 (P2): the call-permission core holds no Datalog and no
+;; Biscuit. It is a closed predicate over six origins, written in Kotoba Form
+;; and compiled by amu, so it runs inside kototama on every qualified target
+;; and has a DefCID like any other definition.
+;;
+;; A capability exists only for the intersection
+;;
+;;   amu static effect  ∩ vm requested intent  ∩ capability-chain grant
+;;   ∩ local policy allow  ∩ runtime availability   (and amu world = runtime world)
+;;
+;; Every origin arrives already resolved by its own owner, as a closed set of
+;; keys -- the predicate does not derive facts, run rules, recurse or reach the
+;; host:
+;;   effect key   "<kind>"                    amu's static effects of the definition
+;;   intent key   "<kind> <resource>"         what the VM was asked to do
+;;   grant key    "<kind> <resource>"         dango's meet over the chain (authority.chain/fold)
+;;   policy key   "<kind> <resource>"         the local policy's allow set
+;;   avail key    "<kind> <resource>"         what the runtime can provide now
+;;
+;; Datalog and Biscuit are lifted out of this core:
+;;   Biscuit  -> an adapter at the Authn boundary; it is transcoded into a
+;;               capability chain before anything here sees it
+;;   Datalog  -> a query library for logic Forms over the datom index, and a
+;;               policy authoring language whose output is the allow set above
+;;
+;; Missing origin denies: an empty set contains nothing. An effect outside the
+;; closed catalog denies even when every origin lists it.
+
+(ns kototama.admission
+  (:export [main pair-key eligible? test-all-origins-admit test-missing-grant-denies
+            test-missing-policy-denies test-unavailable-denies test-world-mismatch-denies
+            test-unknown-effect-denies test-intent-not-requested-denies
+            test-other-resource-denies test-empty-origins-deny]))
+
+(defn pair-key [kind :string resource :string] :string
+  (string-concat (string-concat kind " ") resource))
+
+(defn eligible?
+  [catalog [:set :string]
+   effects [:set :string]
+   definition-world :string
+   intents [:set :string]
+   grants [:set :string]
+   policy [:set :string]
+   runtime-world :string
+   available [:set :string]
+   kind :string
+   resource :string] :bool
+  (let [k (pair-key kind resource)]
+    (and (typed-set-contains [:set :string] catalog kind)
+         (typed-set-contains [:set :string] effects kind)
+         (string=? definition-world runtime-world)
+         (typed-set-contains [:set :string] intents k)
+         (typed-set-contains [:set :string] grants k)
+         (typed-set-contains [:set :string] policy k)
+         (typed-set-contains [:set :string] available k))))
+
+;; --- tests: exported zero-arity test-* return i64 1 on pass -----------------
+
+(def catalog (typed-set-new [:set :string] "http.get-stream" "log.append" "object-store.put-block"))
+(def effects (typed-set-new [:set :string] "http.get-stream" "log.append"))
+(def granted (typed-set-new [:set :string] "http.get-stream https://a.example" "log.append audit"))
+(def none (typed-set-new [:set :string]))
+
+(defn- admit [grants [:set :string] policy [:set :string] available [:set :string]
+              runtime-world :string kind :string resource :string] :bool
+  (eligible? catalog effects "kotoba:app/v0.2" granted grants policy runtime-world available kind resource))
+
+(defn- pass [b :bool] :i64 (if b 1 0))
+
+(defn test-all-origins-admit [] :i64
+  (pass (admit granted granted granted "kotoba:app/v0.2" "http.get-stream" "https://a.example")))
+
+(defn test-missing-grant-denies [] :i64
+  (pass (not (admit none granted granted "kotoba:app/v0.2" "http.get-stream" "https://a.example"))))
+
+(defn test-missing-policy-denies [] :i64
+  (pass (not (admit granted none granted "kotoba:app/v0.2" "http.get-stream" "https://a.example"))))
+
+(defn test-unavailable-denies [] :i64
+  (pass (not (admit granted granted none "kotoba:app/v0.2" "http.get-stream" "https://a.example"))))
+
+(defn test-world-mismatch-denies [] :i64
+  (pass (not (admit granted granted granted "kotoba:app/v0.1" "http.get-stream" "https://a.example"))))
+
+(defn test-unknown-effect-denies [] :i64
+  (let [g (typed-set-new [:set :string] "clock.now -")]
+    (pass (not (eligible? catalog (typed-set-new [:set :string] "clock.now") "w" g g g "w" g "clock.now" "-")))))
+
+(defn test-intent-not-requested-denies [] :i64
+  (pass (not (eligible? catalog effects "w" none granted granted "w" granted "log.append" "audit"))))
+
+(defn test-other-resource-denies [] :i64
+  (pass (not (admit granted granted granted "kotoba:app/v0.2" "http.get-stream" "https://b.example"))))
+
+(defn test-empty-origins-deny [] :i64
+  (pass (not (eligible? none none "w" none none none "w" none "log.append" "audit"))))
+
+;; main: the number of test-* that pass (9 when all do). The browser host
+;; admits a module only with a main export.
+(defn main [] :i64
+  (+ (test-all-origins-admit) (test-missing-grant-denies) (test-missing-policy-denies)
+     (test-unavailable-denies) (test-world-mismatch-denies) (test-unknown-effect-denies)
+     (test-intent-not-requested-denies) (test-other-resource-denies) (test-empty-origins-deny)))
+
+;; Check and run (single file, JVM-free; measured 2026-10-08 on amu a1da8afee):
+;;   kotoba -M check src/kototama/admission.kotoba
+;;   kotoba -M compile src/kototama/admission.kotoba --target wasm32-browser --output admission.wasm
+;; then call main through runtime/browser-host.mjs instantiateKotoba: 9 of 9.

@@ -46,16 +46,23 @@
    :nested-calls :snapshot-and-revert
    :transport :carv2
    :car-is-authority false}
+  ;; root ADR-2610082200 (P2): the admission core is a closed predicate in
+  ;; Kotoba Form, compiled by amu. No Datalog and no Biscuit in the core.
   :logic
-  {:language :bounded-function-free-datalog
-   :facts :closed-n-ary-tuples
-   :rules :range-restricted
+  {:language :closed-s-expression-predicate
+   :source "src/kototama/admission.kotoba"
+   :compiled-by :amu
+   :effects #{}
+   :datalog false
+   :user-rules false
+   :recursion false
    :host-predicates false
    :provenance-required true
    :token-facts-may-impersonate-trusted-origins false}
   :authority
-  {:grant-format :biscuit
-   :biscuit-role :delegated-grant
+  {:grant-format :capability-chain
+   :grant-encoding :ipld-s-expression-blocks
+   :grant-meet :authority-chain-fold
    :allow-decision :local-authorizer-only
    :capability-materialization :successful-five-origin-join
    :raw-bearer-in-car false
@@ -82,7 +89,7 @@
    :actor [:self :caller :address :method :params :value
            :call :static-call :delegate-call :create :emit]
    :state [:root :open :read :write :link :stat :set-state]
-   :logic [:assert-fact :query :authorize]
+   :logic [:authorize]
    :effect [:request-capability :invoke-capability]}}
 
  :values
@@ -101,12 +108,24 @@
   :identity :cid-of-canonical-message
   :nested-call-depth-bounded true}
 
+ ;; root ADR-2610082200: a rule Form (integrity) is called with :validate and
+ ;; holds no capability; a logic Form (coordinator) is called with :invoke.
+ :call-kinds
+ {:invoke {:form :logic-form
+           :capabilities :admitted-by-eligibility}
+  :validate {:form :rule-form
+             :capabilities #{}
+             :effects #{:abort}
+             :inputs [:action :entry :cid-fetched-dependencies :author-chain-prefix]
+             :outcomes [:valid :invalid :unresolved]
+             :unresolved-is-not-invalid true}}
+
  :authority
  {:effective-capability
   [:intersection
    :amu-static-effect
    :vm-requested-intent
-   :biscuit-delegated-grant
+   :capability-chain-delegated-grant
    :local-policy-allow
    :runtime-availability]
  :trusted-origins
@@ -115,16 +134,38 @@
    :grant ["grant:right"]
    :policy ["policy:allows"]
    :runtime ["runtime:world" "runtime:available"]}
-  :eligibility-rule
-  {:head ["kotoba:eligible" ?actor ?kind ?resource]
-   :body [["vm:runs" ?actor ?definition]
-          ["amu:requires" ?definition ?kind]
-          ["amu:world" ?definition ?world]
-          ["vm:requests" ?actor ?kind ?resource]
-          ["grant:right" ?actor ?kind ?resource]
-          ["policy:allows" ?actor ?kind ?resource]
-          ["runtime:world" ?world]
-          ["runtime:available" ?kind ?resource]]}
+  ;; Each origin is resolved by its owner into a closed set of keys before
+  ;; admission; the core only intersects them. grant:right is the meet over the
+  ;; capability chain (kotoba-lang/authority authority.chain/fold, dango blocks).
+  :eligibility
+  {:source "src/kototama/admission.kotoba"
+   :entry eligible?
+   :language :kotoba-form
+   :compiled-by :amu
+   :effects #{}
+   :all-of [["catalog" ?kind]
+            ["amu:requires" ?definition ?kind]
+            ["amu:world" ?definition ?world]
+            ["vm:requests" ?actor ?kind ?resource]
+            ["grant:right" ?actor ?kind ?resource]
+            ["policy:allows" ?actor ?kind ?resource]
+            ["runtime:world" ?world]
+            ["runtime:available" ?kind ?resource]]
+   :evaluation :conjunction-of-closed-set-membership
+   ;; payload-v2 DefCID of eligible? when this spec adopted it (amu a1da8afee,
+   ;; `kotoba -M check`). A change to the predicate changes this CID.
+   :definition-cid-at-adoption "bafyreieoadznepkgmaojyzo6q24pvdv5golsy56pvxuzzbw5h4xwurjvla"}
+  ;; Lifted out of the core (root ADR-2610082200). None of these may decide
+  ;; admission; each only produces one of the origin sets above or a chain.
+  :lifted
+  {:biscuit {:where :authn-boundary-adapter
+             :transcodes-to :capability-chain}
+   :ucan {:where :authn-boundary-adapter
+          :transcodes-to :capability-chain}
+   :datalog {:where [:logic-form-query-library
+                     :policy-authoring-language]
+             :output :policy-allow-set
+             :rule-form-use :bounded-over-cid-fixed-facts-only}}
   :missing-origin :deny
   :unknown-effect :deny
   :revocation :runtime-check
@@ -155,7 +196,7 @@
              :authority-decision]
   :authority-decision [:manifest-cid :grant-ids :policy-id :world :epoch]
   :optional [:return :revert-data :parent-receipt :child-receipts]
-  :forbidden [:raw-biscuit :private-key :ambient-host-handle]
+  :forbidden [:raw-bearer-token :raw-biscuit :private-key :ambient-host-handle]
   :failed-attempts-included true}
 
  :profiles
@@ -163,7 +204,7 @@
   {:purpose :native-kotoba-execution
    :requires [:closed-s-expression
               :ipld-state
-              :bounded-datalog
+              :closed-admission-predicate
               :five-origin-authority
               :deterministic-receipt]
    :does-not-require [:wasm :jvm :evm-bytecode :filecoin-protocol]}

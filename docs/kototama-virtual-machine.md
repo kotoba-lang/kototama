@@ -4,7 +4,7 @@ Kototama is the virtual-machine contract of the Kotoba world. It occupies the
 same architectural position that the EVM occupies for Ethereum and the FVM
 occupies for Filecoin, but it is not defined by one opcode table or one engine.
 It is a deterministic transition relation over closed Lisp data, IPLD state,
-bounded Datalog authority, and content-addressed receipts.
+an admission predicate written in Kotoba Form, and content-addressed receipts.
 
 The machine-readable authority for this document is
 [`spec/kototama-vm-v1.edn`](../spec/kototama-vm-v1.edn). The keywords MUST,
@@ -27,8 +27,9 @@ definition merely because it shipped first.
 
 Kototama does not define consensus, block production, fleet placement, grant
 policy or compilation. Consensus decides which messages and roots are
-committed. Amu proves what a program can attempt. Biscuit carries delegated
-rights. The local authorizer decides whether those rights may be exercised.
+committed. Amu proves what a program can attempt. A capability chain carries
+delegated rights. The local authorizer decides whether those rights may be
+exercised.
 Kototama performs the resulting transition and records it.
 
 ## The four planes
@@ -64,49 +65,62 @@ that snapshot without erasing earlier caller writes.
 CARv2 packages and transports blocks. Possession of a CAR is never authority
 to execute the blocks it contains.
 
-### Logic plane: Datalog as admission and meaning
+### Logic plane: a closed predicate in Kotoba Form
 
-Datalog is not an alternative mutable runtime. It is the bounded relational
-plane through which compiler evidence, runtime intent, delegated grants, local
-policy and current availability meet. Facts are inert, function-free tuples;
-rules are range-restricted and evaluated under explicit budgets.
+The admission core is written in Kotoba Form and compiled by amu
+([`src/kototama/admission.kotoba`](../src/kototama/admission.kotoba), entry
+`eligible?`). It holds no Datalog engine and reads no Biscuit (root
+ADR-2610082200). It has no effects, no user rules and no recursion, and it has
+a DefCID like any other definition, so every qualified target runs the same
+predicate.
 
 A concrete capability exists only for the intersection:
 
 ```text
 Amu static effect
   ∩ VM requested intent
-  ∩ Biscuit delegated grant
+  ∩ capability-chain delegated grant
   ∩ local policy allow
   ∩ runtime availability
   = invocation-local capability
 ```
 
-Each fact retains its origin. A Biscuit token may supply `grant:*` facts but
-MUST NOT impersonate `amu:*`, `vm:*`, `policy:*` or `runtime:*`. Biscuit is a
-delegation envelope, not the final authority and not a substitute compiler.
-Only the local authorizer may derive `allow`.
-
-The v1 eligibility relation is a closed list too:
+Each origin is resolved by its own owner into a closed set of keys before
+admission, and the core only tests membership in all of them:
 
 ```clojure
-(["vm:runs" actor definition]
- ["amu:requires" definition effect]
- ["amu:world" definition world]
- ["vm:requests" actor effect resource]
- ["grant:right" actor effect resource]
- ["policy:allows" actor effect resource]
- ["runtime:world" world]
- ["runtime:available" effect resource])
-=> ["kotoba:eligible" actor effect resource]
+(and (catalog kind)                       ; the closed effect catalog
+     (amu:requires definition kind)       ; amu's static effects
+     (= (amu:world definition) runtime:world)
+     (vm:requests actor kind resource)
+     (grant:right actor kind resource)    ; meet over the capability chain
+     (policy:allows actor kind resource)
+     (runtime:available kind resource))
 ```
 
-This is data, not Clojure host code. Implementations may index or compile the
-relation, but they MUST preserve its bounded semantics and provenance.
+`grant:right` is the effective authority of a capability chain: IPLD blocks
+whose bodies are S-expressions, folded as a meet by `kotoba-lang/authority`
+(`dango`, root ADR-2609242100). A chain may supply `grant:right` only; it
+MUST NOT impersonate `amu:*`, `vm:*`, `policy:*` or `runtime:*`. A missing
+origin denies, because an empty set contains nothing. Only the local
+authorizer may decide `allow`.
 
-The capability produced by a successful join is unforgeable,
-invocation-local and non-serializable. Raw Biscuit bearers, private keys and
-host handles MUST NOT appear in a CAR or receipt.
+**Lifted out of the core.** Biscuit and UCAN are adapters at the Authn
+boundary: a token in either format is transcoded into a capability chain
+before anything here sees it. Datalog is a query library for logic Forms over
+the datom index, and a policy authoring language whose output is the
+`policy:allows` set. A rule Form may evaluate bounded Datalog only over facts
+fixed by CID. None of them may decide admission.
+
+**Call kinds.** A logic Form is called with `:invoke` and holds the
+capabilities admitted above. A rule Form is called with `:validate`, holds no
+capability, may only abort, reads only the action, its entry, dependencies
+fetched by CID and the author's chain prefix, and answers `valid`, `invalid`
+or `unresolved`. Unresolved (a CID not yet fetched) is not invalid.
+
+The capability produced by a successful admission is unforgeable,
+invocation-local and non-serializable. Raw bearer tokens (including Biscuit),
+private keys and host handles MUST NOT appear in a CAR or receipt.
 
 ### Evidence plane: receipts as values
 
@@ -143,8 +157,8 @@ external protocol version and evidence suite.
 
 ### `core/v1`
 
-The native Kotoba profile executes closed S-expressions over IPLD state with
-bounded Datalog authorization and deterministic receipts. It requires no JVM,
+The native Kotoba profile executes closed S-expressions over IPLD state with a
+closed admission predicate in Kotoba Form and deterministic receipts. It requires no JVM,
 Wasm engine, EVM bytecode or Filecoin protocol dependency.
 
 ### `fvm-actor/v1`
