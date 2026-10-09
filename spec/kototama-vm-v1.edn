@@ -152,9 +152,28 @@
             ["runtime:world" ?world]
             ["runtime:available" ?kind ?resource]]
    :evaluation :conjunction-of-closed-set-membership
-   ;; payload-v2 DefCID of eligible? when this spec adopted it (amu a1da8afee,
-   ;; `kotoba -M check`). A change to the predicate changes this CID.
-   :definition-cid-at-adoption "bafyreieoadznepkgmaojyzo6q24pvdv5golsy56pvxuzzbw5h4xwurjvla"}
+   ;; payload-v2 DefCID of eligible?, measured with the module linked against
+   ;; its dependencies (`kotoba -M check --source-path`, amu a1da8afee +
+   ;; kotoba-lang/amu#1253). The same source checked as a single file answered
+   ;; bafyreieoadznepkgmaojyzo6q24pvdv5golsy56pvxuzzbw5h4xwurjvla on 2026-10-09:
+   ;; the two modes disagree, which is an amu question, not a change here. Since
+   ;; admission.kotoba now requires authority.*, only the linked mode applies.
+   :definition-cid-at-adoption "bafyreif5rsipgosiqz24l6y3nnmjqua2mhzd3bhkr4myb5txkxaqkoehzu"
+   ;; admit: the grant origin resolved from the presented delegation chain by
+   ;; authority.delegation/authorize (kotoba-lang/authority, pure Kotoba), the
+   ;; cap mapped to a scope by dango.chain/cap->scope's rule
+   ;; ("ns/name" + "scheme://path" -> "ns://name/scheme/path").
+   :admit {:entry admit
+           :grant-origin :authority.delegation/authorize
+           :cap-scope :dango.chain/cap->scope
+           :order [:catalog :amu-effect :world :vm-intent :cap-scope :chain :policy :runtime]
+           :reasons {1 :admitted
+                     2 :escalation-attempted 3 :empty-chain 4 :expired-or-no-trusted-time
+                     5 :wrong-holder 6 :out-of-scope 7 :malformed-chain
+                     10 :not-in-catalog 11 :effect-not-declared 12 :world-mismatch
+                     13 :not-requested 14 :policy-denies 15 :unavailable
+                     16 :cap-not-a-scope}
+           :definition-cid-at-adoption "bafyreihu2ow6mzc4bdan422sojcvg5mfdf5pd4juvc43unvaoy2ieos7ca"}}
   ;; Lifted out of the core (root ADR-2610082200). None of these may decide
   ;; admission; each only produces one of the origin sets above or a chain.
   :lifted
