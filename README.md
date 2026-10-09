@@ -17,10 +17,19 @@ kotoba     言葉      language
 amu        編む      compiler — project link, one closed cloth
 abi        経        WIT / admission contract (no implementation)
 kototama   言霊      VM contract — reduction, state, authority, receipt
-aiueos     あいうえお  authority (decides grants; supplies named providers)
-murakumo   叢雲      cluster control plane (places and observes, never grants)
+grant                who may do what, decided as pure data (never executes)
+aiueos     あいうえお  operating system — enforces grant's answer; supplies named providers
 sahai      差配      T6 placement loop (leases/checkpoints/fencing)
+murakumo   叢雲      inference node network and its own fleet control plane (never grants)
+hata       機        proposed conductor: runs cells and calls kototama's hosts (ADR-2610082200)
 ```
+
+Grant decisions left aiueos for `kotoba-lang/grant` on 2026-08-21 (root
+ADR-2608219500): grant answers, aiueos enforces. The reusable T6 placement
+library is `sahai`; murakumo operates an inference fleet with its own control
+plane (root ADR-2610071730) and is not the placement owner for every Kotoba
+workload. The hosts (宿) below are engines a conductor calls per cell; root
+ADR-2610082200 proposes that conductor as `hata` (機) and keeps the two apart.
 
 ## Kototama as the Kotoba VM
 
