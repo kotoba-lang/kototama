@@ -105,6 +105,18 @@ MUST NOT impersonate `amu:*`, `vm:*`, `policy:*` or `runtime:*`. A missing
 origin denies, because an empty set contains nothing. Only the local
 authorizer may decide `allow`.
 
+**The grant origin from a chain.** `eligible?` takes `grant:right` as a set
+already resolved. `admit` resolves it from the presented delegation chain with
+`authority.delegation/authorize` (kotoba-lang/authority, pure Kotoba): the
+cap `[kind resource]` becomes a scope by `dango.chain/cap->scope`'s rule
+(`"ns/name"` and `"scheme://path"` give `"ns://name/scheme/path"`), and the
+request is covered when every link of the chain covers that scope, the chain
+is live at `now`, and the holder is the leaf's. `admit` answers a reason code
+so a receipt can name the origin that refused: 1 admitted; 2–7 the chain's own
+reason; 10–16 the catalog, the amu effect, the world, the VM intent, the
+policy, the runtime, or a cap that is not a scope. Static origins are checked
+before the chain, the chain before policy and availability.
+
 **Lifted out of the core.** Biscuit and UCAN are adapters at the Authn
 boundary: a token in either format is transcoded into a capability chain
 before anything here sees it. Datalog is a query library for logic Forms over

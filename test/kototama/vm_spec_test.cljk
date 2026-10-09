@@ -62,6 +62,19 @@
   (is (some #{:closed-admission-predicate} (get-in spec [:profiles :core/v1 :requires])))
   (is (not (some #{:bounded-datalog} (get-in spec [:profiles :core/v1 :requires])))))
 
+(deftest admit-resolves-the-grant-origin-from-the-chain
+  ;; root ADR-2610082200: the grant origin comes from the presented chain via
+  ;; authority.delegation, and every refusal names its origin.
+  (let [admit (get-in spec [:authority :eligibility :admit])
+        src (-> (get-in spec [:authority :eligibility :source]) io/file slurp)]
+    (is (= 'admit (:entry admit)))
+    (is (= :authority.delegation/authorize (:grant-origin admit)))
+    (is (= [:catalog :amu-effect :world :vm-intent :cap-scope :chain :policy :runtime] (:order admit)))
+    (is (= :admitted (get-in admit [:reasons 1])))
+    (is (= 14 (count (:reasons admit))))
+    (is (re-find #"\(defn admit" src))
+    (is (re-find #"\[authority\.delegation :as del\]" src))))
+
 (deftest validate-calls-hold-no-capability
   (is (= #{} (get-in spec [:call-kinds :validate :capabilities])))
   (is (= #{:abort} (get-in spec [:call-kinds :validate :effects])))
