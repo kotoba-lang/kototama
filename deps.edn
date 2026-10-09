@@ -37,7 +37,12 @@
         ;; kotoba.lang.text, not clojure.string. Pinned as an explicit floor:
         ;; tools.deps takes the NEWEST sha it is shown, so without a floor here
         ;; this repo silently rides whatever a sibling happens to name.
-        io.github.kotoba-lang/text {:git/sha "73bdb13ae7a3d004b44bca08be03a3191157a38f"}
+        ;; 3e99104 adds kotoba.lang.bounded-text, which src/kototama/admission.kotoba
+        ;; requires (directly and through authority.lattice). Descendant of 73bdb13.
+        io.github.kotoba-lang/text {:git/sha "3e99104d80a23019b722ab0f3aae32141a478631"}
+        ;; authority.lattice and authority.delegation: the pure Kotoba spine the
+        ;; admission core's admit calls (kotoba-lang/authority#1, merged).
+        io.github.kotoba-lang/authority {:git/sha "79138d666aaf4aaad1ef7fbb3f5fbdaf27271c3a"}
        com.dylibso.chicory/wasm     {:mvn/version "1.4.0"}  ; same pin as kotoba-lang/kotoba
         com.dylibso.chicory/runtime {:mvn/version "1.4.0"}
         ;; Bounded, hardened EDN reader replaces ad-hoc `clojure.edn`
