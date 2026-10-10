@@ -1,0 +1,3 @@
+{:execution.v2/version 1 :owner "kotoba-lang/kototama"
+ :v1-unchanged true :default-cutover false :q9-qualification :not-claimed
+ :entrypoint kototama.execution-v2 :roles [:authority :executor] :ledger kototama.execution-ledger/open-ledger! :durability [:atomic-lock :fsync-file :rename :fsync-directory] :one-shot [:intent :invocation] :async-run :requires-bounded-task-host :native-effects :deny-until-v2-provider-wiring}

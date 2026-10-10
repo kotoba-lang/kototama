@@ -6,6 +6,10 @@
  ;; namespace here needing real deps -- kototama.contract and lib/* stay
  ;; zero-dep/portable.
  :deps {
+        ;; Canonical blocks and Ed25519 verification; no compiler driver imported.
+        io.github.kotoba-lang/artifact {:git/url "https://github.com/kotoba-lang/artifact.git" :git/sha "70afa5725c244fb65f530b482c4ce7bb765c264d"}
+        io.github.kotoba-lang/kotoba-verifier {:git/url "https://github.com/kotoba-lang/kotoba-verifier.git" :git/sha "bdcc12c8340fa52d470353a662b6f87da36b2761"}
+
         ;; kotoba.test (clojure.test-compatible surface), not clojure.test --
         ;; scripts/migrate-clojure-test-to-kotoba-test.cljk. Explicit floor.
         io.github.kotoba-lang/test {:git/url "https://github.com/kotoba-lang/test.git"
@@ -77,14 +81,14 @@
                                         :git/sha "f409dbade106df076cefe640781b12db558f4135"}
         io.github.kotoba-lang/kotoba-core-contracts
         {:git/url "https://github.com/kotoba-lang/kotoba-core-contracts.git"
-         :git/sha "7d6a1183134fac7e8e2427f87d4250422b330563"}
+         :git/sha "00cfa8e29aaa3408e6594c6a55fd46867acc8bfd"}
         io.github.kotoba-lang/abi {:git/url "https://github.com/kotoba-lang/abi.git"
-                                   :git/sha "4dd0b7b9898cec5432bbe60c2904c1546e5f524a"}
+                                   :git/sha "4e67b6fabc9e8584cb127fdb71b3fc47e2eadc59"}
         ;; Component admission verifies identity CIDs structurally before
         ;; linking; a leading `b` is not evidence of content addressing.
         io.github.kotoba-lang/io-multiformats
         {:git/url "https://github.com/kotoba-lang/io-multiformats.git"
-         :git/sha "310724803db65840f00d2d98d7887f2b6a512bd3"}
+         :git/sha "a6ee141708207e990f4268b53a22a85c06b1f69a"}
         ;; kototama.aiueos-adapter calls grant.cli/command-result directly
         ;; (in-process, not the bb-decide subprocess -- see the adapter's
         ;; namespace docstring for why) to translate a REAL policy decision
@@ -103,7 +107,7 @@
         ;; instead, deliberately and with the suite run.
         io.github.kotoba-lang/grant
         {:git/url "https://github.com/kotoba-lang/grant.git"
-         :git/sha "557142a5592a08dac274c9b4a5c83cc509ffa103"}
+         :git/sha "e3e00f7dd5149aa55d90797b4221c4466a0e4720"}
         ;; The EVM plane. `kototama.evm-tender` discharges the tender role
         ;; over EVM bytecode the way `kototama.tender` does over Wasm;
         ;; `:evm/v1` has been a profile in spec/kototama-vm-v1.edn since it
@@ -111,7 +115,7 @@
         ;; means something has to discharge it.
         io.github.kotoba-lang/kotoba-vm
         {:git/url "https://github.com/kotoba-lang/kotoba-vm.git"
-         :git/sha "1412270b84b23882429b4614381d2f5a1b24f7c3"}}
+         :git/sha "19666ed9af6db5b51dbab2e7bd89999c18291ee6"}}
  :aliases
  {:cli  {:main-opts ["-m" "kototama.cli"]}
   :authority-daemon {:main-opts ["-m" "kototama.component-authority-daemon"]}

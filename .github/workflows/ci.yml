@@ -128,3 +128,27 @@ jobs:
             sleep 1
           done
           echo "$result" | grep 'PASS:42,digest-rejected,timeout-terminated'
+
+  execution-v2:
+    name: Authenticated v2 admission and durable lease consumption
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: kotoba-lang/setup-kbb@a4586e48c72c69229ff1237a1246de63583b607d
+      - run: npm ci
+      - name: Resolve declared owner dependencies and run the Node host gate
+        run: >-
+          kbb --backend sci --config scripts/execution-v2-nbb.edn
+          --classpath "src:test:$(kbb -Spath)" scripts/test-execution-v2.cljk
+      - name: Install pinned Component mechanisms
+        run: |
+          curl -fsSLo wasm-tools.tar.gz https://github.com/bytecodealliance/wasm-tools/releases/download/v1.243.0/wasm-tools-1.243.0-x86_64-linux.tar.gz
+          tar xzf wasm-tools.tar.gz
+          curl -fsSLo wasmtime.tar.xz https://github.com/bytecodealliance/wasmtime/releases/download/v42.0.1/wasmtime-v42.0.1-x86_64-linux.tar.xz
+          tar xJf wasmtime.tar.xz
+      - name: Link a real Component through explicit v2 admission with ambient WASI disabled
+        run: >-
+          kbb --backend sci --config scripts/execution-v2-nbb.edn
+          --classpath "src:test:$(kbb -Spath)" scripts/test-component-v2.cljk
+          "$PWD/wasmtime-v42.0.1-x86_64-linux/wasmtime"
+          "$PWD/wasm-tools-1.243.0-x86_64-linux/wasm-tools"
