@@ -2,6 +2,8 @@
   "Fail-closed admission for compiler-produced WIT/Component Model worlds."
   (:require [kotoba.bytes :as kbytes] [kotoba.abi.component :as abi]
             [kotoba.core.execution :as execution]
+            [kotoba.artifact.execution :as blocks]
+            [kototama.execution-v2 :as v2]
             [multiformats.core :as mf]))
 
 (defn- reject [code message]
@@ -180,3 +182,41 @@
                :budgets (:budgets world)
                :identity (:identity world)
                :execution-identity execution-identity}))))
+
+
+(defn admit-and-link-v2!
+  "Explicit v2 Component boundary, retaining the v1 arities above. Verify the
+  actual Component bytes and derived WIT world before v2 admission or linking.
+  The launcher must supply independently measured runtime inspection and a
+  durable ledger; linker receives only scoped provider calls and world limits."
+  [world host packet component-bytes linker]
+  (validate-world! world)
+  (when-not (fn? linker) (reject :linker "v2 linker required"))
+  (let [component-cid (str (mf/cidv1-raw component-bytes))
+        wit-cid (str (world-wit-cid world))
+        binding (blocks/verify-block :binding (:binding packet))
+        intent (blocks/verify-block :intent (:intent packet))
+        artifact-cid (:cid (blocks/block :artifact-envelope
+                             {:format :kotoba.component-execution-artifact/v2
+                              :component-cid component-cid :world world}))
+        interface-cid (:cid (blocks/block :interface
+                              {:format :kotoba.component-interface/v2
+                               :imports (:imports world) :exports (:exports world)
+                               :wit-world-cid wit-cid}))]
+    (when-not (and (= artifact-cid (:artifact-cid binding))
+                   (= interface-cid (:interface-cid binding))
+                   (= (get-in world [:identity :package-lock-cid]) (:package-lock-cid intent))
+                   (= component-cid (get-in world [:identity :component-cid]))
+                   (= (:target world) (:target binding)) (= (:profile world) (:profile binding))
+                   (= {:component-cid component-cid :wit-world-cid wit-cid :wasi-version (:wasi-version world)}
+                      (:layout binding)))
+      (reject :identity "v2 Component binding mismatch"))
+    (let [admission (v2/admit! host packet)]
+      (try
+        {:linked (linker {:component-bytes component-bytes :imports (:imports world)
+                          :abilities (:abilities world) :runtime-bindings (:runtime-bindings world)
+                          :budgets (:budgets world) :identity (:identity world)
+                          :execution-intent (:intent admission) :call! (:call! admission)})
+         :admission admission}
+        (catch #?(:clj Exception :cljs :default) error
+          ((:close! admission)) (throw error))))))
