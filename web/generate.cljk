@@ -93,6 +93,10 @@
     stylesheet]
    [:body
     [:h1 "kototama browser WASM AOT demo"]
+    [:p "Kototama is the Kotoba Lisp VM contract. This page demonstrates a retained browser-host surface, not a complete VM or an AiueOS machine."]
+    [:p "AiueOS is the OS for a modern Kotoba Lisp machine in development; Amu compiles code and grant decides permission. "
+     [:a {:href "https://github.com/kotoba-lang/kotoba-lang/blob/main/docs/stack-architecture.md"}
+      "See the stack architecture and dependency diagrams."]]
     [:p "All three elements below are defined by "
      [:a {:href "https://github.com/kotoba-lang/wasm-webcomponent"} [:code "kotoba-lang/wasm-webcomponent"]]
      " (" [:code "KotobaWasmElement"] " + " [:code "kgraph.js"] " + " [:code "actor-host.js"]

@@ -11,24 +11,39 @@ topology and the full cross-repo cleanup list live there.
 
 ## Position in the stack topology
 
-```
-kotoba    = language + datom model
-amu       = compiler（編む; project link）
-kototama  = VM contract（言霊; reduction + state + authority + receipt）
-aiueos    = capability OS / broker
-kotobase  = datom database           (depends on: kotoba, never the reverse)
+Updated 2026-10-10 against fetched main manifests. The
+[stack architecture](https://github.com/kotoba-lang/kotoba-lang/blob/main/docs/stack-architecture.md) and
+[composition contract](https://github.com/kotoba-lang/kotoba-lang/blob/main/lang/stack-architecture.edn) distinguish responsibility, library,
+artifact and runtime/service graphs.
+
+```text
+kotoba-lang = language contracts (T1)
+kotoba      = CLI, libraries and Codebase
+amu         = compiler and project linker (T2)
+abi         = shared execution contract (T0)
+kototama    = Lisp VM contract; engines implement it (T3)
+grant       = pure permission decisions (T4); authority owns scope/delegation
+aiueos      = operating system (T5); enforces grant's answer
+sahai       = reusable placement (T6); murakumo operates its own inference fleet
+kotobase    = database and persistent data plane
 ```
 
-Hosts of kototama (not sibling products): `wasm-webcomponent` (browser),
-`kototama-native` (native ELF), `kototama-component` (Component engine).
-The Solo5 word *tender* is a role, not a product name (ADR-2608139980).
+AiueOS is the OS for a modern Kotoba Lisp machine in development; Kototama is
+its Lisp VM contract, also implemented by hosted engines. These are
+architectural roles, not completion/qualification claims.
 
-**The `kototama → aiueos` deps.edn edge is deliberate and load-bearing:**
-"aiueos decides, kototama enforces" (ADR-2607022700) is expressed as a real
-dependency direction — the tender imports the decision plane
-(`kototama.aiueos_adapter` → `aiueos.cli/command-result`) and never computes a
-grant itself. aiueos MUST NOT acquire a dependency on kototama; enforcement
-composes downward only.
+Library arrows mean consumer → dependency: Kotoba imports Amu and Kototama;
+Kototama imports grant and abi; AiueOS imports grant; grant imports authority
+and abi and does not import the OS. Amu imports contracts and multiple
+backends. Alias-only dependencies must be labelled separately.
+The booted kernel consumes verified compiler artifacts rather than linking
+the compiler. Host build/conformance aliases may import compiler libraries.
+The database/language boundary describes ownership, not a claim that every
+database runtime directly imports the Kotoba CLI.
+
+The July 2026 topology snapshot was corrected on 2026-10-10 after the grant
+split and VM-contract separation; its old dependency counts and “AiueOS
+decides” wording are not current invariants.
 
 ## Decision 1 — new `actor:host` imports require 2-runtime parity in the same wave
 
@@ -56,14 +71,15 @@ down under this rule, not grandfathered forever.
 
 Today the capability vocabulary exists in four hand-maintained forms: the
 compiler's closed host-import table, `kototama.contract`'s `HostCaps`,
-aiueos's kernel-capability names, and the adapter translation between them.
+grant's decision vocabulary, aiueos's kernel handles, and their adapter translation.
 `kototama.aiueos_adapter` covers only the 3 imports that have aiueos-kernel
 counterparts (`log-write`/`clock-monotonic`/`random-bytes`); the rest take
-caller-supplied `HostCaps`, which is a hole in "aiueos decides".
+caller-supplied `HostCaps`. This is the historical coverage finding; current
+coverage must be measured against grant decisions and the selected host profile.
 
 **Decision:** adopt the canonical typed capability-descriptor schema
 (application-profile completion-gate item 1) as the single source; generate
-`HostCaps` field-by-field from it, and extend the aiueos grant vocabulary so
+`HostCaps` field-by-field from it, and extend the grant decision vocabulary so
 every `actor:host` import has a decidable counterpart. Hand-written adapter
 coverage gaps become schema-coverage gaps, which are mechanically listable.
 

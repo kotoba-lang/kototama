@@ -14,6 +14,14 @@
         :filecoin-network]
   :implementation-independent true}
 
+ :stack-composition
+ {:contract "https://github.com/kotoba-lang/kotoba-lang/blob/main/lang/stack-architecture.edn"
+  :presentation-role :lisp-vm-contract
+  :system-presentation-owner :aiueos
+  :vm-requires-aiueos false
+  :permission-decision-owner :grant
+  :readiness-claim :none}
+
  :transition
  {:notation "K |- <program,message,state,authority,budget> => <outcome,state',events,receipt>"
   :inputs [:program :message :state :authority :budget]
