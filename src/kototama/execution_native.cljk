@@ -47,8 +47,12 @@
            (when-not (and (= [] (get-in artifact [:program :signature :params]))
                           (= :i64 (get-in artifact [:program :signature :result])))
              (reject! :pure-zeroarg-i64-required))
-           (when-not (and (= :on (get-in artifact [:limits :fuel-metering]))
-                          (pos-int? (get-in artifact [:limits :fuel])))
+           (when-not (and (contains? #{nil :on} (get-in artifact [:limits :fuel-metering]))
+                          (let [fuel (get-in artifact [:limits :fuel])]
+                            #?(:clj (and (integer? fuel) (pos? fuel))
+                               :cljs (or (pos-int? fuel)
+                                         (and (some? fuel) (= js/BigInt (.-constructor fuel))
+                                              (< (js/BigInt 0) fuel))))))
              (reject! :explicit-native-fuel-required))
            (when (seq (:effects artifact)) (reject! :native-effect-provider-not-v2-wired))
            (when-not (and (= :native (:family profile))
@@ -57,7 +61,7 @@
                           (or (= :portable (get-in profile [:layout :os]))
                               (= (get-in profile [:layout :os]) (get-in artifact [:target-profile :os])))
                           (= :supervisor (:mode (:layout profile)))
-                          (contains? (:context-versions profile) (get-in artifact [:context-abi :version])))
+                          (contains? (:context-versions profile) (canonical-value (get-in artifact [:context-abi :version]))))
              (reject! :unsupported-native-profile))
            {:target target-id :profile :sync
             :artifact-cid (:cid (blocks/block :artifact-envelope
@@ -65,7 +69,7 @@
                             :sealed-bytes (artifact/canonical-bytes envelope)}))
             :interface-cid (:cid (blocks/block :interface interface))
             :runtime-identity (:cid (blocks/block :runtime (canonical-value runtime)))
-            :layout (assoc (:layout profile) :context-version (get-in artifact [:context-abi :version]))})
+            :layout (assoc (:layout profile) :context-version (canonical-value (get-in artifact [:context-abi :version])))})
          (finally ((:close! plugin) session)))))
    :execute!
    (fn [{:keys [artifact runtime input]}]
