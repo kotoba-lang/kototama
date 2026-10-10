@@ -10,6 +10,15 @@ The machine-readable authority for this document is
 [`spec/kototama-vm-v1.edn`](../spec/kototama-vm-v1.edn). The keywords MUST,
 MUST NOT, REQUIRED, SHOULD and MAY are normative.
 
+## Stack composition and presentation
+
+Kototama is the **Kotoba Lisp VM contract**. AiueOS is the OS for a modern
+Kotoba Lisp machine in development. Hosted engines can implement this VM
+without AiueOS. Grant owns permission decisions; engines and OS mechanisms
+enforce them. This terminology changes no transition or qualification rule.
+See the [composition spec](https://github.com/kotoba-lang/kotoba-lang/blob/main/lang/stack-architecture.edn) and
+[responsibility/dependency diagrams](https://github.com/kotoba-lang/kotoba-lang/blob/main/docs/stack-architecture.md).
+
 ## Definition
 
 Given a program, message, world state, authority context and resource budget,
