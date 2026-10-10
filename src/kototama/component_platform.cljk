@@ -1,6 +1,7 @@
 (ns kototama.component-platform
   "Fail-closed admission for compiler-produced WIT/Component Model worlds."
-  (:require [kotoba.bytes :as kbytes] [kotoba.abi.contract :as abi]
+  (:require [kotoba.bytes :as kbytes] [kotoba.abi.component :as abi]
+            [kotoba.core.execution :as execution]
             [multiformats.core :as mf]))
 
 (defn- reject [code message]
@@ -91,7 +92,7 @@
                  (= imports (set (keys abilities))))
     (reject :ability-mismatch "every declared import requires one exact scoped ability"))
   (doseq [[import ability] abilities]
-    (when-not (and (keyword? import) (abi/valid-ability? ability))
+    (when-not (and (keyword? import) (execution/valid-ability? ability))
       (reject :invalid-ability "component ability is not a complete bounded descriptor"))))
 
 (defn- validate-runtime-bindings! [imports bindings]

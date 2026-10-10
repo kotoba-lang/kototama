@@ -5,7 +5,8 @@
    compatibility, and workerd are engines/adapters, not competing policy
    implementations."
   (:require [kotoba.lang.coll :as set]
-            [kotoba.abi.contract :as abi]))
+            [kotoba.abi.component :as abi]
+            [kotoba.core.execution :as execution]))
 
 (def supported-runtimes
   #{:wasmtime-component :jco-component :chicory-core-compat :workerd-core})
@@ -40,7 +41,7 @@
     ;; independently enforce.  A capability name alone is not authority.
     (when-not (and (map? abilities)
                    (= declared (set (keys abilities)))
-                   (every? abi/valid-ability? (vals abilities)))
+                   (every? execution/valid-ability? (vals abilities)))
       (throw (ex-info "Component providers require complete scoped abilities"
                       {:phase :component-provider :declared declared})))
     (when-not (every? provider-invoke (vals providers))

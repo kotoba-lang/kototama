@@ -77,9 +77,9 @@
                                         :git/sha "f409dbade106df076cefe640781b12db558f4135"}
         io.github.kotoba-lang/kotoba-core-contracts
         {:git/url "https://github.com/kotoba-lang/kotoba-core-contracts.git"
-         :git/sha "2e615d17406ef4b6311401167294becceb5af2a1"}
+         :git/sha "7d6a1183134fac7e8e2427f87d4250422b330563"}
         io.github.kotoba-lang/abi {:git/url "https://github.com/kotoba-lang/abi.git"
-                                   :git/sha "32ee84b2efc92478c846629c8d8319280eed506c"}
+                                   :git/sha "4dd0b7b9898cec5432bbe60c2904c1546e5f524a"}
         ;; Component admission verifies identity CIDs structurally before
         ;; linking; a leading `b` is not evidence of content addressing.
         io.github.kotoba-lang/io-multiformats
@@ -103,7 +103,7 @@
         ;; instead, deliberately and with the suite run.
         io.github.kotoba-lang/grant
         {:git/url "https://github.com/kotoba-lang/grant.git"
-         :git/sha "7ed742ba1982a60c3140638343dfc02061f979c9"}
+         :git/sha "557142a5592a08dac274c9b4a5c83cc509ffa103"}
         ;; The EVM plane. `kototama.evm-tender` discharges the tender role
         ;; over EVM bytecode the way `kototama.tender` does over Wasm;
         ;; `:evm/v1` has been a profile in spec/kototama-vm-v1.edn since it
@@ -249,7 +249,7 @@
        :component-host
        {:extra-deps {io.github.kotoba-lang/kototama-component
                      {:git/url "https://github.com/kotoba-lang/kototama-component.git"
-                      :git/sha "d336ff74494c541566822f3a581956442b6c392f"}}}
+                      :git/sha "168243580797987e71a310792fe98a86e6eed675"}}}
        ;; clj-kondo as a Clojars lib (no Homebrew/system install needed).
        :lint {:replace-deps {clj-kondo/clj-kondo {:mvn/version "2024.11.14"}}
          :main-opts ["-m" "clj-kondo.main" "--lint" "src" "test"

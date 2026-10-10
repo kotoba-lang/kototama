@@ -112,7 +112,7 @@
             [kototama.denial :as denial]
             [kototama.network-authority :as network]
             [kototama.signer-lifecycle :as signer]
-            [kotoba.abi.contract :as abi]
+            [kotoba.abi.component :as abi]
             [ed25519.core :as ed])
   (:import (com.dylibso.chicory.runtime ExecutionListener HostFunction ImportFunction
                                         ImportValues Instance WasmFunctionHandle)
