@@ -94,6 +94,9 @@
    [:body
     [:h1 "kototama browser WASM AOT demo"]
     [:p "Kototama is the Kotoba Lisp VM contract. This page demonstrates a retained browser-host surface, not a complete VM or an AiueOS machine."]
+    [:p "Wasm is one AMU target. Target ABI profiles, content distribution and declared-domain consensus are separate choices; this browser demo qualifies none of the full distributed composition. "
+     [:a {:href "https://github.com/kotoba-lang/kotoba-lang/blob/main/docs/stack-architecture-target-neutral.ja.md"}
+      "Read the target-neutral and distributed architecture."]]
     [:p "AiueOS is the OS for a modern Kotoba Lisp machine in development; Amu compiles code and grant decides permission. "
      [:a {:href "https://github.com/kotoba-lang/kotoba-lang/blob/main/docs/stack-architecture.md"}
       "See the stack architecture and dependency diagrams."]]

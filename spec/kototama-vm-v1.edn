@@ -16,6 +16,10 @@
 
  :stack-composition
  {:contract "https://github.com/kotoba-lang/kotoba-lang/blob/main/lang/stack-architecture.edn"
+  :architecture-direction "https://github.com/kotoba-lang/kotoba-lang/blob/main/lang/stack-architecture-target-neutral.edn"
+  :target-abi-defines-vm false
+  :compiler-target-implies-vm-conformance false
+  :runtime-transition-changed false
   :presentation-role :lisp-vm-contract
   :system-presentation-owner :aiueos
   :vm-requires-aiueos false

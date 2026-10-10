@@ -392,3 +392,14 @@ See [`docs/rust-migration.md`](docs/rust-migration.md).
 ## License
 
 MIT.
+
+## Target-neutral and distributed stack architecture
+
+Defines closed computation, state transitions, bounded authority and receipts. Engines implement this contract; neither a Wasm engine nor an EVM opcode set defines it. Target ABI profiles bind artifacts at host admission. Permission is decided by grant/authority and enforced by the host. Hosted engines do not require AiueOS.
+
+See the [owner integration guide and dependency direction](docs/stack-architecture.md),
+[composition metadata](spec/stack-integration.edn), and
+[whole-stack refactor procedure](https://github.com/kotoba-lang/kotoba-lang/blob/main/docs/stack-refactor-procedure.md).
+The direction is adopted; runtime contract migration and qualification remain
+explicit, separately verified work. Tier labels are responsibility axes, not
+a single dependency ranking.

@@ -1,5 +1,14 @@
 # 0009 — Stack topology position, browser-parity gate, and canonical capability schema
 
+Current architecture direction (2026-10-10): Wasm is one AMU target, target ABI
+profiles are separate from neutral contracts, and distribution/consensus
+profiles are independent of execution targets. Tier numbers are ownership
+labels, not dependency ranks. The coordinated owner guide is
+[stack architecture](https://github.com/kotoba-lang/kotoba-lang/blob/main/docs/stack-architecture-target-neutral.ja.md);
+[current dependency measurements](https://github.com/kotoba-lang/kotoba-lang/blob/main/lang/stack-dependency-observation.edn)
+remain distinct from intended migration. Existing runtime schemas and historical
+qualification evidence are not changed by this documentation.
+
 Status: accepted
 Date: 2026-07-24
 Amended: 2026-08-30 by `docs/kototama-virtual-machine.md`. The host/runtime
