@@ -30,3 +30,12 @@ After execution/trap the closure is closed; journal reopen still denies replay.
 AMU's explicit v3 artifact offers a scalar typed i64 provider bridge for Node
 Wasm/Script. The existing v2 pure artifact/default v1 routes are separate.
 Native loader effects and asynchronous task providers retain their own gates.
+
+## Native per-call reservation
+
+`execution-native/mechanisms` optionally takes a sixth launcher-owned bindings
+vector. It hashes bindings into the interface CID, checks closed typed i64 imports
+and authenticated scopes, then forwards each request through admission `call!`.
+[Native transport owner](https://github.com/kotoba-lang/kototama-native/blob/main/docs/native-lease-transport.md)
+owns POSIX Node pipes/worker/deadline; this repository owns lease policy and ledger.
+Pure five-argument composition and default v1 remain separate.
