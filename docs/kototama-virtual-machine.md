@@ -143,9 +143,11 @@ external protocol version and evidence suite.
 
 ### `core/v1`
 
-The native Kotoba profile executes closed S-expressions over IPLD state with
-bounded Datalog authorization and deterministic receipts. It requires no JVM,
-Wasm engine, EVM bytecode or Filecoin protocol dependency.
+The canonical Kototama core profile executes closed S-expressions over IPLD
+state with bounded Datalog authorization and deterministic receipts. It is
+engine-neutral and requires no JVM, Wasm engine, EVM bytecode or Filecoin
+protocol dependency. Native, Wasm and other conforming engines implement this
+same versioned machine contract.
 
 ### `fvm-actor/v1`
 

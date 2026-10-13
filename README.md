@@ -139,10 +139,10 @@ frequent values like receipts are exactly what packing is for.
 
 | Host | Repo | What it runs |
 |---|---|---|
-| browser / native Wasm | [`wasm-webcomponent`](https://github.com/kotoba-lang/wasm-webcomponent) | AOT `.wasm` on the host engine. First path. Extracted so other repos can adopt it |
-| native ELF | [`kototama-native`](https://github.com/kotoba-lang/kototama-native) | `kototama.native.executor` — sealed native artifacts under a capability gate |
-| Component engine | [`kototama-component`](https://github.com/kotoba-lang/kototama-component) | already-admitted Components via Wasmtime micro-TCB / jco / workerd |
-| JVM compat | `kototama.tender` (this repo) | Chicory harness. Not the first path |
+| browser / native Wasm profile | [`wasm-webcomponent`](https://github.com/kotoba-lang/wasm-webcomponent) | AOT `.wasm` on the host engine; profile-specific evidence |
+| native ELF profile | [`kototama-native`](https://github.com/kotoba-lang/kototama-native) | `kototama.native.executor` — sealed native artifacts under a capability gate |
+| Component profile | [`kototama-component`](https://github.com/kotoba-lang/kototama-component) | already-admitted Components via Wasmtime micro-TCB / jco / workerd |
+| JVM compatibility profile | `kototama.tender` (this repo) | Chicory harness for compatibility and diagnostics |
 
 `provider` is the hand kototama may bind after aiueos grants. It is not
 shipped inside this repo.
@@ -175,37 +175,33 @@ artifact is guest. **Do not reimplement the compiler here.** Project linking
 (many sources → one cloth) is amu. Runtime linking (imports → granted
 providers) is kototama.
 
-The current portable contract is WIT plus the WebAssembly Component Model on
-WASI 0.3, versioned in [`kotoba-lang/abi`](https://github.com/kotoba-lang/abi).
-Kototama verifies and composes compiler-produced component worlds;
-sync functions remain sync, while async functions/futures/streams require
-explicit cancellation and bounded lifetime/item/byte budgets. A host accepts
-only declared WIT imports and a verified, scoped aiueos grant; it must not turn
-a WASI import into ambient filesystem, network, clock, random, environment, or
-process access. Kototama is the product-facing engine API; its initial engine
-adapter may embed a mature native engine such as Wasmtime. Boot, isolation,
-device adapters, and root-key use remain a small native micro-TCB. A nested
-Wasm engine is not the product path: it adds an engine but cannot replace the
-outer native engine that starts and isolates it. See
-[`ADR-2607252500`](https://github.com/com-junkawasaki/root/blob/main/90-docs/adr/2607252500-kotoba-wasm-component-first-execution-boundary.edn).
+The portable contract is Kototama's versioned VM semantics and canonical
+program artifact. WIT and the WebAssembly Component Model on WASI 0.3,
+versioned in [`kotoba-lang/abi`](https://github.com/kotoba-lang/abi), are one
+selectable ABI and engine profile. That profile verifies and composes admitted
+component worlds; sync functions remain sync, while async functions/futures/
+streams require explicit cancellation and bounded lifetime/item/byte budgets.
+Every engine accepts only declared imports and a verified, scoped aiueos grant;
+it must not turn a WASI import into ambient filesystem, network, clock, random,
+environment, or process access. Boot, isolation, device adapters and root-key
+use remain host/OS responsibilities. Historical Wasm-first ADRs remain evidence
+for that profile, not the current product-wide priority.
 
 **Compile guests with [`kotoba-lang/kotoba`](https://github.com/kotoba-lang/kotoba).**
 
-### Runtime priority (ADR-2607100100 / ADR-2607102200 addendum 3)
+### Engine and execution profile policy
 
-**First path is not JVM/Chicory.** App/runtime order is:
-
-```
-kotoba wasm AOT  >  clojurewasm  >  ClojureScript  >  nbb
-(JVM / Chicory is demoted — last-resort / explicit compat only)
-```
+Kototama's canonical VM program is the default compiled artifact. Select a
+qualified engine profile for the host OS and required operations. There is no
+global preference among native, Wasm, Component, Script or JVM compatibility
+engines; passing one profile does not qualify another.
 
 | Path | Status | Notes |
 |---|---|---|
-| **`.kotoba` → AOT `.wasm` on native WebAssembly** | **first** | browser/Node via [`wasm-webcomponent`](https://github.com/kotoba-lang/wasm-webcomponent) (extracted from this repo's `web/`) |
-| **clojurewasm** | next when FFI allows | host-import surface still limited (upstream Phase-16); revisit for host-import guests |
-| **ClojureScript host wire** | when native WASM + CLJS host imports | e.g. portable `kotoba.kami-host` |
-| **`kototama.tender` (JVM/Chicory)** | **demoted compat / CI** | landed historically (ADR-2607022900 / 2607062330); keep for bit-exact fixtures, not the design premise |
+| **Canonical Kototama program** | default compiler artifact | Runs on an engine that conforms for the named VM/profile, OS and operation set |
+| **`.kotoba` → AOT `.wasm` on native WebAssembly** | explicit Wasm profile | browser/Node via [`wasm-webcomponent`](https://github.com/kotoba-lang/wasm-webcomponent); existing evidence applies to this profile |
+| **WASI 0.3 Component** | explicit Component profile | Requires admitted WIT world, bounded async contracts and qualified host |
+| **`kototama.tender` (JVM/Chicory)** | compatibility / diagnostic profile | Keep historical bit-exact fixtures; not the VM definition |
 
 The workerd path is intentionally a Core-Wasm compatibility adapter because
 workerd does not instantiate Component Model binaries directly. The production
@@ -263,25 +259,25 @@ are not considered duplicated work to consolidate.
 ## Quick start (runtime)
 
 ```bash
-# Guest must already be AOT-compiled by the language (kotoba):
+# Explicit Wasm-profile example; the default compile artifact is Kototama:
 #   kotoba wasm emit cell.kotoba --package-lock L -o cell.wasm
 
 kbb -M:cli run path/to/guest.wasm --grant …     # execute (tender / CLI)
 kbb -M:cli lint path/to/guest.kotoba            # emit-pitfall lint only (no compile)
 kbb -M:cli inspect path/to/guest.wasm
 kbb -M:doctor
-node web/verify-host-free.mjs                       # first path: native WebAssembly engine
+node web/verify-host-free.mjs                       # Wasm-profile fixture
 ```
 
-## Browser / native WASM host (`web/`)
+## Browser / native WebAssembly profile (`web/`)
 
 [ADR-2607061630](https://github.com/com-junkawasaki/root/blob/main/90-docs/adr/2607061630-kototama-browser-wasm-aot-webcomponent.md)
-and ADR-2607100100: the **first** execution premise is the host's native
-WebAssembly engine on already-AOT `.wasm` from **kotoba** — not "JVM hosts a
-Wasm interpreter". Hosting library:
+and ADR-2607100100: this profile uses the host's native WebAssembly engine on
+already-AOT `.wasm` from **kotoba**. Hosting library:
 [`kotoba-lang/wasm-webcomponent`](https://github.com/kotoba-lang/wasm-webcomponent)
 (`web/` is a consumer). See `web/README.md` for R0 scope.  
-`kotoba wasm run` and `kototama.tender` Chicory paths are **compat / CI**.
+`kotoba wasm run` and `kototama.tender` Chicory paths are **profile-specific
+compatibility / CI** implementations; neither defines the Kototama VM.
 
 ## Published site (`index.html`, `docs/index.html`)
 
@@ -319,8 +315,8 @@ Ladder and gates: [`docs/maturity.md`](docs/maturity.md).
 | Level | Status |
 |---|---|
 | R0 contract / dry-run | stable |
-| R1 tender (compat: JVM/Chicory) | stable as **compat suite** — session report, host-free guests, emit lint, CLI (not the first path) |
-| **R2 browser / native WASM host** | **first product path** (advanced-partial, derived from `kototama.browser/parity-score`: 19/58 linkable, the rest explicit native-boundary `:no`) — AOT `.wasm` via wasm-webcomponent; `http-post` and `llm-infer` both real via a Worker-hosted SAB+Atomics bridge, needs COOP/COEP; `llm-infer` additionally needs a caller-supplied proxy URL; host-free web fixtures |
+| R1 tender (compat: JVM/Chicory) | stable as a **compatibility suite** — session report, host-free guests, emit lint and CLI |
+| R2 browser / native WASM profile | advanced-partial profile evidence, derived from `kototama.browser/parity-score`: 19/58 linkable, the rest explicit native-boundary `:no` — AOT `.wasm` via wasm-webcomponent; `http-post` and `llm-infer` run through a Worker-hosted SAB+Atomics bridge, needs COOP/COEP; `llm-infer` also needs a caller-supplied proxy URL; host-free web fixtures |
 | T6 fleet placement | external — stable gate owned by `kotoba-lang/fleet` |
 
 ```bash
@@ -332,9 +328,10 @@ kbb -M:cli run     path/to/guest.wasm            # RUNTIME: run AOT guest
 node web/verify-host-free.mjs                        # R2 host-free under browser Wasm
 ```
 
-Host-free pure guests are first-class on **native WASM** (browser/Node via
-wasm-webcomponent / `web/`) and still verified on the demoted JVM tender
-(`fact(5)=120`, peak-cells `@4096→240`).
+Host-free pure guest evidence currently includes the **native WASM profile**
+(browser/Node via wasm-webcomponent / `web/`) and the JVM compatibility tender
+(`fact(5)=120`, peak-cells `@4096→240`). These measurements do not establish
+cross-engine Kototama conformance.
 
 ## Test
 

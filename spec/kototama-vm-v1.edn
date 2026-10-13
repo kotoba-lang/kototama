@@ -160,7 +160,7 @@
 
  :profiles
  {:core/v1
-  {:purpose :native-kotoba-execution
+  {:purpose :canonical-kototama-vm-execution
    :requires [:closed-s-expression
               :ipld-state
               :bounded-datalog
