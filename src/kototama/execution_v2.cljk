@@ -131,7 +131,7 @@
                    {:ticket ticket :intent-cid (:cid intent) :lease-cid cid
                     :epoch ((:epoch! host)) :now ((:clock! host))})
                   ((get (:providers host) scope) args)))]
-    {:intent intent :binding binding :context expected :call! call! :close! #(reset! live? false) :ticket ticket}))
+    {:intent intent :binding binding :context expected :call! call! :scopes (set (keys by-scope)) :close! #(reset! live? false) :ticket ticket}))
 
 (declare verify-completion!)
 
@@ -145,7 +145,7 @@
         observed (try {:status :ok :value ((:execute! host)
                                            {:artifact (:artifact packet) :runtime (:runtime packet)
                                             :input (blocks/verify-block :input (:input packet))
-                                            :context (:context admission) :call! (:call! admission)})}
+                                            :context (:context admission) :scopes (:scopes admission) :call! (:call! admission)})}
                       (catch #?(:clj Exception :cljs :default) error
                         (let [observed (:execution-outcome (ex-data error))]
                           (if (and (map? observed) (= #{:status :value} (set (keys observed)))

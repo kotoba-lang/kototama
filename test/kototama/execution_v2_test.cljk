@@ -196,3 +196,16 @@
         (is (refused? #(host/run! configuration (:packet f)))))
       (finally (clean! f)))))
 ))
+
+(deftest execution-handoff-scopes-are-derived-from-admitted-leases
+  (let [f (fixture :wasm32-kotoba-v1) seen (atom nil)
+        expected (set (map #((juxt :capability-cid :resource-cid :purpose) %)
+                           (get-in f [:issuance :requested])))
+        configured (assoc (:host f) :execute! (fn [request] (reset! seen request) 42))]
+    (try
+      (is (refused? #(host/run! configured (assoc (:packet f) :scopes expected))))
+      (host/run! configured (:packet f))
+      (is (= expected (:scopes @seen)))
+      (is (refused? #((:call! @seen) (first expected) :after-completion)))
+      (is (empty? @(:calls f)))
+      (finally (clean! f)))))
