@@ -172,7 +172,7 @@ frequent values like receipts are exactly what packing is for.
 | Component engine | [`kototama-component`](https://github.com/kotoba-lang/kototama-component) | already-admitted Components via Wasmtime micro-TCB / jco / workerd |
 | JVM compat | `kototama.tender` (this repo) | Chicory harness. Not the first path |
 
-`provider` is the hand kototama may bind after aiueos grants. It is not
+`provider` is the hand kototama may bind after grant allows it. It is not
 shipped inside this repo.
 
 See [`docs/hosts.md`](docs/hosts.md).
@@ -197,7 +197,7 @@ duplication — just an undocumented spelling split, which this note closes.
 ## Role (detail)
 
 In the `kotoba → amu → kototama → aiueos` stack, kototama hosts the guests
-that **amu** wove, under capability grants that `aiueos` decides. The
+that **amu** wove, under capability grants that `grant` decides. The
 attendant-host pattern (Solo5 *tender*) still holds: kototama hosts, the
 artifact is guest. **Do not reimplement the compiler here.** Project linking
 (many sources → one cloth) is amu. Runtime linking (imports → granted
@@ -208,7 +208,7 @@ WASI 0.3, versioned in [`kotoba-lang/abi`](https://github.com/kotoba-lang/abi).
 Kototama verifies and composes compiler-produced component worlds;
 sync functions remain sync, while async functions/futures/streams require
 explicit cancellation and bounded lifetime/item/byte budgets. A host accepts
-only declared WIT imports and a verified, scoped aiueos grant; it must not turn
+only declared WIT imports and a verified, scoped grant decision; it must not turn
 a WASI import into ambient filesystem, network, clock, random, environment, or
 process access. Kototama is the product-facing engine API; its initial engine
 adapter may embed a mature native engine such as Wasmtime. Boot, isolation,
@@ -271,18 +271,18 @@ are not considered duplicated work to consolidate.
   above). `:clj`-only, matching `com.dylibso.chicory`'s own JVM-only
   nature; pulls in `com.dylibso.chicory/{wasm,runtime}` and
   `kotoba-lang/org-ietf-ed25519` (`kototama.contract` itself stays free of them).
-- `src/kototama/aiueos_adapter.cljk` closes the "aiueos decides, kototama
-  enforces" loop for real: calls `aiueos.cli/command-result` (a real
-  `io.github.kotoba-lang/aiueos` dependency, in-process — not the
-  `kbb -M:decide` subprocess `aiueos.decide` also exposes for hosts that
-  aren't already JVM/Clojure) and translates the actual grant/deny
-  decision into a `kototama.contract/host-caps` value. `kototama.tender`
-  never computes a grant itself either way (ADR-2607022700's rule); this
-  only removes the need for every caller to hand-build `HostCaps` from a
-  decision aiueos already made. Covers the subset of `actor:host` imports
-  aiueos's own default kernel capabilities recognize (`log-write`/
-  `clock-monotonic`/`random-bytes`) — `gen-keypair`/`sign`/`verify`/
-  `sha256-hex`/`http-post`/`log-read` have no aiueos-kernel-capability
+- `src/kototama/aiueos_adapter.cljk` closes the "grant decides, kototama
+  enforces" loop for real: calls `grant.cli/command-result` directly (a
+  real `io.github.kotoba-lang/grant` dependency, in-process; aiueos is not
+  on this path since the grant plane left aiueos on 2026-08-21, root
+  ADR-2608219500 — the namespace name is historical) and translates the
+  actual grant/deny decision into a `kototama.contract/host-caps` value.
+  `kototama.tender` never computes a grant itself either way
+  (ADR-2607022700's rule); this only removes the need for every caller to
+  hand-build `HostCaps` from a decision grant already made. Covers the
+  subset of `actor:host` imports grant's default kernel capabilities recognize
+  (`log-write`/`clock-monotonic`/`random-bytes`) — `gen-keypair`/`sign`/
+  `verify`/`sha256-hex`/`http-post`/`log-read` have no kernel-capability
   counterpart and still take caller-supplied `HostCaps`, same as before.
 - `lib/kototama/*.cljc` contains the portable organism/cell runtime:
   gates, membrane, heartbeat, did:key, atproto shaping, and identity helpers.
