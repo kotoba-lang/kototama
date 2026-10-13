@@ -12,12 +12,17 @@ MUST NOT, REQUIRED, SHOULD and MAY are normative.
 
 ## Stack composition and presentation
 
-Kototama is the **Kotoba Lisp VM contract**. AiueOS is the OS for a modern
-Kotoba Lisp machine in development. Hosted engines can implement this VM
-without AiueOS. Grant owns permission decisions; engines and OS mechanisms
-enforce them. This terminology changes no transition or qualification rule.
+Kototama is the **Kotoba VM platform and normative execution contract**. Its
+role is analogous to the EVM in the Ethereum ecosystem: the versioned machine
+rules are shared by tools, artifacts and independent engines. This analogy
+does not imply Ethereum bytecode, consensus or client compatibility. AiueOS is
+one OS that can host Kototama and provide device mechanisms; other OSes may
+host conforming engines without AiueOS. Grant owns permission decisions;
+engines and OS mechanisms enforce them. This terminology changes no transition
+or qualification rule.
 See the [composition spec](https://github.com/kotoba-lang/kotoba-lang/blob/main/lang/stack-architecture.edn) and
-[responsibility/dependency diagrams](https://github.com/kotoba-lang/kotoba-lang/blob/main/docs/stack-architecture.md).
+[responsibility/dependency diagrams](https://github.com/kotoba-lang/kotoba-lang/blob/main/docs/stack-architecture.md),
+and [Kototama VM platform ADR](https://github.com/kotoba-lang/kotoba-lang/blob/main/docs/adr/ADR-kototama-vm-platform.md).
 
 ## Definition
 
@@ -32,7 +37,12 @@ K |- <program, message, state, authority, budget>
 The relation, not a particular interpreter, is the VM. A native engine, a Wasm
 host, a JVM compatibility tender, an EVM bytecode adapter and an FVM-shaped
 actor kernel can all implement Kototama. No implementation becomes the
-definition merely because it shipped first.
+definition merely because it shipped first. Kototama has no preferred engine;
+each target/host/operation profile must publish its own conformance evidence.
+The canonical program envelope is the engine-neutral artifact shape. Amu owns
+compiler target selection and uses it as the default portable application
+artifact; selecting a native, Wasm or Component target is an explicit
+host-specific build choice.
 
 Kototama does not define consensus, block production, fleet placement, grant
 policy or compilation. Consensus decides which messages and roots are
@@ -178,7 +188,7 @@ external protocol version and evidence suite.
 
 ### `core/v1`
 
-The native Kotoba profile executes closed S-expressions over IPLD state with a
+The canonical Kotoba profile executes closed S-expressions over IPLD state with a
 closed admission predicate in Kotoba Form and deterministic receipts. It requires no JVM,
 Wasm engine, EVM bytecode or Filecoin protocol dependency.
 
@@ -249,15 +259,18 @@ differential execution evidence.
 This separation is intentional:
 
 ```text
-Kototama                  semantic VM specification
-  ├─ native/Wasm hosts    core execution engines
+Kototama                  semantic VM platform contract
+  ├─ core/v1 engines      Kotoba/IPLD execution
   ├─ kotoba-vm            FVM-shaped actor-kernel implementation
   ├─ EVM adapter          evm/v1 implementation
   └─ FEVM adapter         fevm/v1 composition
 ```
 
-Kototama is therefore one machine with several explicitly tested projections,
-not a collection of unrelated runtimes and not a new concrete engine that must
+Kototama is therefore one VM platform contract with several explicitly tested
+profiles. `core/v1` defines the canonical Kotoba/IPLD machine; `evm/v1` and
+`fvm-actor/v1` define compatibility projections. They may use separate
+engines, and an engine's conformance to one profile does not establish
+conformance to another. Kototama does not require one concrete engine to
 replace all existing hosts.
 
 ## External compatibility authorities
