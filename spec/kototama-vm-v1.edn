@@ -20,8 +20,14 @@
   :target-abi-defines-vm false
   :compiler-target-implies-vm-conformance false
   :runtime-transition-changed false
-  :presentation-role :lisp-vm-contract
-  :system-presentation-owner :aiueos
+  :presentation-role :evm-like-vm-platform-contract
+  :execution-platform-is-kototama true
+  :system-presentation-owner :kototama
+  :operating-system-owner :aiueos
+  :engine-priority :none
+  :native-wasm-is-a-profile-not-the-vm-definition true
+  :support-requires-target-host-os-operation-and-effect-evidence true
+  :evm-analogy-implies-ethereum-compatibility false
   :vm-requires-aiueos false
   :permission-decision-owner :grant
   :readiness-claim :none}
@@ -90,6 +96,77 @@
  {:source-form :lisp-list
   :source-dialects [:kotoba :clojure :clojurescript]
   :canonical-form :tagged-dag-cbor-vector
+  ;; The canonical top-level artifact contains closed expression data, not
+  ;; engine bytecode, host function pointers, or a source-reader payload.
+  :artifact-envelope
+  {:tag "kototama.vm/program"
+   :version 1
+   :shape ["kototama.vm/program" 1 :program-map]
+   :program-map {:field-keys :text
+                 :entry :text-or-nil
+                 :value-profile :text
+                 :methods :method-map}
+   :method-map {:keys :text
+                :values :method-definition}
+   :method-definition {:field-keys :text
+                       :fields {"params" :text-vector
+                                "param-types" :type-vector
+                                "result" :type-tag
+                                "effects" {:type :effect-vector
+                                           :order :canonical-dag-cbor-byte-order}
+                                "body" :expression}}
+   :expression
+   {:literal ["const" :portable-value]
+    :variable ["var" :text]
+    :let ["let" :binding-vector :expression]
+    :loop ["loop" :binding-vector :expression]
+    :recur ["recur" :expression-vector]
+    :if ["if" :expression :expression :expression]
+    :do ["do" :expression-vector]
+    :call ["call" :text :expression-vector]
+    :builtin ["builtin" :builtin-name :expression-vector]
+    :arithmetic ["arith" :arithmetic-op :expression-vector]
+    :compare ["compare" :comparison-op :expression-vector]
+    :hash ["hash" :expression]
+    :vector ["vector" :expression-vector]
+    :list ["list" :expression-vector]
+    :map ["map" :expression-pair-vector]
+    :set ["set" :expression-vector]
+    :get ["get" :expression :expression]
+    :assoc ["assoc" :expression :expression :expression]
+    :dissoc ["dissoc" :expression :expression]
+    :match ["match" :expression :case-vector]
+    :actor ["actor" :actor-operation :expression-vector]
+    :state ["state" :state-operation :expression-vector]
+    :authorize ["authorize" :expression-vector]
+    :effect ["effect" :effect-operation :expression-vector]}
+   :expression-values-are-data true
+   :symbols-are-text-names true
+   :portable-value-encoding
+   {:integer ["integer" :canonical-decimal-text]
+    :keyword ["keyword" :qualified-name]
+    :symbol ["symbol" :qualified-name]
+    :bytes ["bytes" :byte-vector]}
+   :evaluation-order :left-to-right
+   :branch-condition :zero-is-false
+   :canonical-encoding :dag-cbor
+   :content-identity :cid-of-canonical-dag-cbor
+   :host-eval false
+   :unknown-form :reject
+   :unknown-builtin :reject
+   :unknown-actor-operation :reject
+   :unknown-state-operation :reject
+   :unknown-field :reject
+   :map-keys :canonical-dag-cbor-order}
+  :value-profiles
+  {"kotoba.i64-wrap/v1"
+   {:integer :signed-64
+    :add-sub-mul :twos-complement-wrap
+    :division :signed-truncate-toward-zero
+    :remainder :dividend-sign
+    :division-by-zero :trap
+    :signed-division-overflow :trap
+    :comparison-result :integer-zero-or-one}}
   :macros :compile-time-only
   :symbols :compile-time-resolved
   :closures {:representation [:code-cid :environment]
@@ -97,7 +174,7 @@
   :instructions
   {:pure [:const :let :if :loop :recur :call :return
           :list :vector :map :set :get :assoc :dissoc :match
-          :add :sub :mul :div :mod :compare :hash]
+          :add :sub :mul :div :quot :mod :compare :hash]
    :actor [:self :caller :address :method :params :value
            :call :static-call :delegate-call :create :emit]
    :state [:root :open :read :write :link :stat :set-state]
@@ -105,7 +182,7 @@
    :effect [:request-capability :invoke-capability]}}
 
  :values
- {:portable [:nil :boolean :integer :bytes :text :keyword
+  {:portable [:nil :boolean :integer :bytes :text :keyword
              :list :vector :map :set :cid :address :result]
   :integer {:core :arbitrary-precision-bounded-by-budget
             :evm-profile :unsigned-256-modular}
@@ -232,7 +309,7 @@
 
  :profiles
  {:core/v1
-  {:purpose :native-kotoba-execution
+  {:purpose :canonical-kotoba-execution
    :requires [:closed-s-expression
               :ipld-state
               :closed-admission-predicate
