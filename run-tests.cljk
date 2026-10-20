@@ -47,6 +47,7 @@
             [kototama.denial-test]
             [kototama.execution-test]
             [kototama.rebind-test]
+            [kototama.repl-test]
             [kototama.receipt-debug-test]
             [kototama.tamaki-contract-test]))
 
@@ -59,5 +60,5 @@
 (t/run-tests 'kototama.evm-program-cid-test
              'kototama.component-provider-test
              'kototama.vm-spec-test
-             'kototama.denial-test 'kototama.execution-test 'kototama.receipt-debug-test 'kototama.rebind-test
+             'kototama.denial-test 'kototama.execution-test 'kototama.receipt-debug-test 'kototama.rebind-test 'kototama.repl-test
              'kototama.tamaki-contract-test)
