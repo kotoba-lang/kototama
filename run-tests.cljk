@@ -46,6 +46,7 @@
             [kototama.vm-spec-test]
             [kototama.denial-test]
             [kototama.execution-test]
+            [kototama.rebind-test]
             [kototama.tamaki-contract-test]))
 
 (defmethod t/report [:cljs.test/default :end-run-tests] [m]
@@ -57,5 +58,5 @@
 (t/run-tests 'kototama.evm-program-cid-test
              'kototama.component-provider-test
              'kototama.vm-spec-test
-             'kototama.denial-test 'kototama.execution-test
+             'kototama.denial-test 'kototama.execution-test 'kototama.rebind-test
              'kototama.tamaki-contract-test)
