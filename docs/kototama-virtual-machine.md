@@ -53,6 +53,16 @@ Kototama performs the resulting transition and records it.
 
 ## The four planes
 
+Native programs inside one closed execution domain use typed calls and keep
+context-owned values. Guest/host is a profile-specific embedding boundary,
+not a required split between each library and its caller. A verified input is
+decoded at admission and handed directly to the execution mechanism; canonical
+encoding remains at artifact, wire, state and receipt boundaries. Native i64
+provider bindings constrain the external operation, not internal record/list
+helper signatures. Admission, per-effect grant checks/reservations, fuel,
+arenas and supervisor limits remain enforced. See the shared
+[native execution-domain decision](https://github.com/kotoba-lang/kotoba-lang/blob/main/docs/adr/ADR-native-execution-domains.md).
+
 ### Reduction plane: Lisp as the machine language
 
 The semantic program is a closed S-expression. Kotoba, Clojure and

@@ -94,7 +94,7 @@
         _ (when-not (= (:invocation-cid descriptor) (:cid invocation)) (reject! :invocation-mismatch))
         _ (blocks/intent-block binding expected descriptor)
         _ (live-references! host (blocks/verify-block :binding binding))
-        _ (blocks/verify-block :input input)
+        admitted-input (blocks/verify-block :input input)
         _ (when-not (= (:input-cid descriptor) (:cid input)) (reject! :input-mismatch))
         _ (authorized! host :intent intent authorization)
         grants (mapv (fn [{:keys [block attestation] :as signed}]
@@ -131,7 +131,8 @@
                    {:ticket ticket :intent-cid (:cid intent) :lease-cid cid
                     :epoch ((:epoch! host)) :now ((:clock! host))})
                   ((get (:providers host) scope) args)))]
-    {:intent intent :binding binding :context expected :call! call! :scopes (set (keys by-scope)) :close! #(reset! live? false) :ticket ticket}))
+    {:intent intent :binding binding :context expected :input admitted-input
+     :call! call! :scopes (set (keys by-scope)) :close! #(reset! live? false) :ticket ticket}))
 
 (declare verify-completion!)
 
@@ -144,7 +145,7 @@
   (let [admission (admit! host packet)
         observed (try {:status :ok :value ((:execute! host)
                                            {:artifact (:artifact packet) :runtime (:runtime packet)
-                                            :input (blocks/verify-block :input (:input packet))
+                                            :input (:input admission)
                                             :context (:context admission) :scopes (:scopes admission) :call! (:call! admission)})}
                       (catch #?(:clj Exception :cljs :default) error
                         (let [observed (:execution-outcome (ex-data error))]

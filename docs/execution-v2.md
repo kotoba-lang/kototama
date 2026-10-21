@@ -39,3 +39,15 @@ and authenticated scopes, then forwards each request through admission `call!`.
 [Native transport owner](https://github.com/kotoba-lang/kototama-native/blob/main/docs/native-lease-transport.md)
 owns POSIX Node pipes/worker/deadline; this repository owns lease policy and ledger.
 Pure five-argument composition and default v1 remain separate.
+
+The scalar transport constrains the actual provider imports and public entry.
+Internal native helper signatures may carry context-owned records/lists through
+the bounded pure operations accepted by the adapter and verified by the native
+executor. There is no conversion to an i64 provider message between those
+helpers. The public entry, declared effect/import IDs, scope binding, signature
+verification, shared fuel/arena limits and per-effect reservations are still
+checked. Raw memory, generic `cap-call` and ambient calls remain refused.
+
+The v2 runner hands admission's already verified input value directly to the
+execution mechanism. Input verification is still performed before registration;
+canonical outcome/receipt encoding still happens after execution.
