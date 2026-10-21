@@ -24,9 +24,15 @@
     (seq? x) (apply list (map canonical-value x))
     :else x))
 
-(def ^:private scalar-ops
+(def ^:private internal-ops
+  ;; These operations stay in the admitted native context. Its typed handles
+  ;; do not cross the provider transport: only typed-cap-call's i64 argument
+  ;; and result do. The measured executor independently verifies the artifact
+  ;; and owns fuel/arena limits. Raw memory and ambient host calls stay out.
   '#{typed-cap-call let if do loop recur + - * quot rem = not= < <= > >=
-     not and or bit-and bit-or bit-xor bit-not})
+     not and or bit-and bit-or bit-xor bit-not
+     pair pair-first pair-second record-new record-get record-assoc
+     typed-list-new typed-list-count typed-list-nth typed-list-conj})
 
 (defn- native-bindings! [artifact bindings]
   (let [program (:program artifact)
@@ -36,7 +42,7 @@
         ids (set (map #(number-id (second %)) calls))
         effects (set (map (fn [e] (when (and (vector? e) (= 2 (count e)) (= :cap/call (first e)))
                                     (number-id (second e)))) (:effects artifact)))
-        ops (into scalar-ops (map :name (:functions program)))]
+        ops (into internal-ops (map :name (:functions program)))]
     (when-not (and (vector? bindings) (<= 1 (count bindings) 64)
                    (every? #(and (= #{:id :scope} (set (keys %)))
                                   (pos-int? (:id %)) (<= (:id %) 255)
@@ -48,9 +54,7 @@
                    (= [(symbol "main")] (:exports program))
                    (seq calls) (= ids effects (set (map :id bindings)))
                    (every? #(and (= 5 (count %)) (= :i64 (nth % 2)) (= :i64 (nth % 3))) calls)
-                   (every? #(or (not (seq? %)) (contains? ops (first %))) forms)
-                   (every? #(and (every? #{:i64 :bool} (:param-types %))
-                                  (contains? #{:i64 :bool} (:result %))) (:functions program)))
+                   (every? #(or (not (seq? %)) (contains? ops (first %))) forms))
       (reject! :bounded-native-i64-bindings-required)))
   bindings)
 
@@ -133,4 +137,4 @@
                    :started-at (:started-at observed) :finished-at (:finished-at observed)})]
        (if (= :ok (get-in observed [:evidence :status]))
          result
-         (throw (ex-info "native guest trapped" {:execution-outcome {:status :trap :value result}})))))}))
+         (throw (ex-info "native program trapped" {:execution-outcome {:status :trap :value result}})))))}))

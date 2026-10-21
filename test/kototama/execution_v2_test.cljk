@@ -209,3 +209,23 @@
       (is (refused? #((:call! @seen) (first expected) :after-completion)))
       (is (empty? @(:calls f)))
       (finally (clean! f)))))
+
+(deftest admitted-input-is-decoded-once-before-runtime-handoff
+  (let [f (fixture :aarch64-macos-kotoba-v1) seen (atom nil) decoded (atom [])
+        verify blocks/verify-block
+        configured (assoc (:host f) :execute!
+                          (fn [{:keys [input call!]}]
+                            (reset! seen input)
+                            (call! [cid cid :audit/append] input)
+                            42))]
+    (try
+      (with-redefs [blocks/verify-block
+                    (fn [kind block]
+                      (let [value (verify kind block)]
+                        (when (= :input kind) (swap! decoded conj value))
+                        value))]
+        (host/run! configured (:packet f)))
+      (is (= 1 (count @decoded)))
+      (is (identical? (first @decoded) @seen))
+      (is (identical? @seen (first @(:calls f))))
+      (finally (clean! f)))))

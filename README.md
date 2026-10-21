@@ -196,10 +196,11 @@ duplication — just an undocumented spelling split, which this note closes.
 
 ## Role (detail)
 
-In the `kotoba → amu → kototama → aiueos` stack, kototama hosts the guests
-that **amu** wove, under capability grants that `grant` decides. The
-attendant-host pattern (Solo5 *tender*) still holds: kototama hosts, the
-artifact is guest. **Do not reimplement the compiler here.** Project linking
+In the `kotoba → amu → kototama → aiueos` stack, runtime engines execute the
+programs that **amu** wove, enforcing grant / authority decisions. Native
+internal calls share their execution context and typed values. Guest/host
+terminology applies to an actual embedding or target ABI crossing; it does not
+require a second world for each Kotoba library. **Do not reimplement the compiler here.** Project linking
 (many sources → one cloth) is amu. Runtime linking (imports → granted
 providers) is kototama.
 
